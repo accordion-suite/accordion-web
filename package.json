@@ -1,0 +1,23 @@
+{
+  "name": "accordion-web",
+  "private": true,
+  "description": "The Accordion web app",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "tsc -p . && tsc -p scripts",
+    "test": "esbuild --bundle --platform=node --format=esm --packages=external --log-level=warning --outdir=.build/tests \"src/**/*.test.ts\" && node --test \".build/tests/**/*.test.js\"",
+    "build": "esbuild --bundle --platform=node --format=esm --packages=external --log-level=warning --outfile=.build/build.js scripts/build.ts && node .build/build.js"
+  },
+  "dependencies": {
+    "preact": "11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}
