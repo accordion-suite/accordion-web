@@ -6,10 +6,12 @@ import { useEffect, useId, useRef } from "preact/hooks";
 
 export function Dialog({
   title,
+  class: className,
   onClose,
   children,
 }: {
   title: string;
+  class?: string;
   onClose: () => void;
   children: ComponentChildren;
 }) {
@@ -27,6 +29,7 @@ export function Dialog({
   return (
     <dialog
       ref={dialog}
+      class={className}
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();

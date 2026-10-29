@@ -78,6 +78,7 @@ class FakeServer implements Transport {
       name,
       kind: "file",
       size: content.length,
+      preview: null,
       created_at: "2026-10-29T00:00:00Z",
       modified_at: "2026-10-29T00:00:00Z",
     };
@@ -209,7 +210,7 @@ test("a full disk stops the upload with the server's message", async () => {
 
 test("a name the folder already uses for a folder stops instead of trying forever", async () => {
   const server = new FakeServer();
-  server.fail.finish = () => new ApiError(409, "Something with that name is already in this folder.");
+  server.fail.finish = () => new ApiError(409, "This folder already has a folder with that name.");
   await assert.rejects(run(server, file(10)), { status: 409 });
   assert.deepEqual(server.calls, ["start 10", "send 0 10", "finish"]);
 });

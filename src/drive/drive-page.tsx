@@ -1,7 +1,8 @@
-// A folder in Drive: what's in it, with links into subfolders and to
-// download files, uploads by button or by dropping files on it, and new
-// folders. Selected files and folders can be renamed, moved, or moved to the
-// trash. It uses only Drive's own API, /api/drive (decision 13).
+// A folder in Drive: what's in it, with links into subfolders, to show
+// photos and PDFs, and to download other files, uploads by button or by
+// dropping files on it, and new folders. Selected files and folders can be
+// renamed, moved, or moved to the trash. It uses only Drive's own API,
+// /api/drive (decision 13).
 
 import type { TargetedDragEvent, TargetedEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -9,10 +10,11 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
-import { followLink } from "../shell/router.ts";
+import { followLink, navigate, useQuery } from "../shell/router.ts";
 import { MoveDialog, NameDialog } from "./dialogs.tsx";
 import { uploads } from "./http-transport.ts";
 import type { Item } from "./item.ts";
+import { Viewer } from "./viewer.tsx";
 
 interface Loaded {
   folder: Item;
@@ -34,6 +36,15 @@ interface Done {
 function folderPath(item: Item): string {
   return item.parent === null ? "/drive/" : `/drive/folder/${item.id}`;
 }
+
+/** The folder's address with `file` open in the viewer. */
+function filePath(folder: Item, file: Item): string {
+  return `${folderPath(folder)}?file=${encodeURIComponent(file.id)}`;
+}
+
+/** Marks a history entry that the viewer opened from its folder, so closing
+ * it can go back rather than add another entry. */
+const OPENED_HERE = { viewer: true };
 
 async function load(id: string | null): Promise<Loaded> {
   const folder = await api<Item>("GET", id === null ? "/api/drive/top" : `/api/drive/items/${id}`);
@@ -73,6 +84,7 @@ export function DrivePage({ folder }: { folder: string | null }) {
   // deep the pointer is to know when it has really left.
   const dragDepth = useRef(0);
   const chooser = useRef<HTMLInputElement>(null);
+  const showing = useQuery("file");
 
   function refresh() {
     load(folder).then(
@@ -115,6 +127,24 @@ export function DrivePage({ folder }: { folder: string | null }) {
   const { parent, children } = loaded;
   const folderName = parent ? loaded.folder.name : t("drive.title");
   const chosenItems = children.filter((child) => selected.has(child.id));
+  const shown = children.filter((child) => child.preview !== null);
+  const shownFile = shown.find((file) => file.id === showing);
+
+  function openFile(event: MouseEvent, file: Item) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    navigate(filePath(loaded!.folder, file), { state: OPENED_HERE });
+  }
+
+  function closeFile() {
+    if ((history.state as typeof OPENED_HERE | null)?.viewer) {
+      history.back();
+    } else {
+      // Opened from a link or a reload, so there's no folder entry to go
+      // back to.
+      navigate(folderPath(loaded!.folder), { replace: true });
+    }
+  }
 
   function report(next: Done) {
     setProblem("");
@@ -324,6 +354,10 @@ export function DrivePage({ folder }: { folder: string | null }) {
                       <a href={folderPath(item)} onClick={followLink}>
                         {item.name}
                       </a>
+                    ) : item.preview ? (
+                      <a href={filePath(loaded.folder, item)} onClick={(event) => openFile(event, item)}>
+                        {item.name}
+                      </a>
                     ) : (
                       <a
                         href={`/api/drive/items/${item.id}/content`}
@@ -369,6 +403,17 @@ export function DrivePage({ folder }: { folder: string | null }) {
             report({ message: t("drive.renamed", { name }) });
           }}
           onClose={() => setOpen(null)}
+        />
+      )}
+      {shownFile && (
+        <Viewer
+          files={shown}
+          file={shownFile}
+          // Steps replace the entry, so Back closes the viewer.
+          onShow={(file) =>
+            navigate(filePath(loaded.folder, file), { replace: true, state: history.state })
+          }
+          onClose={closeFile}
         />
       )}
       {open?.kind === "move" && (

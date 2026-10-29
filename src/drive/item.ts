@@ -5,6 +5,8 @@ export interface Item {
   name: string;
   kind: "file" | "folder";
   size: number | null;
+  /** For files the browser can show itself. */
+  preview: "image" | "pdf" | null;
   created_at: string;
   modified_at: string;
 }

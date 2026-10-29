@@ -68,6 +68,16 @@ export const en = {
   "drive.restoredMany": { one: "Put {count} item back.", other: "Put {count} items back." },
   "drive.undo": "Undo",
 
+  "viewer.position": "{position} of {count}",
+  "viewer.previous": "Previous",
+  "viewer.next": "Next",
+  "viewer.download": "Download",
+  "viewer.close": "Close",
+  "viewer.pdfNarrow": "On a small screen, PDFs open in a tab of their own.",
+  "viewer.openPdf": "Open the PDF",
+  "viewer.failed":
+    "Accordion couldn't show {name}. It may be damaged, or not the kind of file its name says. Download it to open it on your device.",
+
   "trash.title": "Trash",
   "trash.explain": "Accordion deletes items for good after 30 days in the trash.",
   "trash.empty": "The trash is empty.",

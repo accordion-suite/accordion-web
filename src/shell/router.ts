@@ -6,20 +6,33 @@ import { useEffect, useState } from "preact/hooks";
 
 const CHANGED = "accordion:navigate";
 
-export function navigate(path: string, options: { replace?: boolean } = {}): void {
+/** Goes to `path`, which can end in a query, such as "/drive/?file=abc".
+ * `state` is kept with the new history entry, as `history.state`. */
+export function navigate(path: string, options: { replace?: boolean; state?: unknown } = {}): void {
+  const state = options.state ?? null;
   if (options.replace) {
-    history.replaceState(null, "", path);
+    history.replaceState(state, "", path);
   } else {
-    history.pushState(null, "", path);
+    history.pushState(state, "", path);
   }
   window.dispatchEvent(new Event(CHANGED));
 }
 
 /** The current path, such as "/drive/", updated as it changes. */
 export function usePath(): string {
-  const [path, setPath] = useState(location.pathname);
+  return useAddress(() => location.pathname);
+}
+
+/** A value from the address's query, such as the file Drive is showing,
+ * updated as it changes. */
+export function useQuery(name: string): string | null {
+  return useAddress(() => new URLSearchParams(location.search).get(name));
+}
+
+function useAddress<T>(read: () => T): T {
+  const [value, setValue] = useState(read);
   useEffect(() => {
-    const update = () => setPath(location.pathname);
+    const update = () => setValue(read);
     window.addEventListener("popstate", update);
     window.addEventListener(CHANGED, update);
     return () => {
@@ -27,7 +40,7 @@ export function usePath(): string {
       window.removeEventListener(CHANGED, update);
     };
   }, []);
-  return path;
+  return value;
 }
 
 /** Handles a link's click inside the app, unless the reader asked for a new
@@ -38,5 +51,5 @@ export function followLink(event: MouseEvent): void {
     return;
   }
   event.preventDefault();
-  navigate(link.pathname);
+  navigate(link.pathname + link.search);
 }
