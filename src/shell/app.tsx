@@ -4,6 +4,7 @@ import { useEffect, useState } from "preact/hooks";
 
 import { ApiError, api, type Session } from "../api.ts";
 import { DrivePage } from "../drive/drive-page.tsx";
+import { TrashPage } from "../drive/trash-page.tsx";
 import { uploads } from "../drive/http-transport.ts";
 import { UploadPanel } from "../drive/upload-panel.tsx";
 import { t } from "../i18n.ts";
@@ -106,6 +107,9 @@ function SignedIn({ session, onSignedOut }: { session: Session; onSignedOut: () 
 function Route({ path }: { path: string }) {
   if (path === "/" || path === "/drive") {
     return <Redirect to="/drive/" />;
+  }
+  if (path === "/drive/trash" || path === "/drive/trash/") {
+    return <TrashPage />;
   }
   const drive = /^\/drive\/(?:folder\/([^/]+)\/?)?$/.exec(path);
   if (drive) {

@@ -11,6 +11,8 @@
   --accent: #1a5fb4;
   --accent-text: #ffffff;
   --error: #b3261e;
+  --danger: #b3261e;
+  --selected: #e3edf9;
   --focus: #1a5fb4;
 }
 
@@ -24,6 +26,8 @@
     --accent: #78aeed;
     --accent-text: #0b1a2e;
     --error: #f2b8b5;
+    --danger: #8c1d18;
+    --selected: #1f3049;
     --focus: #78aeed;
   }
 }
@@ -108,7 +112,7 @@ label {
   font-weight: 600;
 }
 
-input {
+input:not([type="checkbox"]) {
   width: 100%;
   padding: 8px 10px;
   font: inherit;
@@ -132,6 +136,23 @@ button {
 button.secondary {
   color: var(--accent);
   background: transparent;
+}
+
+/* For what can't be undone, such as deleting for good. */
+button.danger {
+  color: #ffffff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+/* A button that reads as a link, such as a folder in the move dialog. */
+button.link {
+  padding: 0;
+  font-weight: normal;
+  color: var(--accent);
+  text-decoration: underline;
+  background: none;
+  border: none;
 }
 
 button:disabled {
@@ -179,11 +200,42 @@ table.items .size {
   white-space: nowrap;
 }
 
+table.items .select {
+  width: 1px;
+  padding-right: 0;
+}
+
+table.items input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+
+table.items tr.selected {
+  background: var(--selected);
+}
+
+table.items .actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+table.items .actions button {
+  margin-left: 8px;
+  padding: 4px 10px;
+}
+
 /* On phones, the date takes the space a name needs. */
 @media (max-width: 600px) {
-  table.items th:nth-child(2),
-  table.items td:nth-child(2) {
+  table.items .modified {
     display: none;
+  }
+
+  table.items .actions button {
+    display: block;
+    margin: 4px 0 0 auto;
   }
 }
 
@@ -200,8 +252,89 @@ table.items .size {
 .toolbar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin: 8px 0 16px;
+}
+
+.toolbar-link {
+  margin-left: auto;
+  padding: 8px 4px;
+}
+
+.toolbar.selection {
+  padding: 8px 12px;
+  background: var(--selected);
+  border-radius: 8px;
+}
+
+.toolbar.selection span {
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.done:empty {
+  display: none;
+}
+
+dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 20px;
+  color: var(--text);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+dialog h2 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+dialog label {
+  margin-top: 8px;
+}
+
+.dialog-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.move-location {
+  margin: 8px 0;
+  font-size: 1rem;
+}
+
+.move-location:focus {
+  outline: none;
+}
+
+.move-folders {
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.move-folders li {
+  border-bottom: 1px solid var(--border);
+}
+
+.move-folders button.link {
+  display: block;
+  width: 100%;
+  padding: 10px 4px;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 
 /* A folder with files dragged over it. */
