@@ -36,8 +36,15 @@ export const en = {
   "drive.download": "Download {name}",
   "drive.upload": "Upload files",
   "drive.dropHere": "Drop files to upload them to {folder}",
-  "drive.noFolders":
-    "Accordion can't upload folders yet. Open the folder on your device, then upload the files inside it.",
+  "drive.uploadFolder": "Upload folder",
+  "drive.folderTaken":
+    "Accordion couldn't upload the folder {name}, because a file here already has that name. Rename the file, then try again.",
+  "drive.new": "New",
+  "drive.newIn": "New in {folder}",
+  "drive.open": "Open",
+  "drive.moreActions": "More actions for {name}",
+  "drive.actionsFor": "Actions for {name}",
+  "drive.actionsForMany": { one: "Actions for {count} item", other: "Actions for {count} items" },
   "drive.newFolder": "New folder",
   "drive.create": "Create",
   "drive.created": "Created the folder {name}.",
@@ -59,6 +66,7 @@ export const en = {
   "drive.noSubfolders": "There are no folders in here.",
   "drive.foldersIn": "Folders in {name}",
   "drive.toTrash": "Move to trash",
+  "drive.trashMany": { one: "Move {count} item to the trash", other: "Move {count} items to the trash" },
   "drive.trashedOne": "Moved {name} to the trash.",
   "drive.trashedMany": {
     one: "Moved {count} item to the trash.",

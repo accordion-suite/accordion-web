@@ -1,17 +1,20 @@
 // A folder in Drive: what's in it, with links into subfolders, to show
-// photos and PDFs, and to download other files, uploads by button or by
-// dropping files on it, and new folders. Selected files and folders can be
-// renamed, moved, or moved to the trash. It uses only Drive's own API,
-// /api/drive (decision 13).
+// photos and PDFs, and to download other files, uploads of files and folders
+// by menu or by dropping them on it, and new folders. Files and folders can
+// be renamed, moved, or moved to the trash from a menu, by right-clicking or
+// with each one's button, or with keyboard shortcuts on what's selected. It
+// uses only Drive's own API, /api/drive (decision 13).
 
-import type { TargetedDragEvent, TargetedEvent } from "preact";
+import type { TargetedDragEvent, TargetedEvent, TargetedMouseEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
+import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
 import { MoveDialog, NameDialog } from "./dialogs.tsx";
+import { type Tree, type TreeFile, chosenTree, droppedTree, key, makeFolders } from "./folder-upload.ts";
 import { uploads } from "./http-transport.ts";
 import type { Item } from "./item.ts";
 import { Viewer } from "./viewer.tsx";
@@ -60,6 +63,27 @@ async function load(id: string | null): Promise<Loaded> {
   return { folder, parent, children };
 }
 
+/** An open menu. `owner` names the button that opened it, if one did. */
+interface OpenMenu {
+  label: string;
+  entries: MenuEntry[];
+  place: MenuPlace;
+  owner?: string;
+}
+
+/** Saves a file, as its download link would. */
+function download(item: Item) {
+  const link = document.createElement("a");
+  link.href = `/api/drive/items/${item.id}/content`;
+  link.download = item.name;
+  link.click();
+}
+
+/** Whether a key press is meant for a text field rather than the page. */
+function typing(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest("input:not([type=checkbox]), textarea, [contenteditable]") !== null;
+}
+
 /** Whether a drag holds files from the device, rather than, say, text. */
 function holdsFiles(event: DragEvent): boolean {
   return event.dataTransfer?.types.includes("Files") ?? false;
@@ -82,9 +106,20 @@ export function DrivePage({ folder }: { folder: string | null }) {
   const [dropping, setDropping] = useState(false);
   // Drags enter and leave each element inside the page, so this counts how
   // deep the pointer is to know when it has really left.
+  const [menu, setMenu] = useState<OpenMenu | null>(null);
   const dragDepth = useRef(0);
   const chooser = useRef<HTMLInputElement>(null);
+  const folderChooser = useRef<HTMLInputElement>(null);
   const showing = useQuery("file");
+  // The shortcuts need what's loaded, so the page sets them once it is.
+  const shortcuts = useRef<((event: KeyboardEvent) => void) | null>(null);
+  shortcuts.current = null;
+
+  useEffect(() => {
+    const keys = (event: KeyboardEvent) => shortcuts.current?.(event);
+    document.addEventListener("keydown", keys);
+    return () => document.removeEventListener("keydown", keys);
+  }, []);
 
   function refresh() {
     load(folder).then(
@@ -152,21 +187,136 @@ export function DrivePage({ folder }: { folder: string | null }) {
     refresh();
   }
 
-  function upload(files: readonly File[]) {
-    if (files.length > 0) {
+  /** Uploads files and folders into this folder, making the folders
+   * first. */
+  async function upload(tree: Tree) {
+    let ids: Map<string, string>;
+    try {
+      ids = await makeFolders(loaded!.folder.id, tree);
+    } catch (failure) {
+      setProblem((failure as Error).message);
+      return;
+    }
+    if (ids.size > 1) refresh();
+    const byFolder = new Map<string, TreeFile[]>();
+    for (const file of tree.files) {
+      byFolder.set(key(file.path), [...(byFolder.get(key(file.path)) ?? []), file]);
+    }
+    for (const [folderKey, files] of byFolder) {
+      const path = files[0]!.path;
       uploads.add(
-        files.map((file) => ({ file, name: file.name })),
-        { id: loaded!.folder.id, name: folderName },
+        files.map(({ file }) => ({ file, name: file.name })),
+        { id: ids.get(folderKey)!, name: path.length > 0 ? path[path.length - 1]! : folderName },
       );
     }
   }
 
-  function chosen(event: TargetedEvent<HTMLInputElement>) {
+  function chosen(event: TargetedEvent<HTMLInputElement>, folders: boolean) {
     setProblem("");
-    upload([...(event.currentTarget.files ?? [])]);
-    // Lets the same file be chosen again.
+    const files = [...(event.currentTarget.files ?? [])];
+    void upload(folders ? chosenTree(files) : { files: files.map((file) => ({ file, path: [] })), folders: [] });
+    // Lets the same files be chosen again.
     event.currentTarget.value = "";
   }
+
+  /** What an action on `item` applies to: everything selected, if it's
+   * among them, or else just the item. */
+  function targets(item: Item): Item[] {
+    return selected.has(item.id) && chosenItems.length > 1 ? chosenItems : [item];
+  }
+
+  function itemEntries(items: Item[]): MenuEntry[] {
+    if (items.length > 1) {
+      return [
+        { label: t("drive.moveMany", { count: items.length }), onSelect: () => setOpen({ kind: "move", items }) },
+        SEPARATOR,
+        { label: t("drive.trashMany", { count: items.length }), shortcut: "Delete", onSelect: () => trash(items) },
+      ];
+    }
+    const item = items[0]!;
+    const entries: MenuEntry[] = [];
+    if (item.kind === "folder") {
+      entries.push({ label: t("drive.open"), onSelect: () => navigate(folderPath(item)) });
+    } else {
+      if (item.preview) {
+        entries.push({
+          label: t("drive.open"),
+          onSelect: () => navigate(filePath(loaded!.folder, item), { state: OPENED_HERE }),
+        });
+      }
+      entries.push({ label: t("viewer.download"), onSelect: () => download(item) });
+    }
+    entries.push(
+      SEPARATOR,
+      { label: t("drive.rename"), shortcut: "F2", onSelect: () => setOpen({ kind: "rename", item }) },
+      { label: t("drive.move"), onSelect: () => setOpen({ kind: "move", items }) },
+      SEPARATOR,
+      { label: t("drive.toTrash"), shortcut: "Delete", onSelect: () => trash(items) },
+    );
+    return entries;
+  }
+
+  function itemMenu(item: Item, place: MenuPlace, owner?: string): OpenMenu {
+    const items = targets(item);
+    const label =
+      items.length > 1 ? t("drive.actionsForMany", { count: items.length }) : t("drive.actionsFor", { name: item.name });
+    return { label, entries: itemEntries(items), place, owner };
+  }
+
+  function newMenu(place: MenuPlace, owner?: string): OpenMenu {
+    return {
+      label: t("drive.newIn", { folder: folderName }),
+      entries: [
+        { label: t("drive.newFolder"), onSelect: () => setOpen({ kind: "newFolder" }) },
+        SEPARATOR,
+        { label: t("drive.upload"), onSelect: () => chooser.current?.click() },
+        { label: t("drive.uploadFolder"), onSelect: () => folderChooser.current?.click() },
+      ],
+      place,
+      owner,
+    };
+  }
+
+  /** Right-clicking, or the context menu key: a menu for the item under the
+   * pointer, or for the folder itself on empty space. */
+  function contextMenu(event: TargetedMouseEvent<HTMLElement>) {
+    const target = event.target as Element;
+    if (typing(target) || target.closest("dialog")) return;
+    event.preventDefault();
+    const row = target.closest<HTMLElement>("tr[data-id]");
+    // The context menu key may give no position, so the menu opens under
+    // what has focus.
+    const place: MenuPlace =
+      event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : { under: row ?? target };
+    const item = row && children.find((child) => child.id === row.dataset["id"]);
+    setMenu(item ? itemMenu(item, place) : newMenu(place));
+  }
+
+  shortcuts.current = (event) => {
+    if (open || menu || shownFile || typing(event.target)) return;
+    if (event.target instanceof Element && event.target.closest("dialog")) return;
+    const command = event.ctrlKey || event.metaKey;
+    const focused = (document.activeElement as Element | null)?.closest<HTMLElement>("tr[data-id]");
+    const focusedItem = focused && children.find((child) => child.id === focused.dataset["id"]);
+    const items = chosenItems.length > 0 ? chosenItems : focusedItem ? [focusedItem] : [];
+    if (event.key === "Delete" || (event.key === "Backspace" && event.metaKey)) {
+      if (items.length === 0) return;
+      void trash(items);
+    } else if (event.key === "F2") {
+      if (items.length !== 1) return;
+      setOpen({ kind: "rename", item: items[0]! });
+    } else if (command && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
+      setSelected(new Set(children.map((child) => child.id)));
+    } else if (command && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "z") {
+      if (!done?.restore) return;
+      void undo(done.restore);
+    } else if (event.key === "Escape" && selected.size > 0) {
+      setSelected(new Set());
+    } else {
+      return;
+    }
+    event.preventDefault();
+  };
 
   function toggle(id: string) {
     const next = new Set(selected);
@@ -229,20 +379,13 @@ export function DrivePage({ folder }: { folder: string | null }) {
     dragDepth.current = 0;
     setDropping(false);
     setProblem("");
-    const files: File[] = [];
-    let folders = false;
-    for (const entry of event.dataTransfer!.items) {
-      if (entry.kind !== "file") continue;
-      // A dropped folder arrives as a file that can't be read.
-      if (entry.webkitGetAsEntry?.()?.isDirectory) {
-        folders = true;
-        continue;
-      }
-      const file = entry.getAsFile();
-      if (file) files.push(file);
+    const reading = droppedTree(event.dataTransfer!.items);
+    if (reading) {
+      reading.then(upload, (failure: Error) => setProblem(failure.message));
+    } else {
+      // A browser that can't read folders from a drop still gives files.
+      void upload({ files: [...event.dataTransfer!.files].map((file) => ({ file, path: [] })), folders: [] });
     }
-    if (folders) setProblem(t("drive.noFolders"));
-    upload(files);
   }
 
   return (
@@ -252,6 +395,7 @@ export function DrivePage({ folder }: { folder: string | null }) {
       onDragOver={dragOver}
       onDragLeave={dragLeave}
       onDrop={drop}
+      onContextMenu={contextMenu}
     >
       {dropping && (
         <p class="drop-hint" aria-hidden="true">
@@ -267,13 +411,24 @@ export function DrivePage({ folder }: { folder: string | null }) {
       )}
       <PageTitle>{folderName}</PageTitle>
       <div class="toolbar">
-        <button type="button" onClick={() => chooser.current?.click()}>
-          {t("drive.upload")}
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={menu?.owner === "new"}
+          onClick={(event) => setMenu(newMenu({ under: event.currentTarget }, "new"))}
+        >
+          {t("drive.new")}
         </button>
-        <input ref={chooser} type="file" multiple hidden onChange={chosen} />
-        <button type="button" class="secondary" onClick={() => setOpen({ kind: "newFolder" })}>
-          {t("drive.newFolder")}
-        </button>
+        <input ref={chooser} type="file" multiple hidden onChange={(event) => chosen(event, false)} />
+        <input
+          ref={folderChooser}
+          type="file"
+          hidden
+          // Chooses a folder. Every browser supports it, but Preact's types
+          // don't list it yet.
+          {...{ webkitdirectory: true }}
+          onChange={(event) => chosen(event, true)}
+        />
         <a class="toolbar-link" href="/drive/trash" onClick={followLink}>
           {t("trash.title")}
         </a>
@@ -336,11 +491,12 @@ export function DrivePage({ folder }: { folder: string | null }) {
                 <th scope="col" class="size">
                   {t("drive.size")}
                 </th>
+                <td class="more" />
               </tr>
             </thead>
             <tbody>
               {children.map((item) => (
-                <tr key={item.id} class={selected.has(item.id) ? "selected" : undefined}>
+                <tr key={item.id} data-id={item.id} class={selected.has(item.id) ? "selected" : undefined}>
                   <td class="select">
                     <input
                       type="checkbox"
@@ -371,6 +527,18 @@ export function DrivePage({ folder }: { folder: string | null }) {
                   <td class="modified">{formatDate(item.modified_at)}</td>
                   <td class="size">
                     {item.kind === "folder" ? t("drive.folder") : formatSize(item.size ?? 0)}
+                  </td>
+                  <td class="more">
+                    <button
+                      type="button"
+                      class="icon"
+                      aria-label={t("drive.moreActions", { name: item.name })}
+                      aria-haspopup="menu"
+                      aria-expanded={menu?.owner === item.id}
+                      onClick={(event) => setMenu(itemMenu(item, { under: event.currentTarget }, item.id))}
+                    >
+                      ⋮
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -405,6 +573,7 @@ export function DrivePage({ folder }: { folder: string | null }) {
           onClose={() => setOpen(null)}
         />
       )}
+      {menu && <Menu label={menu.label} entries={menu.entries} place={menu.place} onClose={() => setMenu(null)} />}
       {shownFile && (
         <Viewer
           files={shown}
