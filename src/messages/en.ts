@@ -34,4 +34,28 @@ export const en = {
   "drive.size": "Size",
   "drive.folder": "Folder",
   "drive.download": "Download {name}",
+  "drive.upload": "Upload files",
+  "drive.dropHere": "Drop files to upload them to {folder}",
+  "drive.noFolders":
+    "Accordion can't upload folders yet. Open the folder on your device, then upload the files inside it.",
+
+  "uploads.title": "Uploads",
+  "uploads.uploading": { one: "Uploading {count} file", other: "Uploading {count} files" },
+  "uploads.uploaded": { one: "{count} file uploaded", other: "{count} files uploaded" },
+  "uploads.waiting": "Waiting",
+  "uploads.sent": "{sent} of {size}",
+  "uploads.retrying": "The connection dropped. Trying again…",
+  "uploads.saving": "Saving…",
+  "uploads.done": "Uploaded to {folder}",
+  "uploads.canceled": "Canceled",
+  "uploads.cancel": "Cancel",
+  "uploads.cancelNamed": "Cancel uploading {name}",
+  "uploads.progressOf": "Uploading {name}",
+  "uploads.clear": "Clear finished",
+  "uploads.hide": "Hide",
+  "uploads.show": "Show",
+  "uploads.announceDone": "{name} uploaded.",
+  "uploads.announceFailed": "{name} didn't upload. {problem}",
+  "uploads.gone":
+    "Accordion removed this upload, such as after a day without progress. Upload the file again.",
 } as const;

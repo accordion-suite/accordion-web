@@ -1,22 +1,16 @@
 // A folder in Drive: what's in it, with links into subfolders and to
-// download files. It uses only Drive's own API, /api/drive (decision 13).
+// download files, and uploads by button or by dropping files on it. It uses
+// only Drive's own API, /api/drive (decision 13).
 
-import { useEffect, useState } from "preact/hooks";
+import type { TargetedDragEvent, TargetedEvent } from "preact";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
 import { followLink } from "../shell/router.ts";
-
-/** A file or folder, as `/api/drive` describes it. */
-interface Item {
-  id: string;
-  parent: string | null;
-  name: string;
-  kind: "file" | "folder";
-  size: number | null;
-  modified_at: string;
-}
+import { uploads } from "./http-transport.ts";
+import type { Item } from "./item.ts";
 
 interface Loaded {
   folder: Item;
@@ -42,13 +36,35 @@ async function load(id: string | null): Promise<Loaded> {
   return { folder, parent, children };
 }
 
+/** Whether a drag holds files from the device, rather than, say, text. */
+function holdsFiles(event: DragEvent): boolean {
+  return event.dataTransfer?.types.includes("Files") ?? false;
+}
+
 export function DrivePage({ folder }: { folder: string | null }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [dropping, setDropping] = useState(false);
+  // Drags enter and leave each element inside the page, so this counts how
+  // deep the pointer is to know when it has really left.
+  const dragDepth = useRef(0);
+  const chooser = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     load(folder).then(setLoaded, (problem: Error) => setError(problem.message));
   }, [folder]);
+
+  // Shows a file as soon as its upload into this folder finishes.
+  const folderId = loaded?.folder.id;
+  useEffect(() => {
+    if (!folderId) return;
+    return uploads.onFinished((upload) => {
+      if (upload.folder.id === folderId) {
+        load(folder).then(setLoaded, () => undefined);
+      }
+    });
+  }, [folder, folderId]);
 
   if (error) {
     return (
@@ -64,8 +80,78 @@ export function DrivePage({ folder }: { folder: string | null }) {
     return <p class="loading">{t("shell.loading")}</p>;
   }
   const { parent, children } = loaded;
+  const folderName = parent ? loaded.folder.name : t("drive.title");
+
+  function upload(files: readonly File[]) {
+    if (files.length > 0) {
+      uploads.add(
+        files.map((file) => ({ file, name: file.name })),
+        { id: loaded!.folder.id, name: folderName },
+      );
+    }
+  }
+
+  function chosen(event: TargetedEvent<HTMLInputElement>) {
+    setNotice("");
+    upload([...(event.currentTarget.files ?? [])]);
+    // Lets the same file be chosen again.
+    event.currentTarget.value = "";
+  }
+
+  function dragEnter(event: TargetedDragEvent<HTMLElement>) {
+    if (!holdsFiles(event)) return;
+    event.preventDefault();
+    dragDepth.current += 1;
+    setDropping(true);
+  }
+
+  function dragOver(event: TargetedDragEvent<HTMLElement>) {
+    if (!holdsFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer!.dropEffect = "copy";
+  }
+
+  function dragLeave(event: TargetedDragEvent<HTMLElement>) {
+    if (!holdsFiles(event)) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDropping(false);
+  }
+
+  function drop(event: TargetedDragEvent<HTMLElement>) {
+    if (!holdsFiles(event)) return;
+    event.preventDefault();
+    dragDepth.current = 0;
+    setDropping(false);
+    setNotice("");
+    const files: File[] = [];
+    let folders = false;
+    for (const entry of event.dataTransfer!.items) {
+      if (entry.kind !== "file") continue;
+      // A dropped folder arrives as a file that can't be read.
+      if (entry.webkitGetAsEntry?.()?.isDirectory) {
+        folders = true;
+        continue;
+      }
+      const file = entry.getAsFile();
+      if (file) files.push(file);
+    }
+    if (folders) setNotice(t("drive.noFolders"));
+    upload(files);
+  }
+
   return (
-    <main>
+    <main
+      class={dropping ? "dropping" : undefined}
+      onDragEnter={dragEnter}
+      onDragOver={dragOver}
+      onDragLeave={dragLeave}
+      onDrop={drop}
+    >
+      {dropping && (
+        <p class="drop-hint" aria-hidden="true">
+          {t("drive.dropHere", { folder: folderName })}
+        </p>
+      )}
       {parent && (
         <p>
           <a href={folderPath(parent)} onClick={followLink}>
@@ -73,7 +159,16 @@ export function DrivePage({ folder }: { folder: string | null }) {
           </a>
         </p>
       )}
-      <PageTitle>{parent ? loaded.folder.name : t("drive.title")}</PageTitle>
+      <PageTitle>{folderName}</PageTitle>
+      <div class="toolbar">
+        <button type="button" onClick={() => chooser.current?.click()}>
+          {t("drive.upload")}
+        </button>
+        <input ref={chooser} type="file" multiple hidden onChange={chosen} />
+      </div>
+      <p class="error" role="alert">
+        {notice}
+      </p>
       {children.length === 0 ? (
         <p>{t("drive.empty")}</p>
       ) : (

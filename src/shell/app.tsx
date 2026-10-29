@@ -4,6 +4,8 @@ import { useEffect, useState } from "preact/hooks";
 
 import { ApiError, api, type Session } from "../api.ts";
 import { DrivePage } from "../drive/drive-page.tsx";
+import { uploads } from "../drive/http-transport.ts";
+import { UploadPanel } from "../drive/upload-panel.tsx";
 import { t } from "../i18n.ts";
 import { PageTitle } from "./page.tsx";
 import { followLink, navigate, usePath } from "./router.ts";
@@ -47,7 +49,30 @@ export function App() {
 function SignedIn({ session, onSignedOut }: { session: Session; onSignedOut: () => void }) {
   const path = usePath();
 
+  useEffect(() => {
+    // A file dropped outside a folder's page would otherwise open in the
+    // tab, in place of the app and its uploads.
+    const ignoreDrop = (event: DragEvent) => {
+      if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+    };
+    // Leaving the page stops its uploads, so the browser asks first.
+    const confirmLeaving = (event: BeforeUnloadEvent) => {
+      if (uploads.busy) event.preventDefault();
+    };
+    window.addEventListener("dragover", ignoreDrop);
+    window.addEventListener("drop", ignoreDrop);
+    window.addEventListener("beforeunload", confirmLeaving);
+    return () => {
+      window.removeEventListener("dragover", ignoreDrop);
+      window.removeEventListener("drop", ignoreDrop);
+      window.removeEventListener("beforeunload", confirmLeaving);
+    };
+  }, []);
+
   async function signOut() {
+    // Uploads need the session to remove what they sent.
+    await uploads.cancelAll();
+    uploads.clearFinished();
     await api("DELETE", "/api/session").catch(() => undefined);
     onSignedOut();
   }
@@ -73,6 +98,7 @@ function SignedIn({ session, onSignedOut }: { session: Session; onSignedOut: () 
         </button>
       </header>
       <Route path={path} />
+      <UploadPanel />
     </>
   );
 }
