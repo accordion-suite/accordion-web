@@ -1,10 +1,12 @@
 // Builds the web app into dist/ (decision 13). npm run build compiles this
 // script with esbuild first, so it runs on any Node.js.
 //
-// The same source and esbuild version give the same files, so a release
-// built on the developer's computer matches CI's (decision 9). File names
-// carry a hash of their contents, and the compressed copies have no
-// timestamps.
+// The same source, esbuild version, and Node.js build give the same files,
+// so a release built on the developer's computer matches CI's (decision 9).
+// The Node.js build matters because its zlib and Brotli make the compressed
+// copies, and Node.js's own builds use a different zlib from Ubuntu's, so
+// the suite's release build downloads a pinned Node.js. File names carry a
+// hash of their contents, and the compressed copies have no timestamps.
 //
 // dist/index.html is the page the server sends for every address in the
 // app, and dist/app/ holds the scripts and styles. Each file also has .gz
