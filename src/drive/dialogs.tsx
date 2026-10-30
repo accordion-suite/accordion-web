@@ -1,5 +1,6 @@
 // Drive's dialogs: naming a new folder or renaming, choosing where to move
-// to, and confirming what can't be undone.
+// to, choosing what an upload does to items with its names, and confirming
+// what can't be undone.
 
 import type { TargetedSubmitEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -7,8 +8,9 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../api.ts";
 import { t } from "../i18n.ts";
 import { Dialog } from "../shell/dialog.tsx";
+import type { Child } from "./folder-upload.ts";
 import type { Item } from "./item.ts";
-import { stemLength } from "./names.ts";
+import { freeName, stemLength } from "./names.ts";
 
 function message(problem: unknown): string {
   return problem instanceof Error ? problem.message : t("error.problem");
@@ -128,6 +130,48 @@ export function ConfirmDialog({
         </button>
         {/* Focus starts on the safe choice. */}
         <button type="button" class="secondary" autofocus onClick={onClose}>
+          {t("dialog.cancel")}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** Asks whether uploads replace the items that have their names, or keep
+ * both, as Google Drive's upload options do. */
+export function ClashDialog({
+  clashes,
+  onChoose,
+  onClose,
+}: {
+  clashes: readonly Child[];
+  onChoose: (replace: boolean) => void;
+  onClose: () => void;
+}) {
+  const first = clashes[0]!;
+  const files = clashes.filter((child) => child.kind === "file").length;
+  const folders = clashes.length - files;
+  const taken = new Set(clashes.map((child) => child.name));
+  const said =
+    clashes.length > 1
+      ? t("drive.clashMany", { count: clashes.length })
+      : t(first.kind === "file" ? "drive.clashFile" : "drive.clashFolder", { name: first.name });
+
+  return (
+    <Dialog title={t("drive.clashTitle")} onClose={onClose}>
+      <p>{said}</p>
+      {files > 0 && <p>{t("drive.replaceFiles", { count: files })}</p>}
+      {folders > 0 && <p>{t("drive.replaceFolders", { count: folders })}</p>}
+      <p>{t("drive.keepBothHelp", { example: freeName(first.name, taken) })}</p>
+      <div class="dialog-buttons">
+        <button type="button" onClick={() => onChoose(true)}>
+          {t("drive.replace")}
+        </button>
+        {/* Focus starts on the choice that changes nothing that's there. */}
+        <button type="button" class="secondary" autofocus onClick={() => onChoose(false)}>
+          {t("drive.keepBoth")}
+        </button>
+        <button type="button" class="secondary" onClick={onClose}>
           {t("dialog.cancel")}
         </button>
       </div>

@@ -13,10 +13,20 @@ import { formatDate, formatSize, t } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
-import { MoveDialog, NameDialog } from "./dialogs.tsx";
-import { type Tree, type TreeFile, chosenTree, droppedTree, key, makeFolders } from "./folder-upload.ts";
+import { ClashDialog, MoveDialog, NameDialog } from "./dialogs.tsx";
+import {
+  type Child,
+  type Folders,
+  type Tree,
+  chosenTree,
+  clashes,
+  droppedTree,
+  httpFolders,
+  placeTree,
+} from "./folder-upload.ts";
 import { uploads } from "./http-transport.ts";
 import type { Item } from "./item.ts";
+import { finished } from "./uploads.ts";
 import { Viewer } from "./viewer.tsx";
 
 interface Loaded {
@@ -28,7 +38,8 @@ interface Loaded {
 type Open =
   | { kind: "newFolder" }
   | { kind: "rename"; item: Item }
-  | { kind: "move"; items: Item[] };
+  | { kind: "move"; items: Item[] }
+  | { kind: "clash"; clashes: Child[]; answer: (replace: boolean | null) => void };
 
 /** What just changed, with a way to undo moving to the trash. */
 interface Done {
@@ -71,6 +82,18 @@ interface OpenMenu {
   byKeyboard: boolean;
   owner?: string;
 }
+
+/** Drive's folders, with the files still in the upload queue counted as
+ * there, so uploading the same file twice in a row asks too. */
+const foldersWithQueue: Folders = {
+  create: httpFolders.create,
+  async children(parent) {
+    const queued = uploads.uploads
+      .filter((upload) => upload.folder.id === parent && !finished(upload.state))
+      .map((upload): Child => ({ name: upload.name, kind: "file" }));
+    return [...(await httpFolders.children(parent)), ...queued];
+  },
+};
 
 /** Whether a key, rather than the pointer, pressed a button. A click from
  * Enter or Space counts no presses. */
@@ -194,34 +217,41 @@ export function DrivePage({ folder }: { folder: string | null }) {
     refresh();
   }
 
+  /** Asks whether to replace what has the upload's names, or keep both.
+   * Null means cancel. */
+  function ask(found: Child[]): Promise<boolean | null> {
+    return new Promise((answer) => setOpen({ kind: "clash", clashes: found, answer }));
+  }
+
   /** Uploads files and folders into this folder, making the folders
    * first. */
   async function upload(tree: Tree) {
-    let ids: Map<string, string>;
+    const top = { id: loaded!.folder.id, name: folderName };
+    let placed;
     try {
-      ids = await makeFolders(loaded!.folder.id, tree);
+      const found = clashes(tree, await foldersWithQueue.children(top.id));
+      const replace = found.length > 0 ? await ask(found) : false;
+      if (replace === null) return;
+      placed = await placeTree(top, tree, replace, foldersWithQueue);
     } catch (failure) {
       setProblem((failure as Error).message);
       return;
     }
-    if (ids.size > 1) refresh();
-    const byFolder = new Map<string, TreeFile[]>();
-    for (const file of tree.files) {
-      byFolder.set(key(file.path), [...(byFolder.get(key(file.path)) ?? []), file]);
+    if (placed.some((file) => file.folder.id !== top.id) || tree.folders.length > 0) refresh();
+    const byFolder = new Map<string, typeof placed>();
+    for (const file of placed) {
+      byFolder.set(file.folder.id, [...(byFolder.get(file.folder.id) ?? []), file]);
     }
-    for (const [folderKey, files] of byFolder) {
-      const path = files[0]!.path;
-      uploads.add(
-        files.map(({ file }) => ({ file, name: file.name })),
-        { id: ids.get(folderKey)!, name: path.length > 0 ? path[path.length - 1]! : folderName },
-      );
-    }
+    for (const files of byFolder.values()) uploads.add(files, files[0]!.folder);
   }
 
   function chosen(event: TargetedEvent<HTMLInputElement>, folders: boolean) {
     setProblem("");
     const files = [...(event.currentTarget.files ?? [])];
-    void upload(folders ? chosenTree(files) : { files: files.map((file) => ({ file, path: [] })), folders: [] });
+    // A chosen folder brings only its files, so an empty one brings
+    // nothing, and the browser doesn't say so.
+    if (folders && files.length === 0) setProblem(t("drive.emptyFolder"));
+    else void upload(folders ? chosenTree(files) : { files: files.map((file) => ({ file, path: [] })), folders: [] });
     // Lets the same files be chosen again.
     event.currentTarget.value = "";
   }
@@ -599,6 +629,19 @@ export function DrivePage({ folder }: { folder: string | null }) {
             navigate(filePath(loaded.folder, file), { replace: true, state: history.state })
           }
           onClose={closeFile}
+        />
+      )}
+      {open?.kind === "clash" && (
+        <ClashDialog
+          clashes={open.clashes}
+          onChoose={(replace) => {
+            setOpen(null);
+            open.answer(replace);
+          }}
+          onClose={() => {
+            setOpen(null);
+            open.answer(null);
+          }}
         />
       )}
       {open?.kind === "move" && (

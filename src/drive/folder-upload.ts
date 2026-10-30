@@ -1,15 +1,17 @@
-// Uploading whole folders, from the folder chooser or by dropping them.
-// Drive's API uploads files into folders that already exist, so this makes
-// each folder first, parents before what's inside them, and then the page
-// hands the files to the upload queue, folder by folder.
+// Uploading files and whole folders, chosen or dropped. Drive's API uploads
+// files into folders that already exist, so this makes each folder first,
+// parents before what's inside them, and names everything, and then the page
+// hands the files to the upload queue.
 //
-// A folder that's already there with the same name is used as it is, so
-// uploading a folder again adds to it, and files with the same names become
-// new versions, as they do when uploading files.
+// Names follow Google Drive. When an upload has the same name as an item of
+// the same kind, the reader chooses to replace it or keep both. Replacing a
+// file adds a new version, and replacing a folder adds to it. Keeping both,
+// or meeting an item of the other kind, gives the upload a free name, such
+// as "Photos (1)".
 
 import { ApiError, api } from "../api.ts";
-import { t } from "../i18n.ts";
 import type { Item } from "./item.ts";
+import { freeName } from "./names.ts";
 
 /** A file, and the names of the folders it's in, outermost first, inside
  * the folder it's uploaded to. */
@@ -89,45 +91,108 @@ export function key(path: readonly string[]): string {
   return path.join("/");
 }
 
-/** Makes or finds folders. Tests use a fake one. */
+/** What's in a folder, as far as names go. An upload that hasn't finished
+ * has no ID yet. */
+export interface Child {
+  readonly name: string;
+  readonly kind: Item["kind"];
+  readonly id?: string;
+}
+
+/** Makes and lists folders. Tests use a fake one. */
 export interface Folders {
   /** Makes the folder `name` in `parent`, and returns its ID. */
   create(parent: string, name: string): Promise<string>;
-  /** The folder named `name` in `parent`, if there's one. */
-  find(parent: string, name: string): Promise<string | null>;
+  children(parent: string): Promise<readonly Child[]>;
 }
 
 export const httpFolders: Folders = {
   async create(parent, name) {
     return (await api<Item>("POST", `/api/drive/items/${parent}/children`, { name })).id;
   },
-  async find(parent, name) {
-    const children = await api<Item[]>("GET", `/api/drive/items/${parent}/children`);
-    return children.find((child) => child.kind === "folder" && child.name === name)?.id ?? null;
+  children(parent) {
+    return api<Item[]>("GET", `/api/drive/items/${parent}/children`);
   },
 };
 
-/** Makes the folders the tree needs inside `top`, and returns each one's
- * ID by its key. */
-export async function makeFolders(
-  top: string,
-  tree: Tree,
-  folders: Folders = httpFolders,
-): Promise<Map<string, string>> {
-  const ids = new Map<string, string>([[key([]), top]]);
-  for (const path of foldersNeeded(tree)) {
-    const parent = ids.get(key(path.slice(0, -1)))!;
-    const name = path[path.length - 1]!;
-    let id: string | null;
-    try {
-      id = await folders.create(parent, name);
-    } catch (problem) {
-      if (!(problem instanceof ApiError) || problem.status !== 409) throw problem;
-      // Something has the name already. A folder is used as it is.
-      id = await folders.find(parent, name);
-      if (id === null) throw new ApiError(409, t("drive.folderTaken", { name }));
-    }
-    ids.set(key(path), id);
+/** The items in `here` that something at the top of the tree would replace:
+ * the ones with the same name and kind. */
+export function clashes(tree: Tree, here: readonly Child[]): Child[] {
+  const top = new Map<string, Item["kind"]>();
+  for (const { file, path } of tree.files) {
+    if (path.length === 0) top.set(file.name, "file");
+    else top.set(path[0]!, "folder");
   }
-  return ids;
+  for (const folder of tree.folders) top.set(folder[0]!, "folder");
+  return here.filter((child) => top.get(child.name) === child.kind);
+}
+
+/** A file to upload, with the name it gets and the folder it goes in. */
+export interface Placed {
+  readonly file: File;
+  readonly name: string;
+  readonly folder: { readonly id: string; readonly name: string };
+}
+
+/** Makes the folders the tree needs inside `top`, and places each file.
+ * With `replace`, an item with the same name and kind as one that's there
+ * replaces it; otherwise it takes a free name. */
+export async function placeTree(
+  top: { id: string; name: string },
+  tree: Tree,
+  replace: boolean,
+  folders: Folders = httpFolders,
+): Promise<Placed[]> {
+  interface Place {
+    id: string;
+    name: string;
+    /** What was there before the upload, by name. */
+    there: Map<string, Child>;
+    /** Names that are there or that the upload has given out. */
+    taken: Set<string>;
+  }
+  async function existing(id: string, name: string): Promise<Place> {
+    const children = await folders.children(id);
+    return {
+      id,
+      name,
+      there: new Map(children.map((child) => [child.name, child])),
+      taken: new Set(children.map((child) => child.name)),
+    };
+  }
+
+  const places = new Map<string, Place>([[key([]), await existing(top.id, top.name)]]);
+  for (const path of foldersNeeded(tree)) {
+    const parent = places.get(key(path.slice(0, -1)))!;
+    const wanted = path[path.length - 1]!;
+    const there = parent.there.get(wanted);
+    if (replace && there?.kind === "folder" && there.id) {
+      places.set(key(path), await existing(there.id, wanted));
+      continue;
+    }
+    for (;;) {
+      const name = freeName(wanted, parent.taken);
+      parent.taken.add(name);
+      try {
+        const id = await folders.create(parent.id, name);
+        places.set(key(path), { id, name, there: new Map(), taken: new Set() });
+        break;
+      } catch (problem) {
+        if (!(problem instanceof ApiError) || problem.status !== 409) throw problem;
+        // Something took the name since the folder was listed, so this
+        // tries the next number. Any other conflict, such as the folder
+        // having moved to the trash, stops the upload.
+        const now = await folders.children(parent.id);
+        if (!now.some((child) => child.name === name)) throw problem;
+      }
+    }
+  }
+
+  return tree.files.map(({ file, path }) => {
+    const place = places.get(key(path))!;
+    const name =
+      replace && place.there.get(file.name)?.kind === "file" ? file.name : freeName(file.name, place.taken);
+    place.taken.add(name);
+    return { file, name, folder: { id: place.id, name: place.name } };
+  });
 }

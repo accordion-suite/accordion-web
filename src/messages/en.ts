@@ -37,8 +37,27 @@ export const en = {
   "drive.upload": "Upload files",
   "drive.dropHere": "Drop files to upload them to {folder}",
   "drive.uploadFolder": "Upload folder",
-  "drive.folderTaken":
-    "Accordion couldn't upload the folder {name}, because a file here already has that name. Rename the file, then try again.",
+  "drive.emptyFolder":
+    "That folder is empty, so there's nothing to upload. To make an empty folder, select New, then New folder.",
+  "drive.clashTitle": "Upload options",
+  "drive.clashFile": "This folder already has a file named {name}.",
+  "drive.clashFolder": "This folder already has a folder named {name}.",
+  "drive.clashMany": {
+    one: "{count} item you're uploading has the same name as one that's already in this folder.",
+    other: "{count} items you're uploading have the same names as ones that are already in this folder.",
+  },
+  "drive.replaceFiles": {
+    one: "Replace makes your upload the newest version of the file. Accordion keeps the earlier version.",
+    other: "Replace makes your uploads the newest versions of the files. Accordion keeps the earlier versions.",
+  },
+  "drive.replaceFolders": {
+    one: "Replace adds what's in your folder to the one that's there. Files with the same names get new versions.",
+    other:
+      "Replace adds what's in your folders to the ones that are there. Files with the same names get new versions.",
+  },
+  "drive.keepBothHelp": "Keep both adds a number to the name, such as {example}.",
+  "drive.replace": "Replace",
+  "drive.keepBoth": "Keep both",
   "drive.new": "New",
   "drive.newIn": "New in {folder}",
   "drive.open": "Open",
