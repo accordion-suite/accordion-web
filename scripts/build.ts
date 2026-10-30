@@ -9,9 +9,12 @@
 // hash of their contents, and the compressed copies have no timestamps.
 //
 // dist/index.html is the page the server sends for every address in the
-// app, and dist/app/ holds the scripts and styles. Each file also has .gz
-// and .br copies, so the server never compresses on a request.
+// app, and dist/app/ holds the scripts, styles, and icons. The manifest in
+// dist/manifest.webmanifest lets phones and computers install the app. Each
+// file also has .gz and .br copies, so the server never compresses on a
+// request. PNGs are compressed already, so they don't.
 
+import { createHash } from "node:crypto";
 import { build, type Metafile } from "esbuild";
 import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -19,6 +22,11 @@ import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 
 const OUT = "dist";
 const ENTRY = "src/main.tsx";
+const ICONS = "src/icon";
+// The installed app's colors before its styles load, such as behind the
+// icon while it opens. They match --page in src/app.css.
+const LIGHT = "#f1f4f9";
+const DARK = "#111418";
 // Drive's first load, compressed with gzip. The build fails above it, so
 // the first load stays fast on a Raspberry Pi over 4G (decision 13).
 const BUDGET = 150 * 1024;
@@ -66,6 +74,43 @@ function firstLoad(meta: Metafile): { script: string; style: string; files: stri
 
 const { script, style, files } = firstLoad(metafile);
 const url = (file: string) => "/" + file.slice(OUT.length + 1);
+
+/** Copies an icon into dist/app/, named by a hash of its contents like the
+ * scripts, and returns its address. */
+async function icon(name: string): Promise<string> {
+  const content = await readFile(join(ICONS, name));
+  const hash = createHash("sha256").update(content).digest("hex").slice(0, 8).toUpperCase();
+  const dot = name.lastIndexOf(".");
+  const file = join(OUT, "app", `${name.slice(0, dot)}-${hash}${name.slice(dot)}`);
+  await writeFile(file, content);
+  return url(file);
+}
+
+// The whole server is one app, so it opens at the server's address, and
+// every page there, including the account and admin pages, stays in its
+// window.
+const manifest = {
+  id: "/",
+  name: "Accordion",
+  short_name: "Accordion",
+  start_url: "/",
+  scope: "/",
+  display: "standalone",
+  background_color: LIGHT,
+  theme_color: LIGHT,
+  icons: [
+    { src: await icon("icon-192.png"), sizes: "192x192", type: "image/png" },
+    { src: await icon("icon-512.png"), sizes: "512x512", type: "image/png" },
+    // Filled to the edges, for phones that cut the icon to their own shape.
+    { src: await icon("icon-maskable-192.png"), sizes: "192x192", type: "image/png", purpose: "maskable" },
+    { src: await icon("icon-maskable-512.png"), sizes: "512x512", type: "image/png", purpose: "maskable" },
+  ],
+};
+await writeFile(join(OUT, "manifest.webmanifest"), JSON.stringify(manifest, null, 2) + "\n");
+const tabIcon = await icon("icon.svg");
+// iPhones and iPads round the corners themselves, and fill see-through ones
+// with black.
+const homeScreenIcon = await icon("apple-touch-icon.png");
 await writeFile(
   join(OUT, "index.html"),
   `<!doctype html>
@@ -74,7 +119,12 @@ await writeFile(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="${LIGHT}">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="${DARK}">
 <title>Accordion</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="${tabIcon}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="${homeScreenIcon}">
 <link rel="stylesheet" href="${url(style)}">
 <script type="module" src="${url(script)}"></script>
 </head>
@@ -88,7 +138,7 @@ await writeFile(
 
 const sizes = new Map<string, number>();
 for (const entry of await readdir(OUT, { recursive: true, withFileTypes: true })) {
-  if (!entry.isFile()) continue;
+  if (!entry.isFile() || entry.name.endsWith(".png")) continue;
   const file = join(entry.parentPath, entry.name);
   const content = await readFile(file);
   const gzipped = gzipSync(content, { level: 9 });

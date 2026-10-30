@@ -9,6 +9,7 @@ This repo is part of [Accordion](https://github.com/accordion-suite/accordion), 
 - `src/shell/`: the app's frame, with sign-in, the top bar, and moving between pages.
 - `src/drive/`, and later one folder per module: each module's pages. A module's pages call only its own API, such as `/api/drive`, and the server's shared endpoints, such as `/api/session`, so they could move with their module later.
 - `src/messages/en.ts`: every string the app shows, in English, ready for translation.
+- `src/icon/`: the app's icon. `icon.svg` has rounded corners, and `icon-maskable.svg` fills the square, for phones that cut the icon to their own shape. The PNGs are exports of those SVGs at the sizes in their names, with `apple-touch-icon.png` at 180 pixels from `icon-maskable.svg`. After changing an SVG, export its PNGs again.
 - `scripts/build.ts`: the build, which writes `dist/`.
 
 ## Building
