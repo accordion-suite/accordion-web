@@ -68,7 +68,14 @@ interface OpenMenu {
   label: string;
   entries: MenuEntry[];
   place: MenuPlace;
+  byKeyboard: boolean;
   owner?: string;
+}
+
+/** Whether a key, rather than the pointer, pressed a button. A click from
+ * Enter or Space counts no presses. */
+function keyed(event: MouseEvent): boolean {
+  return event.detail === 0;
 }
 
 /** Saves a file, as its download link would. */
@@ -256,14 +263,14 @@ export function DrivePage({ folder }: { folder: string | null }) {
     return entries;
   }
 
-  function itemMenu(item: Item, place: MenuPlace, owner?: string): OpenMenu {
+  function itemMenu(item: Item, place: MenuPlace, byKeyboard: boolean, owner?: string): OpenMenu {
     const items = targets(item);
     const label =
       items.length > 1 ? t("drive.actionsForMany", { count: items.length }) : t("drive.actionsFor", { name: item.name });
-    return { label, entries: itemEntries(items), place, owner };
+    return { label, entries: itemEntries(items), place, byKeyboard, owner };
   }
 
-  function newMenu(place: MenuPlace, owner?: string): OpenMenu {
+  function newMenu(place: MenuPlace, byKeyboard: boolean, owner?: string): OpenMenu {
     return {
       label: t("drive.newIn", { folder: folderName }),
       entries: [
@@ -273,6 +280,7 @@ export function DrivePage({ folder }: { folder: string | null }) {
         { label: t("drive.uploadFolder"), onSelect: () => folderChooser.current?.click() },
       ],
       place,
+      byKeyboard,
       owner,
     };
   }
@@ -286,10 +294,10 @@ export function DrivePage({ folder }: { folder: string | null }) {
     const row = target.closest<HTMLElement>("tr[data-id]");
     // The context menu key may give no position, so the menu opens under
     // what has focus.
-    const place: MenuPlace =
-      event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : { under: row ?? target };
+    const byKeyboard = !event.clientX && !event.clientY;
+    const place: MenuPlace = byKeyboard ? { under: row ?? target } : { x: event.clientX, y: event.clientY };
     const item = row && children.find((child) => child.id === row.dataset["id"]);
-    setMenu(item ? itemMenu(item, place) : newMenu(place));
+    setMenu(item ? itemMenu(item, place, byKeyboard) : newMenu(place, byKeyboard));
   }
 
   shortcuts.current = (event) => {
@@ -415,7 +423,7 @@ export function DrivePage({ folder }: { folder: string | null }) {
           type="button"
           aria-haspopup="menu"
           aria-expanded={menu?.owner === "new"}
-          onClick={(event) => setMenu(newMenu({ under: event.currentTarget }, "new"))}
+          onClick={(event) => setMenu(newMenu({ under: event.currentTarget }, keyed(event), "new"))}
         >
           {t("drive.new")}
         </button>
@@ -535,7 +543,7 @@ export function DrivePage({ folder }: { folder: string | null }) {
                       aria-label={t("drive.moreActions", { name: item.name })}
                       aria-haspopup="menu"
                       aria-expanded={menu?.owner === item.id}
-                      onClick={(event) => setMenu(itemMenu(item, { under: event.currentTarget }, item.id))}
+                      onClick={(event) => setMenu(itemMenu(item, { under: event.currentTarget }, keyed(event), item.id))}
                     >
                       ⋮
                     </button>
@@ -573,7 +581,15 @@ export function DrivePage({ folder }: { folder: string | null }) {
           onClose={() => setOpen(null)}
         />
       )}
-      {menu && <Menu label={menu.label} entries={menu.entries} place={menu.place} onClose={() => setMenu(null)} />}
+      {menu && (
+        <Menu
+          label={menu.label}
+          entries={menu.entries}
+          place={menu.place}
+          byKeyboard={menu.byKeyboard}
+          onClose={() => setMenu(null)}
+        />
+      )}
       {shownFile && (
         <Viewer
           files={shown}

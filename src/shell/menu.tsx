@@ -1,7 +1,8 @@
 // A menu of actions, such as the one that opens on right-clicking a file.
 // It follows the ARIA menu pattern: the arrow keys move between items,
 // Enter or Space picks one, and Escape or Tab closes it and returns focus to
-// where it was.
+// where it was. Only the focused item is highlighted, and the pointer moves
+// focus, so there's never more than one.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 
@@ -28,11 +29,14 @@ export function Menu({
   label,
   entries,
   place,
+  byKeyboard,
   onClose,
 }: {
   label: string;
   entries: readonly MenuEntry[];
   place: MenuPlace;
+  /** Whether a key opened the menu, which starts it on its first item. */
+  byKeyboard: boolean;
   onClose: () => void;
 }) {
   const menu = useRef<HTMLDivElement>(null);
@@ -53,11 +57,12 @@ export function Menu({
     setPosition({ left, top });
   }, []);
 
-  // A hidden menu can't take focus, so the first item takes it once the
-  // menu is in place.
+  // A hidden menu can't take focus, so it takes it once it's in place. Opened
+  // by the pointer, the menu itself takes it, so no item is highlighted
+  // until the pointer reaches one or an arrow key is pressed.
   const placed = position !== null;
   useEffect(() => {
-    if (placed) items()[0]?.focus();
+    if (placed) (byKeyboard ? items()[0] : menu.current)?.focus();
   }, [placed]);
 
   useEffect(() => {
@@ -91,7 +96,8 @@ export function Menu({
         move(at + 1);
         break;
       case "ArrowUp":
-        move(at - 1);
+        // With no item focused yet, `at` is -1, and Up goes to the last.
+        move(at === -1 ? all.length - 1 : at - 1);
         break;
       case "Home":
         move(0);
@@ -116,6 +122,7 @@ export function Menu({
       class="menu"
       role="menu"
       aria-label={label}
+      tabIndex={-1}
       style={position ? { left: `${position.left}px`, top: `${position.top}px` } : { visibility: "hidden" }}
       onKeyDown={keyDown}
       onContextMenu={(event) => event.preventDefault()}
@@ -130,6 +137,10 @@ export function Menu({
             role="menuitem"
             tabIndex={-1}
             aria-keyshortcuts={entry.shortcut}
+            onPointerMove={(event) => {
+              if (document.activeElement !== event.currentTarget) event.currentTarget.focus();
+            }}
+            onPointerLeave={() => menu.current?.focus()}
             onClick={() => {
               onClose();
               entry.onSelect();

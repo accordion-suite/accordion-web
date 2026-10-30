@@ -382,7 +382,12 @@ dialog label {
   border-radius: 0;
 }
 
-.menu [role="menuitem"]:hover,
+.menu:focus {
+  outline: none;
+}
+
+/* Not :hover as well, because the pointer moves focus, and an item under a
+   pointer that's still while the arrow keys move would stay lit. */
 .menu [role="menuitem"]:focus {
   background: var(--selected);
   outline: none;
