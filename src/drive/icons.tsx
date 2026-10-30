@@ -196,14 +196,3 @@ export function ItemIcon({ item }: { item: Pick<Item, "kind" | "name"> }) {
     </svg>
   );
 }
-
-/** Accordion's mark: an accordion seen from the front, with its two ends
- * and the folded bellows between them. */
-export const Logo = () => (
-  <svg class="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-    <rect x="2" y="5" width="7" height="22" rx="2.5" fill="var(--logo-end)" />
-    <rect x="23" y="5" width="7" height="22" rx="2.5" fill="var(--logo-end)" />
-    <path d="M9 8h3.5L14 24h-3.5zM12.5 8H16l1.5 16H14zM16 8h3.5L21 24h-3.5zM19.5 8H23v16h-2z" fill="var(--logo-folds)" />
-    <path d="M12.5 8 14 24M16 8l1.5 16M19.5 8 21 24" stroke="var(--logo-crease)" stroke-width="1" />
-  </svg>
-);

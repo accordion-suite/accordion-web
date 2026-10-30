@@ -5,7 +5,7 @@ import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 
 import type { Session } from "../api.ts";
-import { Logo, MenuIcon } from "../drive/icons.tsx";
+import { MenuIcon } from "../drive/icons.tsx";
 import { t } from "../i18n.ts";
 import { Menu, type MenuPlace } from "./menu.tsx";
 import { followLink } from "./router.ts";
@@ -42,7 +42,6 @@ export function TopBar({
         </button>
       )}
       <a class="brand" href="/drive/" onClick={followLink}>
-        <Logo />
         <span class="brand-name">{t("app.name")}</span>
         <span class="brand-module">{t("drive.title")}</span>
       </a>
