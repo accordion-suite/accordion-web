@@ -1,34 +1,85 @@
 /* The web app's styles. Colors are tokens, so dark mode only changes the
-   tokens. Fonts are the device's own (decision 13). */
+   tokens. Fonts are the device's own (decision 13).
+
+   Drive's pages sit in a frame: a top bar, a sidebar on the left, and the
+   page itself on a raised panel. On phones, the sidebar slides in from the
+   left instead. */
 
 :root {
   color-scheme: light dark;
-  --text: #1d1d1f;
-  --muted: #5f6368;
-  --background: #ffffff;
-  --surface: #f4f5f7;
-  --border: #d5d8dc;
+  --text: #1c2430;
+  --muted: #5b6573;
+  --page: #f1f4f9;
+  --panel: #ffffff;
+  --surface: #e9eef6;
+  --surface-strong: #dde5f1;
+  --border: #d5dce6;
   --accent: #1a5fb4;
   --accent-text: #ffffff;
+  --accent-soft: #d6e4f8;
+  --on-accent-soft: #0e3a73;
+  --selected: #dbe7f8;
   --error: #b3261e;
+  --error-soft: #fbe3e1;
   --danger: #b3261e;
-  --selected: #e3edf9;
   --focus: #1a5fb4;
+  --star: #c98a00;
+  --shadow: 0 1px 2px rgb(16 24 40 / 0.08), 0 4px 16px rgb(16 24 40 / 0.12);
+  --logo-end: #1a5fb4;
+  --logo-folds: #e88a3f;
+  --logo-crease: #b8571a;
+
+  /* File icons, by kind. */
+  --kind-folder: #5f6b7a;
+  --kind-document: #2f6fd6;
+  --kind-spreadsheet: #1e8e4e;
+  --kind-presentation: #d98a00;
+  --kind-pdf: #d33b2c;
+  --kind-image: #c2410c;
+  --kind-video: #b5179e;
+  --kind-audio: #7048c8;
+  --kind-archive: #6b5a45;
+  --kind-file: #6b7685;
+
+  --radius: 12px;
+  --sidebar-width: 256px;
+  --top-bar-height: 64px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #e8eaed;
-    --muted: #a8adb4;
-    --background: #16181b;
-    --surface: #212429;
-    --border: #3a3f46;
-    --accent: #78aeed;
+    --text: #e4e8ee;
+    --muted: #a4adba;
+    --page: #111418;
+    --panel: #1a1e24;
+    --surface: #242a32;
+    --surface-strong: #2e3540;
+    --border: #353d48;
+    --accent: #8ab4f0;
     --accent-text: #0b1a2e;
+    --accent-soft: #23385a;
+    --on-accent-soft: #d6e4f8;
+    --selected: #22344f;
     --error: #f2b8b5;
+    --error-soft: #4a1f1c;
     --danger: #8c1d18;
-    --selected: #1f3049;
-    --focus: #78aeed;
+    --focus: #8ab4f0;
+    --star: #f2c14e;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.5);
+    --logo-end: #8ab4f0;
+    --logo-folds: #f0a060;
+    --logo-crease: #b86a30;
+
+    --kind-folder: #aab4c2;
+    --kind-document: #7aa8f0;
+    --kind-spreadsheet: #5cc98a;
+    --kind-presentation: #f2bb4d;
+    --kind-pdf: #f07b6e;
+    --kind-image: #f59a62;
+    --kind-video: #e57ad2;
+    --kind-audio: #a98bf0;
+    --kind-archive: #c4ad8e;
+    --kind-file: #a4adba;
   }
 }
 
@@ -38,9 +89,9 @@
 
 body {
   margin: 0;
-  font: 16px/1.5 system-ui, sans-serif;
+  font: 15px/1.5 system-ui, sans-serif;
   color: var(--text);
-  background: var(--background);
+  background: var(--page);
 }
 
 :focus-visible {
@@ -49,8 +100,10 @@ body {
 }
 
 h1 {
+  margin: 0;
   font-size: 1.5rem;
-  margin: 0 0 8px;
+  font-weight: 500;
+  line-height: 1.3;
 }
 
 h1:focus {
@@ -61,61 +114,33 @@ a {
   color: var(--accent);
 }
 
-/* The page fills the window below the top bar, so right-clicking or
-   dropping files anywhere reaches it. Its content stays 1100px wide at most,
-   in the middle. */
+.icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
 #app {
-  display: flex;
-  flex-direction: column;
   min-height: 100dvh;
 }
 
-main {
-  flex-grow: 1;
-  padding: 24px max(16px, calc((100% - 1068px) / 2));
+/* Drive's frame scrolls inside its panel, so the window itself never
+   does. */
+body:has(.drive) {
+  overflow: hidden;
 }
 
-main.narrow {
-  width: 100%;
-  max-width: 420px;
-  margin: 0 auto;
-  padding: 24px 16px;
+/* Read by screen readers, not shown. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-.top-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.top-bar .app-name {
-  font-weight: 600;
-  color: var(--text);
-  text-decoration: none;
-}
-
-.top-bar nav {
-  flex: 1;
-}
-
-.top-bar nav a {
-  padding: 4px 8px;
-  border-radius: 6px;
-  text-decoration: none;
-}
-
-.top-bar nav a[aria-current="page"] {
-  background: var(--background);
-  font-weight: 600;
-}
-
-.who {
-  color: var(--muted);
-}
+/* Forms and buttons. */
 
 label {
   display: block;
@@ -125,33 +150,62 @@ label {
 
 input:not([type="checkbox"]) {
   width: 100%;
-  padding: 8px 10px;
+  padding: 10px 12px;
   font: inherit;
   color: inherit;
-  background: var(--background);
+  background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
+}
+
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  vertical-align: middle;
+  accent-color: var(--accent);
 }
 
 /* A link can look like a button, such as Download in the viewer. */
 button,
 a.button {
-  display: inline-block;
-  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 18px;
   font: inherit;
   font-weight: 600;
   color: var(--accent-text);
   background: var(--accent);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: 999px;
   text-decoration: none;
   cursor: pointer;
+}
+
+button.wide {
+  width: 100%;
+  padding: 10px 18px;
 }
 
 button.secondary,
 a.button.secondary {
   color: var(--accent);
   background: transparent;
+  border-color: var(--border);
+}
+
+/* A button that sits back in a bar, such as Restore in the trash. */
+button.quiet {
+  color: var(--text);
+  background: transparent;
+  border-color: transparent;
+}
+
+button.quiet:hover,
+button.secondary:hover {
+  background: var(--surface);
 }
 
 /* For what can't be undone, such as deleting for good. */
@@ -161,14 +215,35 @@ button.danger {
   border-color: var(--danger);
 }
 
-/* A button that reads as a link, such as a folder in the move dialog. */
+/* A button that reads as a link, such as Undo in a notice. */
 button.link {
   padding: 0;
-  font-weight: normal;
+  font-weight: 600;
   color: var(--accent);
-  text-decoration: underline;
   background: none;
   border: none;
+  border-radius: 0;
+}
+
+button.link:hover {
+  text-decoration: underline;
+}
+
+/* A round button with a symbol, named for screen readers by its label. */
+button.icon-button {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+}
+
+button.icon-button:hover,
+button.icon-button[aria-expanded="true"] {
+  color: var(--text);
+  background: var(--surface);
 }
 
 button:disabled {
@@ -194,6 +269,434 @@ button:disabled {
   text-align: center;
 }
 
+/* Signing in. */
+
+main.sign-in {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 24px 16px;
+}
+
+.sign-in-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+  background: var(--panel);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+.sign-in-card .logo {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 16px;
+}
+
+.sign-in-card .hint {
+  margin: 4px 0 8px;
+}
+
+.sign-in-card button {
+  margin-top: 16px;
+}
+
+/* A page outside a module, such as Page not found. */
+main.narrow {
+  max-width: 480px;
+  margin: 48px auto;
+  padding: 24px;
+  background: var(--panel);
+  border-radius: var(--radius);
+}
+
+/* The top bar. */
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--top-bar-height);
+  padding: 0 16px 0 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: calc(var(--sidebar-width) - 12px);
+  padding: 4px 8px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 1.25rem;
+  text-decoration: none;
+}
+
+.brand .logo {
+  width: 34px;
+  height: 34px;
+}
+
+.brand-name {
+  font-weight: 600;
+}
+
+.brand-module {
+  color: var(--muted);
+}
+
+.top-bar-middle {
+  flex: 1;
+  min-width: 0;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 720px;
+  height: 48px;
+  padding: 0 16px;
+  color: var(--muted);
+  background: var(--surface);
+  border-radius: 999px;
+}
+
+.search:focus-within {
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.search input {
+  padding: 0;
+  font-size: 1rem;
+  background: transparent;
+  border: none;
+}
+
+.search input:focus-visible {
+  outline: none;
+}
+
+.avatar {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin-left: 8px;
+  font-size: 1rem;
+  color: #ffffff;
+  background: #6b4fbb;
+  border: none;
+}
+
+.sidebar-button {
+  display: none;
+}
+
+/* Drive's frame. */
+
+.drive {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: var(--top-bar-height) minmax(0, 1fr);
+  height: 100dvh;
+}
+
+.drive .top-bar {
+  grid-column: 1 / -1;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px 12px 16px 8px;
+  overflow-y: auto;
+}
+
+.new-button {
+  align-self: flex-start;
+  gap: 12px;
+  margin: 4px 0 16px 4px;
+  padding: 14px 20px 14px 16px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--panel);
+  border: none;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.new-button:hover,
+.new-button[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--on-accent-soft);
+}
+
+.places,
+.tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.place-row {
+  display: flex;
+  align-items: center;
+}
+
+.place {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 16px;
+  overflow: hidden;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  border-radius: 999px;
+}
+
+.place:hover {
+  background: var(--surface);
+}
+
+.place[aria-current="page"] {
+  font-weight: 600;
+  color: var(--on-accent-soft);
+  background: var(--accent-soft);
+}
+
+.tree .place {
+  display: block;
+  padding: 0 12px 0 4px;
+  line-height: 36px;
+}
+
+.tree-toggle {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+}
+
+.tree-toggle:hover {
+  background: var(--surface);
+}
+
+.tree-toggle .chevron {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.15s;
+}
+
+.tree-toggle[aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+.storage {
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
+  padding: 16px 16px 0;
+  color: var(--muted);
+}
+
+.storage-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.storage-title {
+  color: var(--text);
+}
+
+.storage progress {
+  width: 100%;
+  height: 4px;
+  accent-color: var(--accent);
+}
+
+.storage-used {
+  font-size: 0.875rem;
+}
+
+.sidebar-scrim {
+  display: none;
+}
+
+/* The page, on its panel. It scrolls inside the panel, so the frame stays
+   in place. */
+.drive-main {
+  position: relative;
+  min-height: 0;
+  margin: 0 16px 16px 0;
+  overflow-y: auto;
+  background: var(--panel);
+  border-radius: 16px;
+}
+
+main.page {
+  min-height: 100%;
+  padding: 16px 24px 32px;
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  margin-bottom: 8px;
+}
+
+.crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crumbs li {
+  display: flex;
+  align-items: center;
+}
+
+.crumbs li + li::before {
+  content: "›";
+  padding: 0 8px;
+  font-size: 1.5rem;
+  color: var(--muted);
+}
+
+.crumbs a {
+  padding: 2px 8px;
+  margin: 0 -8px;
+  font-size: 1.5rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.crumbs a:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.list-title {
+  margin: 16px 0 8px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.view-toggle {
+  display: flex;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.view-toggle button {
+  padding: 6px 14px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.view-toggle button[aria-pressed="true"] {
+  color: var(--on-accent-soft);
+  background: var(--accent-soft);
+}
+
+.banner {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  padding: 64px 16px;
+  text-align: center;
+}
+
+.empty p {
+  margin: 4px 0;
+}
+
+.empty-title {
+  font-size: 1.125rem;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.chip {
+  padding: 6px 14px;
+  font-weight: 500;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.chip:hover {
+  background: var(--surface);
+}
+
+.chip.chosen {
+  color: var(--on-accent-soft);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.chip .icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Items as rows. */
+
+.selection-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: var(--surface);
+  border-radius: 999px;
+}
+
+.selection-count {
+  margin-right: 12px;
+  font-weight: 600;
+}
+
 table.items {
   width: 100%;
   border-collapse: collapse;
@@ -201,36 +704,122 @@ table.items {
 
 table.items th,
 table.items td {
-  padding: 8px;
+  padding: 6px 8px;
   text-align: left;
   border-bottom: 1px solid var(--border);
-  overflow-wrap: anywhere;
+}
+
+table.items thead th {
+  font-weight: 500;
+  color: var(--muted);
 }
 
 table.items tbody th {
   font-weight: normal;
 }
 
+table.items tbody tr:hover {
+  background: var(--surface);
+}
+
+table.items tbody tr.selected {
+  background: var(--selected);
+}
+
+.name-cell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 36px;
+}
+
+.item-name {
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+a.item-name:hover {
+  text-decoration: underline;
+}
+
+.item-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.kind-folder {
+  color: var(--kind-folder);
+}
+.kind-document {
+  color: var(--kind-document);
+}
+.kind-spreadsheet {
+  color: var(--kind-spreadsheet);
+}
+.kind-presentation {
+  color: var(--kind-presentation);
+}
+.kind-pdf {
+  color: var(--kind-pdf);
+}
+.kind-image {
+  color: var(--kind-image);
+}
+.kind-video {
+  color: var(--kind-video);
+}
+.kind-audio {
+  color: var(--kind-audio);
+}
+.kind-archive {
+  color: var(--kind-archive);
+}
+.kind-file {
+  color: var(--kind-file);
+}
+
+.star-mark {
+  display: inline-flex;
+  color: var(--star);
+}
+
+.star-mark .icon {
+  width: 16px;
+  height: 16px;
+}
+
+table.items .modified,
+table.items .location,
+table.items .size {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+table.items .location a,
+.card-meta a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+table.items .location a:hover,
+.card-meta a:hover {
+  text-decoration: underline;
+}
+
 table.items .size {
   text-align: right;
-  white-space: nowrap;
 }
 
 table.items .select {
   width: 1px;
-  padding-right: 0;
+  padding-right: 4px;
 }
 
-table.items input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  vertical-align: middle;
-  accent-color: var(--accent);
-}
-
-table.items tr.selected {
-  background: var(--selected);
+table.items .more-cell {
+  width: 1px;
+  padding: 2px 4px;
 }
 
 table.items .actions {
@@ -238,68 +827,321 @@ table.items .actions {
   white-space: nowrap;
 }
 
-table.items .actions button {
-  margin-left: 8px;
-  padding: 4px 10px;
-}
-
-/* On phones, the date takes the space a name needs. */
-@media (max-width: 600px) {
-  table.items .modified {
+/* On phones, only the name and its button keep their space. */
+@media (max-width: 700px) {
+  table.items .modified,
+  table.items .location,
+  table.items .size {
     display: none;
   }
 
   table.items .actions button {
-    display: block;
+    display: flex;
     margin: 4px 0 0 auto;
   }
 }
 
-/* Read by screen readers, not shown. */
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+/* Items as a grid: folders as tiles, then files as cards. */
+
+.section-title {
+  margin: 16px 0 12px;
+  font-size: 0.95rem;
+  font-weight: 500;
 }
 
-.toolbar {
+.tiles,
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tile,
+.card-top {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin: 8px 0 16px;
+  gap: 12px;
+  min-width: 0;
+  padding: 6px 4px 6px 14px;
 }
 
-.toolbar-link {
-  margin-left: auto;
-  padding: 8px 4px;
+.tile {
+  background: var(--surface);
+  border-radius: var(--radius);
 }
 
-.toolbar.selection {
-  padding: 8px 12px;
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 8px;
+  background: var(--surface);
+  border-radius: var(--radius);
+}
+
+.tile:hover,
+.card:hover {
+  background: var(--surface-strong);
+}
+
+.tile.selected,
+.card.selected {
   background: var(--selected);
-  border-radius: 8px;
 }
 
-.toolbar.selection span {
-  margin-right: 8px;
-  font-weight: 600;
+.tile-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-decoration: none;
 }
 
-.done:empty {
+/* The name's link covers the whole tile, so it opens from anywhere on it.
+   The checkbox and the ⋮ button sit above it. */
+.tile-name::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* On a card, the link covers the card, not just its top row. */
+.card .card-top {
+  position: static;
+}
+
+.tile .tile-check,
+.tile .more,
+.card .tile-check,
+.card .more {
+  position: relative;
+  z-index: 1;
+}
+
+/* The checkbox takes the icon's place when it's wanted. */
+.tile-check {
   display: none;
 }
 
-dialog {
-  width: min(440px, calc(100vw - 32px));
-  padding: 20px;
+.tile:hover .tile-check,
+.card:hover .tile-check,
+.tile.selected .tile-check,
+.card.selected .tile-check,
+.tile-check:focus-visible,
+.grid-view:has(.selected) .tile-check {
+  display: block;
+}
+
+.tile:hover .tile-check + .item-icon,
+.card:hover .tile-check + .item-icon,
+.tile.selected .tile-check + .item-icon,
+.card.selected .tile-check + .item-icon,
+.tile-check:focus-visible + .item-icon,
+.grid-view:has(.selected) .tile-check + .item-icon {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .tile-check {
+    display: block;
+  }
+
+  .tile-check + .item-icon {
+    display: none;
+  }
+}
+
+.card-preview {
+  display: grid;
+  place-items: center;
+  height: 144px;
+  margin: 0 8px;
+  background: var(--panel);
+  border-radius: 8px;
+}
+
+.card-preview .item-icon {
+  width: 56px;
+  height: 56px;
+}
+
+.card-meta {
+  margin: 8px 14px 0;
+  overflow: hidden;
+  font-size: 0.875rem;
+  color: var(--muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.card-meta a {
+  position: relative;
+  z-index: 1;
+}
+
+/* Notices along the bottom, such as "Moved to the trash". */
+
+.notice-area {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 4;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 6px 6px 6px 20px;
+  color: var(--panel);
+  background: var(--text);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.notice.problem {
   color: var(--text);
-  background: var(--background);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--error-soft);
+}
+
+.notice .notice-undo {
+  color: var(--accent-soft);
+}
+
+.notice.problem .notice-undo {
+  color: var(--accent);
+}
+
+.notice .icon-button {
+  color: inherit;
+}
+
+.notice .icon-button:hover {
+  color: inherit;
+  background: rgb(127 127 127 / 0.25);
+}
+
+/* Files dragged over a page that takes them. */
+.drive-main.dropping {
+  outline: 3px dashed var(--accent);
+  outline-offset: -6px;
+}
+
+.drop-hint {
+  position: sticky;
+  top: 12px;
+  z-index: 2;
+  width: fit-content;
+  margin: 12px auto 0;
+  padding: 10px 20px;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+/* Phones and narrow windows: the sidebar slides in over the page. */
+@media (max-width: 800px) {
+  .drive {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar-button {
+    display: inline-flex;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand-name,
+  .brand-module {
+    display: none;
+  }
+
+  .search {
+    height: 44px;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 5;
+    width: min(300px, 85vw);
+    padding-top: 16px;
+    background: var(--page);
+    box-shadow: var(--shadow);
+    transform: translateX(-105%);
+    transition: transform 0.2s;
+    visibility: hidden;
+  }
+
+  .sidebar-open .sidebar {
+    transform: none;
+    visibility: visible;
+  }
+
+  .sidebar-open .sidebar-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 4;
+    display: block;
+    background: rgb(0 0 0 / 0.4);
+  }
+
+  .drive-main {
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+  }
+
+  main.page {
+    padding: 12px 16px 24px;
+  }
+
+  .crumbs a,
+  .crumbs li + li::before,
+  h1 {
+    font-size: 1.25rem;
+  }
+
+  .tiles,
+  .cards {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .notice-area {
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .tree-toggle .chevron {
+    transition: none;
+  }
+}
+
+/* Dialogs. */
+
+dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 24px;
+  color: var(--text);
+  background: var(--panel);
+  border: none;
+  border-radius: 24px;
+  box-shadow: var(--shadow);
 }
 
 dialog::backdrop {
@@ -307,8 +1149,9 @@ dialog::backdrop {
 }
 
 dialog h2 {
-  margin: 0 0 8px;
-  font-size: 1.25rem;
+  margin: 0 0 12px;
+  font-size: 1.375rem;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
@@ -319,8 +1162,9 @@ dialog label {
 .dialog-buttons {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
 .move-location {
@@ -349,29 +1193,39 @@ dialog label {
   display: block;
   width: 100%;
   padding: 10px 4px;
+  font-weight: normal;
   text-align: left;
   overflow-wrap: anywhere;
 }
 
 /* Menus open over the page, at the pointer or under their button. */
+
 .menu {
   position: fixed;
-  z-index: 3;
-  min-width: 220px;
+  z-index: 6;
+  min-width: 240px;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
   overflow-y: auto;
-  padding: 4px 0;
-  background: var(--background);
-  border: 1px solid var(--border);
+  padding: 8px 0;
+  background: var(--panel);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+  box-shadow: var(--shadow);
 }
 
-.menu [role="menuitem"] {
+.menu-heading {
+  margin: 0;
+  padding: 8px 16px 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.menu [role^="menuitem"] {
   display: flex;
-  justify-content: space-between;
-  gap: 24px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
   width: 100%;
   padding: 8px 16px;
   font-weight: normal;
@@ -382,14 +1236,38 @@ dialog label {
   border-radius: 0;
 }
 
+.menu-label {
+  flex: 1;
+}
+
+.menu-icon {
+  display: flex;
+  color: var(--muted);
+}
+
+/* A chosen option shows a check before its name. */
+.menu [role="menuitemradio"]::before {
+  content: "";
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.menu [role="menuitemradio"][aria-checked="true"]::before {
+  content: "✓";
+  font-weight: 700;
+  text-align: center;
+  color: var(--accent);
+}
+
 .menu:focus {
   outline: none;
 }
 
 /* Not :hover as well, because the pointer moves focus, and an item under a
    pointer that's still while the arrow keys move would stay lit. */
-.menu [role="menuitem"]:focus {
-  background: var(--selected);
+.menu [role^="menuitem"]:focus {
+  background: var(--surface);
   outline: none;
 }
 
@@ -406,35 +1284,14 @@ dialog label {
 }
 
 .menu hr {
-  margin: 4px 0;
+  margin: 8px 0;
   border: none;
   border-top: 1px solid var(--border);
 }
 
-/* A button that shows a symbol, such as a row's ⋮, named for screen
-   readers by its label. */
-button.icon {
-  padding: 2px 10px;
-  font-size: 1.25rem;
-  line-height: 1.2;
-  color: var(--text);
-  background: none;
-  border-color: transparent;
-}
-
-button.icon:hover,
-button.icon[aria-expanded="true"] {
-  background: var(--surface);
-  border-color: var(--border);
-}
-
-table.items .more {
-  width: 1px;
-  padding: 4px;
-}
-
 /* The viewer fills the screen, with the file's name and buttons in a bar
    along the top. */
+
 dialog.viewer {
   width: 100vw;
   height: 100dvh;
@@ -528,40 +1385,20 @@ dialog.viewer h2 {
   }
 }
 
-/* A folder with files dragged over it. */
-main.dropping {
-  outline: 3px dashed var(--accent);
-  outline-offset: -8px;
-  border-radius: 12px;
-}
-
-.drop-hint {
-  position: sticky;
-  top: 8px;
-  z-index: 1;
-  margin: 0 0 16px;
-  padding: 12px 16px;
-  text-align: center;
-  font-weight: 600;
-  color: var(--accent-text);
-  background: var(--accent);
-  border-radius: 8px;
-}
-
 /* The uploads stay in the corner while the page scrolls under them. */
+
 .upload-panel {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 2;
+  right: 24px;
+  bottom: 24px;
+  z-index: 3;
   width: min(380px, calc(100vw - 32px));
   max-height: 50vh;
   overflow-y: auto;
   padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.2);
+  background: var(--panel);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
 }
 
 .upload-panel-head {
@@ -574,6 +1411,7 @@ main.dropping {
 .upload-panel h2 {
   margin: 0;
   font-size: 1rem;
+  font-weight: 500;
 }
 
 .upload-panel ul {
@@ -614,17 +1452,18 @@ main.dropping {
 .upload button {
   grid-column: 2;
   grid-row: 1 / span 3;
-  padding: 4px 10px;
+  padding: 4px 12px;
 }
 
-/* Phones keep more of the folder in view. */
-@media (max-width: 600px) {
+@media (max-width: 800px) {
   .upload-panel {
+    right: 16px;
+    bottom: 16px;
     max-height: 40vh;
   }
 }
 
 /* Room to scroll the last rows of a folder above the uploads. */
-body:has(.upload-panel) main {
+body:has(.upload-panel) main.page {
   padding-bottom: calc(50vh + 32px);
 }

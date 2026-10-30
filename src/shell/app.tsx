@@ -1,16 +1,22 @@
-// The app's shell: sign-in, the top bar, and the page for the address.
+// The app's shell: sign-in, and the page for the address, in its module's
+// frame.
 
 import { useEffect, useState } from "preact/hooks";
 
 import { ApiError, api, type Session } from "../api.ts";
-import { DrivePage } from "../drive/drive-page.tsx";
-import { TrashPage } from "../drive/trash-page.tsx";
+import { FolderPage } from "../drive/folder-page.tsx";
+import { HomePage } from "../drive/home-page.tsx";
 import { uploads } from "../drive/http-transport.ts";
+import { DriveLayout } from "../drive/layout.tsx";
+import { SearchPage } from "../drive/search-page.tsx";
+import { StarredPage } from "../drive/starred-page.tsx";
+import { TrashPage } from "../drive/trash-page.tsx";
 import { UploadPanel } from "../drive/upload-panel.tsx";
 import { t } from "../i18n.ts";
 import { PageTitle } from "./page.tsx";
 import { followLink, navigate, usePath } from "./router.ts";
 import { SignIn } from "./sign-in.tsx";
+import { TopBar } from "./top-bar.tsx";
 
 export function App() {
   // Undefined while the app finds out whether someone is signed in.
@@ -78,46 +84,49 @@ function SignedIn({ session, onSignedOut }: { session: Session; onSignedOut: () 
     onSignedOut();
   }
 
+  const page = drivePage(path);
   return (
     <>
-      <header class="top-bar">
-        <a class="app-name" href="/drive/" onClick={followLink}>
-          {t("app.name")}
-        </a>
-        <nav aria-label={t("shell.mainMenu")}>
-          <a
-            href="/drive/"
-            onClick={followLink}
-            aria-current={path.startsWith("/drive/") ? "page" : undefined}
-          >
-            {t("drive.title")}
-          </a>
-        </nav>
-        <span class="who">{t("shell.signedInAs", { name: session.user.display_name })}</span>
-        <button type="button" class="secondary" onClick={signOut}>
-          {t("shell.signOut")}
-        </button>
-      </header>
-      <Route path={path} />
+      {page ? (
+        <DriveLayout session={session} onSignOut={signOut}>
+          {page}
+        </DriveLayout>
+      ) : path === "/" || path === "/drive" ? (
+        <Redirect to="/drive/" />
+      ) : (
+        <>
+          <TopBar session={session} onSignOut={signOut} />
+          <NotFound />
+        </>
+      )}
       <UploadPanel />
     </>
   );
 }
 
-function Route({ path }: { path: string }) {
-  if (path === "/" || path === "/drive") {
-    return <Redirect to="/drive/" />;
+/** Drive's page for `path`, or null if it isn't one. Each page is keyed by
+ * its path, so it starts with its own state. */
+function drivePage(path: string) {
+  const trimmed = path.length > "/drive/".length ? path.replace(/\/$/, "") : path;
+  switch (trimmed) {
+    case "/drive/":
+      return <HomePage key={trimmed} />;
+    case "/drive/my-drive":
+      return <FolderPage key={trimmed} folder={null} />;
+    case "/drive/starred":
+      return <StarredPage key={trimmed} />;
+    case "/drive/trash":
+      return <TrashPage key={trimmed} />;
+    case "/drive/search":
+      return <SearchPage key={trimmed} />;
   }
-  if (path === "/drive/trash" || path === "/drive/trash/") {
-    return <TrashPage />;
-  }
-  const drive = /^\/drive\/(?:folder\/([^/]+)\/?)?$/.exec(path);
-  if (drive) {
-    // Keyed, so each folder starts with its own state.
-    return <DrivePage key={path} folder={drive[1] ?? null} />;
-  }
+  const folder = /^\/drive\/folder\/([^/]+)$/.exec(trimmed);
+  return folder ? <FolderPage key={trimmed} folder={folder[1]!} /> : null;
+}
+
+function NotFound() {
   return (
-    <main>
+    <main class="page narrow">
       <PageTitle>{t("notFound.title")}</PageTitle>
       <p>{t("notFound.body")}</p>
       <p>

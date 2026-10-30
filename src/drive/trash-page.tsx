@@ -6,9 +6,11 @@ import { useEffect, useState } from "preact/hooks";
 import { api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
-import { followLink } from "../shell/router.ts";
 import { ConfirmDialog } from "./dialogs.tsx";
+import { ItemIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
+import { useDrive, useTarget } from "./layout.tsx";
+import { announceChange } from "./store.ts";
 
 /** An item in the trash, which says when it was deleted. */
 interface Trashed extends Item {
@@ -19,10 +21,10 @@ type Confirming = { kind: "one"; item: Trashed } | { kind: "all" };
 
 export function TrashPage() {
   const [items, setItems] = useState<Trashed[] | null>(null);
+  const drive = useDrive();
   const [error, setError] = useState("");
-  const [problem, setProblem] = useState("");
-  const [done, setDone] = useState("");
   const [confirming, setConfirming] = useState<Confirming | null>(null);
+  useTarget(null, false);
 
   function refresh() {
     api<Trashed[]>("GET", "/api/drive/trash").then(setItems, (failure: Error) => setError(failure.message));
@@ -30,27 +32,34 @@ export function TrashPage() {
 
   useEffect(refresh, []);
 
+  function done(message: string) {
+    drive.notify({ message });
+    refresh();
+    // Restoring and deleting change the space used, and the sidebar's
+    // folders.
+    announceChange();
+  }
+
   async function restore(item: Trashed) {
-    setProblem("");
-    setDone("");
     try {
       await api("POST", `/api/drive/items/${item.id}/restore`);
-      setDone(t("trash.restored", { name: item.name }));
-      refresh();
+      done(t("trash.restored", { name: item.name }));
     } catch (failure) {
-      setProblem((failure as Error).message);
+      drive.notify({ message: (failure as Error).message, problem: true });
     }
   }
 
   return (
-    <main>
-      <p>
-        <a href="/drive/" onClick={followLink}>
-          {t("drive.up", { name: t("drive.title") })}
-        </a>
-      </p>
-      <PageTitle>{t("trash.title")}</PageTitle>
-      <p class="hint">{t("trash.explain")}</p>
+    <main class="page">
+      <div class="page-head">
+        <PageTitle>{t("trash.title")}</PageTitle>
+        {items && items.length > 0 && (
+          <button type="button" class="quiet" onClick={() => setConfirming({ kind: "all" })}>
+            {t("trash.emptyTrash")}
+          </button>
+        )}
+      </div>
+      <p class="banner">{t("trash.explain")}</p>
       {error ? (
         <p class="error" role="alert">
           {error}
@@ -59,22 +68,13 @@ export function TrashPage() {
         <p class="loading">{t("shell.loading")}</p>
       ) : (
         <>
-          <p class="error" role="alert">
-            {problem}
-          </p>
-          <p class="done" role="status">
-            {done}
-          </p>
           {items.length === 0 ? (
-            <p>{t("trash.empty")}</p>
+            <div class="empty">
+              <p class="hint">{t("trash.empty")}</p>
+            </div>
           ) : (
             <>
-              <div class="toolbar">
-                <button type="button" class="secondary" onClick={() => setConfirming({ kind: "all" })}>
-                  {t("trash.emptyTrash")}
-                </button>
-              </div>
-              <table class="items trash">
+              <table class="items trash" aria-label={t("trash.title")}>
                 <thead>
                   <tr>
                     <th scope="col">{t("drive.name")}</th>
@@ -90,15 +90,20 @@ export function TrashPage() {
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.id}>
-                      <th scope="row">{item.name}</th>
+                      <th scope="row">
+                        <span class="name-cell">
+                          <ItemIcon item={item} />
+                          <span class="item-name">{item.name}</span>
+                        </span>
+                      </th>
                       <td class="modified">{formatDate(item.trashed_at)}</td>
                       <td class="size">
-                        {item.kind === "folder" ? t("drive.folder") : formatSize(item.size ?? 0)}
+                        {item.kind === "folder" ? "—" : formatSize(item.size ?? 0)}
                       </td>
                       <td class="actions">
                         <button
                           type="button"
-                          class="secondary"
+                          class="quiet"
                           aria-label={t("trash.restoreNamed", { name: item.name })}
                           onClick={() => restore(item)}
                         >
@@ -106,7 +111,7 @@ export function TrashPage() {
                         </button>
                         <button
                           type="button"
-                          class="secondary"
+                          class="quiet"
                           aria-label={t("trash.deleteNamed", { name: item.name })}
                           onClick={() => setConfirming({ kind: "one", item })}
                         >
@@ -132,8 +137,7 @@ export function TrashPage() {
           onConfirm={async () => {
             await api("DELETE", `/api/drive/trash/${confirming.item.id}`);
             setConfirming(null);
-            setDone(t("trash.deletedOne", { name: confirming.item.name }));
-            refresh();
+            done(t("trash.deletedOne", { name: confirming.item.name }));
           }}
           onClose={() => setConfirming(null)}
         />
@@ -146,8 +150,7 @@ export function TrashPage() {
           onConfirm={async () => {
             await api("DELETE", "/api/drive/trash");
             setConfirming(null);
-            setDone(t("trash.emptied"));
-            refresh();
+            done(t("trash.emptied"));
           }}
           onClose={() => setConfirming(null)}
         />

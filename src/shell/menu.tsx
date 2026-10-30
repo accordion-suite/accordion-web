@@ -4,6 +4,7 @@
 // where it was. Only the focused item is highlighted, and the pointer moves
 // focus, so there's never more than one.
 
+import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 
 export interface MenuAction {
@@ -11,6 +12,11 @@ export interface MenuAction {
   onSelect: () => void;
   /** The key that does the same, shown beside the label, such as "F2". */
   shortcut?: string;
+  /** For a choice among options, such as a search filter: whether it's the
+   * one chosen. */
+  checked?: boolean;
+  /** A symbol before the label, such as an icon. */
+  icon?: ComponentChildren;
 }
 
 /** A line between groups of actions. */
@@ -30,11 +36,18 @@ export function Menu({
   entries,
   place,
   byKeyboard,
+  heading,
+  align = "start",
   onClose,
 }: {
   label: string;
   entries: readonly MenuEntry[];
   place: MenuPlace;
+  /** Text above the actions, such as who's signed in. */
+  heading?: string;
+  /** Under an element, whether the menu lines up with its left edge or its
+   * right edge, for a button at the right of the screen. */
+  align?: "start" | "end";
   /** Whether a key opened the menu, which starts it on its first item. */
   byKeyboard: boolean;
   onClose: () => void;
@@ -49,7 +62,7 @@ export function Menu({
     let { x, y } = "under" in place ? { x: 0, y: 0 } : place;
     if ("under" in place) {
       const under = place.under.getBoundingClientRect();
-      x = under.left;
+      x = align === "end" ? under.right - own.width : under.left;
       y = under.bottom + 4;
     }
     const left = Math.max(MARGIN, Math.min(x, innerWidth - own.width - MARGIN));
@@ -84,7 +97,7 @@ export function Menu({
   }, []);
 
   function items(): HTMLButtonElement[] {
-    return [...(menu.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
+    return [...(menu.current?.querySelectorAll<HTMLButtonElement>("[role^=menuitem]") ?? [])];
   }
 
   function keyDown(event: KeyboardEvent) {
@@ -127,6 +140,11 @@ export function Menu({
       onKeyDown={keyDown}
       onContextMenu={(event) => event.preventDefault()}
     >
+      {heading && (
+        <p class="menu-heading" aria-hidden="true">
+          {heading}
+        </p>
+      )}
       {entries.map((entry, index) =>
         entry === SEPARATOR ? (
           <hr key={index} role="separator" />
@@ -134,7 +152,8 @@ export function Menu({
           <button
             key={index}
             type="button"
-            role="menuitem"
+            role={entry.checked === undefined ? "menuitem" : "menuitemradio"}
+            aria-checked={entry.checked}
             tabIndex={-1}
             aria-keyshortcuts={entry.shortcut}
             onPointerMove={(event) => {
@@ -146,7 +165,12 @@ export function Menu({
               entry.onSelect();
             }}
           >
-            <span>{entry.label}</span>
+            {entry.icon !== undefined && (
+              <span class="menu-icon" aria-hidden="true">
+                {entry.icon}
+              </span>
+            )}
+            <span class="menu-label">{entry.label}</span>
             {entry.shortcut && <kbd aria-hidden="true">{entry.shortcut}</kbd>}
           </button>
         ),

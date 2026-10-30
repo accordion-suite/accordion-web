@@ -77,6 +77,7 @@ class FakeServer implements Transport {
       parent: folder,
       name,
       kind: "file",
+      starred: false,
       size: content.length,
       preview: null,
       created_at: "2026-10-29T00:00:00Z",

@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 
 import { api, type Session } from "../api.ts";
+import { Logo } from "../drive/icons.tsx";
 import { t } from "../i18n.ts";
 import { PageTitle } from "./page.tsx";
 
@@ -25,9 +26,12 @@ export function SignIn({ onSignedIn }: { onSignedIn: (session: Session) => void 
   }
 
   return (
-    <main class="narrow">
-      <PageTitle>{t("signIn.title")}</PageTitle>
-      <form onSubmit={submit}>
+    <main class="sign-in">
+      <div class="sign-in-card">
+        <Logo />
+        <PageTitle>{t("signIn.title")}</PageTitle>
+        <p class="hint">{t("signIn.intro")}</p>
+        <form onSubmit={submit}>
         <label for="username">{t("signIn.username")}</label>
         <input
           id="username"
@@ -50,10 +54,11 @@ export function SignIn({ onSignedIn }: { onSignedIn: (session: Session) => void 
         <p class="error" role="alert">
           {error}
         </p>
-        <button type="submit" disabled={busy}>
+        <button type="submit" class="wide" disabled={busy}>
           {t("signIn.submit")}
         </button>
-      </form>
+        </form>
+      </div>
     </main>
   );
 }

@@ -222,7 +222,7 @@ export function MoveDialog({
     place(at, moving).then(setShown, (problem) => setError(message(problem)));
   }, [at]);
 
-  const name = (folder: Item) => (folder.parent === null ? t("drive.title") : folder.name);
+  const name = (folder: Item) => (folder.parent === null ? t("drive.myDrive") : folder.name);
   const here = shown?.folder;
   // Moving to where everything already is would change nothing.
   const already = here !== undefined && items.every((item) => item.parent === here.id);
