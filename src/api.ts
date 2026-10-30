@@ -41,4 +41,7 @@ export interface Session {
     display_name: string;
     role: string;
   };
+  /** Whether the server's admin pages open for this user here: they're for
+   * admins, and usually only on the home network. */
+  admin_pages: boolean;
 }

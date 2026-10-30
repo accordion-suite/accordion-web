@@ -22,6 +22,12 @@ export const en = {
   "shell.signOut": "Sign out",
   "shell.mainMenu": "Main menu",
   "shell.account": "Account: {name}",
+  "shell.manageAccount": "Manage your account",
+  "shell.people": "People",
+  "shell.health": "Server health",
+  "shell.backups": "Backups",
+  "shell.updates": "Updates",
+  "shell.network": "Network",
 
   "notFound.title": "Page not found",
   "notFound.body": "There's nothing at this address.",
