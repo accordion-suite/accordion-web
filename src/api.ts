@@ -1,15 +1,18 @@
 // Calls the server's JSON API. A failed call throws an ApiError whose
 // message the page can show as it is: the server writes its errors for the
-// person reading them.
+// person reading them. Some errors also have a code, such as
+// "password_needed", for the app to act on, since the message can change.
 
 import { t } from "./i18n.ts";
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly code: string | null;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code: string | null = null) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -27,8 +30,12 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
   if (response.status === 204) return undefined as T;
   const data: unknown = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = (data as { error?: unknown }).error;
-    throw new ApiError(response.status, typeof error === "string" ? error : t("error.problem"));
+    const { error, code } = data as { error?: unknown; code?: unknown };
+    throw new ApiError(
+      response.status,
+      typeof error === "string" ? error : t("error.problem"),
+      typeof code === "string" ? code : null,
+    );
   }
   return data as T;
 }
