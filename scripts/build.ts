@@ -13,11 +13,16 @@
 // dist/manifest.webmanifest lets phones and computers install the app. Each
 // file also has .gz and .br copies, so the server never compresses on a
 // request. PNGs are compressed already, so they don't.
+//
+// dist/files.json lists every file with its SHA-256 hash. The server checks
+// the files against it as it starts, and says so if any is missing or
+// changed. The build fails if the page, the manifest, or a script names a
+// file that isn't in the list.
 
 import { createHash } from "node:crypto";
 import { build, type Metafile } from "esbuild";
 import { readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 
 const OUT = "dist";
@@ -111,9 +116,7 @@ const tabIcon = await icon("icon.svg");
 // iPhones and iPads round the corners themselves, and fill see-through ones
 // with black.
 const homeScreenIcon = await icon("apple-touch-icon.png");
-await writeFile(
-  join(OUT, "index.html"),
-  `<!doctype html>
+const page = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -133,8 +136,8 @@ await writeFile(
 <noscript>Accordion needs JavaScript. Turn it on in your browser's settings, then reload this page.</noscript>
 </body>
 </html>
-`,
-);
+`;
+await writeFile(join(OUT, "index.html"), page);
 
 const sizes = new Map<string, number>();
 for (const entry of await readdir(OUT, { recursive: true, withFileTypes: true })) {
@@ -149,6 +152,27 @@ for (const entry of await readdir(OUT, { recursive: true, withFileTypes: true })
     brotliCompressSync(content, { params: { [constants.BROTLI_PARAM_QUALITY]: 11 } }),
   );
 }
+
+const hashes: Record<string, string> = {};
+const entries = await readdir(OUT, { recursive: true, withFileTypes: true });
+for (const entry of entries.filter((entry) => entry.isFile())) {
+  const file = join(entry.parentPath, entry.name);
+  hashes[relative(OUT, file).split(sep).join("/")] = createHash("sha256").update(await readFile(file)).digest("hex");
+}
+const named = [
+  ...[...page.matchAll(/(?:href|src)="\/([^"]+)"/g)].map((match) => match[1] ?? ""),
+  ...manifest.icons.map((icon) => icon.src.slice(1)),
+  ...Object.values(metafile.outputs).flatMap((output) =>
+    output.imports.filter((imported) => !imported.external).map((imported) => relative(OUT, imported.path)),
+  ),
+];
+const missing = named.filter((file) => !(file in hashes));
+if (missing.length > 0) {
+  console.error(`The build names files it didn't make: ${[...new Set(missing)].join(", ")}.`);
+  process.exit(1);
+}
+const sorted = Object.fromEntries(Object.entries(hashes).sort(([a], [b]) => (a < b ? -1 : 1)));
+await writeFile(join(OUT, "files.json"), JSON.stringify({ files: sorted }, null, 2) + "\n");
 
 const total = files.reduce((sum, file) => sum + (sizes.get(file) ?? 0), 0);
 for (const file of files.sort()) {

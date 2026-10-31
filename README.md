@@ -23,7 +23,7 @@ npm test
 npm run build
 ```
 
-The build writes the app to `dist/`, with compressed copies of each file, and fails if Drive's first load is over its 150 KB budget. With the same Node.js build, the same source always builds the same files, so release builds can be compared (decision 9). The suite's release build downloads a pinned Node.js for this.
+The build writes the app to `dist/`, with compressed copies of each file, and fails if Drive's first load is over its 150 KB budget. It also writes `dist/files.json`, each file's SHA-256 hash, which the server checks as it starts. With the same Node.js build, the same source always builds the same files, so release builds can be compared (decision 9). The suite's release build downloads a pinned Node.js for this.
 
 To try the app, point a development server at the build with the `ACCORDION_WEB_DIR` setting, and rebuild after each change.
 
