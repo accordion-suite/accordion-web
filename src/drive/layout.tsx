@@ -268,10 +268,11 @@ export function DriveLayout({
 
   return (
     <Frame.Provider value={frame}>
-      <div class={sidebarOpen ? "drive sidebar-open" : "drive"}>
+      <div class={sidebarOpen ? "frame sidebar-open" : "frame"}>
         <TopBar
           session={session}
           onSignOut={onSignOut}
+          settings="/settings/drive"
           menuOpen={sidebarOpen}
           onMenu={() => setSidebarOpen(!sidebarOpen)}
         >
@@ -320,7 +321,7 @@ export function DriveLayout({
         {/* Closes the sidebar on a phone when the reader taps beside it. */}
         <div class="sidebar-scrim" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
         <div
-          class={dropping ? "drive-main dropping" : "drive-main"}
+          class={dropping ? "frame-main dropping" : "frame-main"}
           onDragEnter={dragEnter}
           onDragOver={dragOver}
           onDragLeave={dragLeave}

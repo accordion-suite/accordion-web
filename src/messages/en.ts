@@ -1,4 +1,5 @@
-// The web app's English text. Every string the app shows comes from here, so
+// The web app's English text. Every string the app shows comes from here,
+// or from a file beside it for a part that loads later, such as Settings, so
 // it can be translated (decision 13).
 //
 // Write whole sentences, with {name} where a value goes. Translators can't
@@ -22,12 +23,9 @@ export const en = {
   "shell.signOut": "Sign out",
   "shell.mainMenu": "Main menu",
   "shell.account": "Account: {name}",
-  "shell.manageAccount": "Manage your account",
-  "shell.people": "People",
-  "shell.health": "Server health",
-  "shell.backups": "Backups",
-  "shell.updates": "Updates",
-  "shell.network": "Network",
+
+  "settings.title": "Settings",
+  "settings.loadFailed": "Accordion couldn't load Settings. Reload the page, then try again.",
 
   "notFound.title": "Page not found",
   "notFound.body": "There's nothing at this address.",

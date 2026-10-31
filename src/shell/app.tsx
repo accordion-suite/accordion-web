@@ -1,11 +1,12 @@
 // The app's shell: sign-in, and the page for the address, in its module's
-// frame.
+// frame, or in Settings'.
 
 import { useEffect, useState } from "preact/hooks";
 
 import { ApiError, api, type Session } from "../api.ts";
 import { FolderPage } from "../drive/folder-page.tsx";
 import { HomePage } from "../drive/home-page.tsx";
+import { driveSettings, startPath } from "../drive/preferences.ts";
 import { uploads } from "../drive/http-transport.ts";
 import { DriveLayout } from "../drive/layout.tsx";
 import { SearchPage } from "../drive/search-page.tsx";
@@ -50,10 +51,25 @@ export function App() {
   if (session === null) {
     return <SignIn onSignedIn={setSession} />;
   }
-  return <SignedIn session={session} onSignedOut={() => setSession(null)} />;
+  return (
+    <SignedIn
+      session={session}
+      onSessionChanged={async () => setSession(await api<Session>("GET", "/api/session"))}
+      onSignedOut={() => setSession(null)}
+    />
+  );
 }
 
-function SignedIn({ session, onSignedOut }: { session: Session; onSignedOut: () => void }) {
+function SignedIn({
+  session,
+  onSessionChanged,
+  onSignedOut,
+}: {
+  session: Session;
+  /** Loads the session again, such as after the reader renames themselves. */
+  onSessionChanged: () => Promise<void>;
+  onSignedOut: () => void;
+}) {
   const path = usePath();
 
   useEffect(() => {
@@ -91,8 +107,12 @@ function SignedIn({ session, onSignedOut }: { session: Session; onSignedOut: () 
         <DriveLayout session={session} onSignOut={signOut}>
           {page}
         </DriveLayout>
-      ) : path === "/" || path === "/drive" ? (
-        <Redirect to="/drive/" />
+      ) : path === "/" || path === "/drive" || path === "/drive/start" ? (
+        <StartPage />
+      ) : path === "/settings" || path === "/settings/" ? (
+        <Redirect to="/settings/account" />
+      ) : path.startsWith("/settings/") ? (
+        <LazySettings path={path} session={session} onSessionChanged={onSessionChanged} onSignOut={signOut} />
       ) : (
         <>
           <TopBar session={session} onSignOut={signOut} />
@@ -124,6 +144,41 @@ function drivePage(path: string) {
   return folder ? <FolderPage key={trimmed} folder={folder[1]!} /> : null;
 }
 
+type SettingsModule = typeof import("../settings/settings.tsx");
+
+/** Settings, whose code loads the first time it opens, so Drive doesn't
+ * wait for it. */
+let settingsModule: SettingsModule | null = null;
+
+function LazySettings(props: Parameters<SettingsModule["Settings"]>[0]) {
+  const [loaded, setLoaded] = useState(settingsModule);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (loaded) return;
+    import("../settings/settings.tsx").then(
+      (module) => {
+        settingsModule = module;
+        setLoaded(module);
+      },
+      // Such as after a server update, when the old code is gone.
+      () => setFailed(true),
+    );
+  }, []);
+
+  if (failed) {
+    return (
+      <main class="narrow">
+        <p class="error" role="alert">
+          {t("settings.loadFailed")}
+        </p>
+      </main>
+    );
+  }
+  if (!loaded) return <p class="loading">{t("shell.loading")}</p>;
+  return <loaded.Settings {...props} />;
+}
+
 function NotFound() {
   return (
     <main class="page narrow">
@@ -138,7 +193,17 @@ function NotFound() {
   );
 }
 
-/** Replaces the address with `to`, such as "/" with "/drive/". */
+/** Opens the reader's start page, Home or My Drive, from the server's
+ * address or Drive's name in the top bar. */
+function StartPage() {
+  useEffect(() => {
+    void driveSettings().then((settings) => navigate(startPath(settings), { replace: true }));
+  }, []);
+  return null;
+}
+
+/** Replaces the address with `to`, such as "/settings" with its first
+ * section. */
 function Redirect({ to }: { to: string }) {
   useEffect(() => navigate(to, { replace: true }), [to]);
   return null;

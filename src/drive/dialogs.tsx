@@ -1,20 +1,15 @@
 // Drive's dialogs: naming a new folder or renaming, choosing where to move
-// to, choosing what an upload does to items with its names, and confirming
-// what can't be undone.
+// to, and choosing what an upload does to items with its names.
 
 import type { TargetedSubmitEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { t } from "../i18n.ts";
-import { Dialog } from "../shell/dialog.tsx";
+import { Dialog, problemText as message } from "../shell/dialog.tsx";
 import type { Child } from "./folder-upload.ts";
 import type { Item } from "./item.ts";
 import { freeName, stemLength } from "./names.ts";
-
-function message(problem: unknown): string {
-  return problem instanceof Error ? problem.message : t("error.problem");
-}
 
 /** Asks for a name, such as for a new folder. `onSubmit` throws to show a
  * problem, such as a name that's taken, and leaves the dialog open. */
@@ -85,54 +80,6 @@ export function NameDialog({
           </button>
         </div>
       </form>
-    </Dialog>
-  );
-}
-
-/** Asks before something that can't be undone, such as emptying the
- * trash. */
-export function ConfirmDialog({
-  title,
-  body,
-  confirm,
-  onConfirm,
-  onClose,
-}: {
-  title: string;
-  body: string;
-  confirm: string;
-  onConfirm: () => Promise<void>;
-  onClose: () => void;
-}) {
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function go() {
-    setBusy(true);
-    setError("");
-    try {
-      await onConfirm();
-    } catch (problem) {
-      setError(message(problem));
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Dialog title={title} onClose={onClose}>
-      <p>{body}</p>
-      <p class="error" role="alert">
-        {error}
-      </p>
-      <div class="dialog-buttons">
-        <button type="button" class="danger" disabled={busy} onClick={go}>
-          {confirm}
-        </button>
-        {/* Focus starts on the safe choice. */}
-        <button type="button" class="secondary" autofocus onClick={onClose}>
-          {t("dialog.cancel")}
-        </button>
-      </div>
     </Dialog>
   );
 }

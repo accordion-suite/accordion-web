@@ -19,6 +19,7 @@ import { CloseIcon, GridIcon, ItemIcon, ListIcon, MoreIcon, StarIcon } from "./i
 import type { Found, Item } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { freeName } from "./names.ts";
+import { useDriveSettings } from "./preferences.ts";
 import { announceChange, useViewMode } from "./store.ts";
 import { Viewer } from "./viewer.tsx";
 
@@ -90,6 +91,7 @@ export function ItemList({
   /** Whether to show where each item is. */
   location?: boolean;
 }) {
+  const thumbnails = useDriveSettings()?.thumbnails ?? true;
   const drive = useDrive();
   const [mode] = useViewMode();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -483,10 +485,12 @@ export function ItemList({
                     </div>
                     {/* The tile's name link covers the card, so this only
                         shows what kind of file it is. Thumbnails are
-                        planned. */}
-                    <div class="card-preview" aria-hidden="true">
-                      <ItemIcon item={item} />
-                    </div>
+                        planned, and the same setting will show them. */}
+                    {thumbnails && (
+                      <div class="card-preview" aria-hidden="true">
+                        <ItemIcon item={item} />
+                      </div>
+                    )}
                     <p class="card-meta">
                       {located(item) ? where(item) : formatDate(item.modified_at)}
                     </p>

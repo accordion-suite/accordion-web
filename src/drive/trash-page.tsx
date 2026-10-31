@@ -5,8 +5,8 @@ import { useEffect, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
+import { ConfirmDialog } from "../shell/dialog.tsx";
 import { PageTitle } from "../shell/page.tsx";
-import { ConfirmDialog } from "./dialogs.tsx";
 import { ItemIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
 import { useDrive, useTarget } from "./layout.tsx";

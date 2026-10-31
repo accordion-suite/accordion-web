@@ -1,9 +1,9 @@
 /* The web app's styles. Colors are tokens, so dark mode only changes the
    tokens. Fonts are the device's own (decision 13).
 
-   Drive's pages sit in a frame: a top bar, a sidebar on the left, and the
-   page itself on a raised panel. On phones, the sidebar slides in from the
-   left instead. */
+   Drive's pages and Settings sit in a frame: a top bar, a sidebar on the
+   left, and the page itself on a raised panel. On phones, the sidebar
+   slides in from the left instead. */
 
 :root {
   color-scheme: light dark;
@@ -24,6 +24,10 @@
   --danger: #b3261e;
   --focus: #1a5fb4;
   --star: #c98a00;
+  --ok: #1d6b38;
+  --ok-soft: #dcf2e3;
+  --warning: #7a4f00;
+  --warning-soft: #fbeccb;
   --shadow: 0 1px 2px rgb(16 24 40 / 0.08), 0 4px 16px rgb(16 24 40 / 0.12);
 
   /* File icons, by kind. */
@@ -43,8 +47,12 @@
   --top-bar-height: 64px;
 }
 
+/* Dark colors, for a device set to dark unless the reader chose Light in
+   Settings, and for anyone who chose Dark. CSS can't share one block
+   between a media query and a selector, so the tokens appear twice. Change
+   both together. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --text: #e4e8ee;
     --muted: #a4adba;
     --page: #111418;
@@ -62,6 +70,10 @@
     --danger: #8c1d18;
     --focus: #8ab4f0;
     --star: #f2c14e;
+    --ok: #9fdcb0;
+    --ok-soft: #173523;
+    --warning: #f5cf86;
+    --warning-soft: #3d2e0b;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.5);
 
     --kind-folder: #aab4c2;
@@ -75,6 +87,48 @@
     --kind-archive: #c4ad8e;
     --kind-file: #a4adba;
   }
+}
+
+:root[data-theme="dark"] {
+  --text: #e4e8ee;
+  --muted: #a4adba;
+  --page: #111418;
+  --panel: #1a1e24;
+  --surface: #242a32;
+  --surface-strong: #2e3540;
+  --border: #353d48;
+  --accent: #8ab4f0;
+  --accent-text: #0b1a2e;
+  --accent-soft: #23385a;
+  --on-accent-soft: #d6e4f8;
+  --selected: #22344f;
+  --error: #f2b8b5;
+  --error-soft: #4a1f1c;
+  --danger: #8c1d18;
+  --focus: #8ab4f0;
+  --star: #f2c14e;
+  --ok: #9fdcb0;
+  --ok-soft: #173523;
+  --warning: #f5cf86;
+  --warning-soft: #3d2e0b;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.5);
+
+  --kind-folder: #aab4c2;
+  --kind-document: #7aa8f0;
+  --kind-spreadsheet: #5cc98a;
+  --kind-presentation: #f2bb4d;
+  --kind-pdf: #f07b6e;
+  --kind-image: #f59a62;
+  --kind-video: #e57ad2;
+  --kind-audio: #a98bf0;
+  --kind-archive: #c4ad8e;
+  --kind-file: #a4adba;
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 * {
@@ -118,9 +172,9 @@ a {
   min-height: 100dvh;
 }
 
-/* Drive's frame scrolls inside its panel, so the window itself never
+/* A module's frame scrolls inside its panel, so the window itself never
    does. */
-body:has(.drive) {
+body:has(.frame) {
   overflow: hidden;
 }
 
@@ -142,7 +196,8 @@ label {
   font-weight: 600;
 }
 
-input:not([type="checkbox"]) {
+input:not([type="checkbox"], [type="radio"]),
+select {
   width: 100%;
   padding: 10px 12px;
   font: inherit;
@@ -223,8 +278,10 @@ button.link:hover {
   text-decoration: underline;
 }
 
-/* A round button with a symbol, named for screen readers by its label. */
-button.icon-button {
+/* A round button with a symbol, named for screen readers by its label. A
+   link can look the same, such as the way to Settings. */
+button.icon-button,
+a.icon-button {
   flex: none;
   width: 40px;
   height: 40px;
@@ -235,6 +292,7 @@ button.icon-button {
 }
 
 button.icon-button:hover,
+a.icon-button:hover,
 button.icon-button[aria-expanded="true"] {
   color: var(--text);
   background: var(--surface);
@@ -377,16 +435,17 @@ main.narrow {
   display: none;
 }
 
-/* Drive's frame. */
+/* A module's frame, such as Drive's: the top bar, the sidebar, and the
+   page on its panel. */
 
-.drive {
+.frame {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: var(--top-bar-height) minmax(0, 1fr);
   height: 100dvh;
 }
 
-.drive .top-bar {
+.frame .top-bar {
   grid-column: 1 / -1;
 }
 
@@ -520,7 +579,7 @@ main.narrow {
 
 /* The page, on its panel. It scrolls inside the panel, so the frame stays
    in place. */
-.drive-main {
+.frame-main {
   position: relative;
   min-height: 0;
   margin: 0 16px 16px 0;
@@ -1012,7 +1071,7 @@ table.items .actions {
 }
 
 /* Files dragged over a page that takes them. */
-.drive-main.dropping {
+.frame-main.dropping {
   outline: 3px dashed var(--accent);
   outline-offset: -6px;
 }
@@ -1032,7 +1091,7 @@ table.items .actions {
 
 /* Phones and narrow windows: the sidebar slides in over the page. */
 @media (max-width: 800px) {
-  .drive {
+  .frame {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1077,7 +1136,7 @@ table.items .actions {
     background: rgb(0 0 0 / 0.4);
   }
 
-  .drive-main {
+  .frame-main {
     margin: 0;
     border-radius: 16px 16px 0 0;
   }
@@ -1445,4 +1504,421 @@ dialog.viewer h2 {
 /* Room to scroll the last rows of a folder above the uploads. */
 body:has(.upload-panel) main.page {
   padding-bottom: calc(50vh + 32px);
+}
+
+a.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+select {
+  appearance: auto;
+}
+
+select.short {
+  width: auto;
+  min-width: 160px;
+}
+
+pre {
+  padding: 12px 16px;
+  overflow-x: auto;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.done {
+  color: var(--ok);
+}
+
+.done:empty {
+  display: none;
+}
+
+/* Settings. */
+
+.sidebar .place.back {
+  flex: none;
+  margin-bottom: 8px;
+}
+
+.places-title {
+  margin: 16px 16px 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+main.settings-page {
+  max-width: 800px;
+}
+
+.settings-intro {
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+
+.settings-card {
+  margin: 0 0 16px;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.settings-card.highlight {
+  background: var(--surface);
+  border-color: transparent;
+}
+
+.settings-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.125rem;
+  font-weight: 500;
+}
+
+.settings-card > p:last-child,
+.settings-card form > :last-child {
+  margin-bottom: 0;
+}
+
+.settings-card .hint {
+  margin: 0 0 8px;
+}
+
+.settings-card label + .hint {
+  margin: 0 0 6px;
+}
+
+dialog .hint {
+  margin: 4px 0 8px;
+}
+
+dialog label + .hint {
+  margin: 0 0 6px;
+}
+
+.settings-card input:not([type="checkbox"], [type="radio"]),
+.settings-card select {
+  max-width: 420px;
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+
+.card-head h2 {
+  margin: 0;
+}
+
+.card-head .state {
+  margin-left: auto;
+}
+
+.form-buttons,
+.row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.row-buttons {
+  margin-top: 8px;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.row:first-child {
+  border-top: none;
+}
+
+.row.target {
+  align-items: flex-start;
+}
+
+.row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.row-text .hint {
+  margin: 0;
+}
+
+.avatar.small {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+fieldset.choices {
+  margin: 12px 0 0;
+  padding: 0;
+  border: none;
+}
+
+fieldset.choices legend {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+label.choice {
+  display: flex;
+  gap: 10px;
+  margin: 8px 0;
+  font-weight: normal;
+}
+
+label.choice input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+}
+
+/* Something to copy, such as a new app password, with its Copy button. */
+.secret {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 12px 0;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.secret code {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.secret .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.secret.long code {
+  flex-basis: 100%;
+  font-size: 0.875rem;
+}
+
+.recovery-key code {
+  display: block;
+  padding: 16px;
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  overflow-wrap: anywhere;
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+dl.details,
+dl.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 16px;
+  margin: 12px 0;
+}
+
+dl.details dt,
+dl.facts dt {
+  color: var(--muted);
+}
+
+dl.details dd,
+dl.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.steps {
+  padding-left: 20px;
+}
+
+.notes {
+  white-space: pre-line;
+}
+
+.history {
+  margin: 0;
+  padding-left: 20px;
+}
+
+/* A setting that's on or off, such as Thumbnails. */
+.switch-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.switch-row .hint {
+  margin: 0;
+}
+
+input.switch {
+  flex: none;
+  position: relative;
+  width: 44px;
+  height: 24px;
+  margin: 4px 0 0;
+  appearance: none;
+  cursor: pointer;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition: background 0.15s;
+}
+
+input.switch::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: var(--panel);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  transition: transform 0.15s;
+}
+
+input.switch:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+input.switch:checked::before {
+  transform: translateX(20px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  input.switch,
+  input.switch::before {
+    transition: none;
+  }
+}
+
+/* A check's state, such as "Needs attention", or a switch that's off. */
+.state {
+  display: inline-block;
+  padding: 2px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  vertical-align: middle;
+  background: var(--surface);
+  border-radius: 999px;
+}
+
+.overall {
+  margin: 0 0 16px;
+  padding: 14px 20px;
+  font-size: 1.125rem;
+  font-weight: 500;
+  border-radius: var(--radius);
+}
+
+.overall[data-state="ok"],
+[data-state="ok"] .state {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.overall[data-state="warning"],
+[data-state="warning"] .state {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.overall[data-state="problem"],
+[data-state="problem"] .state {
+  color: var(--error);
+  background: var(--error-soft);
+}
+
+.checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 800px) {
+  /* Settings has no search, so its name keeps its place. */
+  .settings-frame .brand {
+    display: flex;
+    min-width: 0;
+  }
+
+  .settings-card {
+    padding: 16px;
+  }
+
+  dl.facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  dl.facts dd {
+    margin-bottom: 8px;
+  }
+}
+
+/* Printing the recovery key prints only the key. */
+@media print {
+  .top-bar,
+  .sidebar,
+  .settings-page > :not(.printable),
+  .no-print {
+    display: none !important;
+  }
+
+  .frame {
+    display: block;
+    height: auto;
+  }
+
+  .frame-main {
+    margin: 0;
+    overflow: visible;
+  }
+
+  body:has(.frame) {
+    overflow: visible;
+  }
 }

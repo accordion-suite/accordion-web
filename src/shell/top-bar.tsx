@@ -1,39 +1,35 @@
-// The bar along the top of every signed-in page: Accordion's name, a place
-// for the page's search, and the reader's account. The account menu leads
-// to the server's own pages, which the server serves outside the app.
+// The bar along the top of every signed-in page: Accordion's name with the
+// module's, a place for the page's search, a way to Settings, and the
+// reader's account.
 
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 
 import type { Session } from "../api.ts";
 import { MenuIcon } from "../drive/icons.tsx";
-import { t, type MessageKey } from "../i18n.ts";
-import { Menu, SEPARATOR, type MenuEntry, type MenuPlace } from "./menu.tsx";
-import { followLink } from "./router.ts";
-
-/** The admin pages, in the order the server's pages list them. */
-const ADMIN_PAGES: readonly [string, MessageKey][] = [
-  ["/people", "shell.people"],
-  ["/health", "shell.health"],
-  ["/backups", "shell.backups"],
-  ["/updates", "shell.updates"],
-  ["/network", "shell.network"],
-];
-
-/** A link to a page outside the app, which loads it in full. */
-function page(path: string, label: MessageKey): MenuEntry {
-  return { label: t(label), onSelect: () => location.assign(path) };
-}
+import { SettingsIcon } from "../settings/icons.tsx";
+import { t } from "../i18n.ts";
+import { Menu, SEPARATOR, type MenuPlace } from "./menu.tsx";
+import { followLink, navigate } from "./router.ts";
 
 export function TopBar({
   session,
   onSignOut,
+  module = t("drive.title"),
+  home = "/drive/start",
+  settings,
   menuOpen,
   onMenu,
   children,
 }: {
   session: Session;
   onSignOut: () => void;
+  /** The module's name beside Accordion's, and where it leads. */
+  module?: string;
+  home?: string;
+  /** Where the gear leads: this module's group in Settings. No gear in
+   * Settings itself. */
+  settings?: string;
   /** Whether the sidebar is open, on screens too small to show it always. */
   menuOpen?: boolean;
   onMenu?: () => void;
@@ -41,9 +37,6 @@ export function TopBar({
 }) {
   const [account, setAccount] = useState<{ place: MenuPlace; byKeyboard: boolean } | null>(null);
   const name = session.user.display_name;
-  const entries: MenuEntry[] = [page("/account", "shell.manageAccount")];
-  if (session.admin_pages) entries.push(SEPARATOR, ...ADMIN_PAGES.map(([path, label]) => page(path, label)));
-  entries.push(SEPARATOR, { label: t("shell.signOut"), onSelect: onSignOut });
 
   return (
     <header class="top-bar">
@@ -59,11 +52,16 @@ export function TopBar({
           <MenuIcon />
         </button>
       )}
-      <a class="brand" href="/drive/" onClick={followLink}>
+      <a class="brand" href={home} onClick={followLink}>
         <span class="brand-name">{t("app.name")}</span>
-        <span class="brand-module">{t("drive.title")}</span>
+        <span class="brand-module">{module}</span>
       </a>
       <div class="top-bar-middle">{children}</div>
+      {settings && (
+        <a class="icon-button" href={settings} title={t("settings.title")} aria-label={t("settings.title")} onClick={followLink}>
+          <SettingsIcon />
+        </a>
+      )}
       <button
         type="button"
         class="avatar"
@@ -79,7 +77,11 @@ export function TopBar({
         <Menu
           label={t("shell.signedInAs", { name })}
           heading={t("shell.signedInAs", { name })}
-          entries={entries}
+          entries={[
+            { label: t("settings.title"), onSelect: () => navigate("/settings/account") },
+            SEPARATOR,
+            { label: t("shell.signOut"), onSelect: onSignOut },
+          ]}
           place={account.place}
           byKeyboard={account.byKeyboard}
           align="end"

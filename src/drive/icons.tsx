@@ -10,7 +10,7 @@ import type { ComponentChildren } from "preact";
 
 import type { Item } from "./item.ts";
 
-function Icon({ children, class: className }: { children: ComponentChildren; class?: string }) {
+export function Icon({ children, class: className }: { children: ComponentChildren; class?: string }) {
   return (
     <svg class={className ? `icon ${className}` : "icon"} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       {children}

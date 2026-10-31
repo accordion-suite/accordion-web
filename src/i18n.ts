@@ -3,12 +3,19 @@
 // translations or formats ship in the app beyond the message files.
 
 import { en } from "./messages/en.ts";
+import type { settingsEn } from "./messages/settings.en.ts";
 
-export type MessageKey = keyof typeof en;
+export type MessageKey = keyof typeof en | keyof typeof settingsEn;
 type Plural = { readonly other: string } & { readonly [category: string]: string };
 type Values = Readonly<Record<string, string | number>>;
 
-const messages: Readonly<Record<MessageKey, string | Plural>> = en;
+const messages: Record<string, string | Plural> = { ...en };
+
+/** Adds the messages of a part of the app that loads later, such as
+ * Settings. */
+export function addMessages(more: Readonly<Record<string, string | Plural>>): void {
+  Object.assign(messages, more);
+}
 let locale = "en";
 let plurals = new Intl.PluralRules(locale);
 
@@ -22,6 +29,9 @@ export function setLocale(next: string): void {
  * message with plural forms picks one by `values.count`. */
 export function t(key: MessageKey, values: Values = {}): string {
   let message = messages[key];
+  // A part's messages that haven't loaded. Showing the key is better than
+  // breaking the page.
+  if (message === undefined) return key;
   if (typeof message !== "string") {
     const category = plurals.select(Number(values["count"] ?? 0));
     message = message[category] ?? message.other;
@@ -62,4 +72,34 @@ export function formatDate(iso: string): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
     new Date(iso),
   );
+}
+
+/** A date, such as "October 22, 2026", from an ISO time or milliseconds.
+ * The month is a word, so it reads the same in every country. */
+export function formatDay(when: string | number): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(new Date(when));
+}
+
+/** A date and time, such as "October 22, 2026 at 3:04 AM", in the reader's
+ * time zone. */
+export function formatMoment(when: string | number): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: "long", timeStyle: "short" }).format(new Date(when));
+}
+
+/** A calendar date with no time, such as a release's "2026-11-02", as
+ * "November 2, 2026". It's read as a local date, so it doesn't move a day
+ * in time zones behind UTC. */
+export function formatCalendarDay(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(new Date(year!, month! - 1, day));
+}
+
+/** An hour of the day, such as "3 AM". */
+export function formatHour(hour: number): string {
+  return new Intl.DateTimeFormat(locale, { hour: "numeric" }).format(new Date(2000, 0, 1, hour));
+}
+
+/** Items joined as a sentence, such as "a, b, and c". */
+export function formatList(items: readonly string[]): string {
+  return new Intl.ListFormat(locale, { type: "conjunction" }).format(items);
 }
