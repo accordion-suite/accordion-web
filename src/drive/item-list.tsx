@@ -541,31 +541,69 @@ export function ItemList({
   );
 }
 
-/** Switches every list between rows and a grid. */
 /** The picture on a grid card: the file's thumbnail if the server has one,
  * or a large icon that shows what kind of file it is. The card's name link
  * covers it, so screen readers skip it. */
 function CardPreview({ item }: { item: Item }) {
   const [failed, setFailed] = useState(false);
+  const kind = item.sha256 && !failed ? item.thumbnail : null;
   // The hash changes with each version, so browsers keep each thumbnail
   // and fetch a new one when the file changes.
-  const thumbnail = item.thumbnail && item.sha256 && !failed;
+  const src = `/api/drive/items/${item.id}/thumbnail?v=${item.sha256}`;
   return (
-    <div class={thumbnail ? "card-preview has-thumbnail" : "card-preview"} aria-hidden="true">
-      {thumbnail ? (
+    <div class={kind ? `card-preview has-thumbnail has-${kind}` : "card-preview"} aria-hidden="true">
+      {kind === "picture" ? (
         <img
-          src={`/api/drive/items/${item.id}/thumbnail?v=${item.sha256}`}
+          src={src}
           alt=""
           loading="lazy"
           decoding="async"
           onError={() => setFailed(true)}
         />
+      ) : kind === "text" ? (
+        <TextPreview src={src} onError={() => setFailed(true)} />
       ) : (
         <ItemIcon item={item} />
       )}
     </div>
   );
 }
+
+/** A text file's first lines, drawn as a small page. Like a lazy image, it
+ * waits until the card is nearly on screen, so a folder of a thousand notes
+ * doesn't fetch them all at once. */
+function TextPreview({ src, onError }: { src: string; onError: () => void }) {
+  const page = useRef<HTMLPreElement>(null);
+  const [text, setText] = useState("");
+  useEffect(() => {
+    const element = page.current;
+    if (!element) return;
+    let current = true;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        fetch(src)
+          .then((response) => (response.ok ? response.text() : Promise.reject()))
+          .then((lines) => current && setText(lines))
+          .catch(() => current && onError());
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(element);
+    return () => {
+      current = false;
+      observer.disconnect();
+    };
+  }, [src]);
+  return (
+    <pre ref={page} class="card-text">
+      {text}
+    </pre>
+  );
+}
+
+/** Switches every list between rows and a grid. */
 
 export function ViewToggle() {
   const [mode, setMode] = useViewMode();

@@ -1026,6 +1026,34 @@ table.items .actions {
   object-fit: cover;
 }
 
+/* A text file's first lines, as the top of a page that fades out at the
+   card's edge. The fade puts the page above the card's link, so clicks go
+   through it to the link, as they do on a picture, and the text can't be
+   selected. */
+.card-preview.has-text {
+  background: var(--panel);
+}
+
+.card-text {
+  align-self: stretch;
+  justify-self: stretch;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: hidden;
+  background: none;
+  border-radius: 0;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: 0.625rem;
+  line-height: 1.45;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  pointer-events: none;
+  user-select: none;
+}
+
 .card-meta {
   margin: 8px 14px 0;
   overflow: hidden;

@@ -9,8 +9,9 @@ export interface Item {
   sha256: string | null;
   /** For files the browser can show itself. */
   preview: "image" | "pdf" | null;
-  /** Whether the server has a thumbnail of the file yet. */
-  thumbnail: boolean;
+  /** What thumbnail the server has of the file yet: a small picture, or a
+   * text file's first lines. */
+  thumbnail: "picture" | "text" | null;
   created_at: string;
   modified_at: string;
   /** Whether the reader starred it. */
