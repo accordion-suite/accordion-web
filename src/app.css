@@ -1457,6 +1457,52 @@ dialog.viewer h2 {
   text-align: center;
 }
 
+/* A text file, as a page that scrolls inside the viewer. */
+.viewer-text {
+  align-self: stretch;
+  justify-self: stretch;
+  overflow: auto;
+  background: var(--page);
+}
+
+.viewer-text pre,
+.viewer-text-cut {
+  max-width: 880px;
+  margin: 24px auto;
+}
+
+.viewer-text pre {
+  min-height: calc(100% - 48px);
+  padding: 32px 40px;
+  overflow: visible;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+  background: var(--panel);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.viewer-text-cut {
+  margin-bottom: 0;
+  padding: 0 8px;
+  color: var(--muted);
+}
+
+/* Phones use the whole width. */
+@media (max-width: 600px) {
+  .viewer-text pre {
+    margin: 0;
+    padding: 16px;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
 /* Above the note for a file the browser can't show: its thumbnail, such as
    a HEIC photo's, or its icon. */
 .viewer-note .viewer-thumbnail {

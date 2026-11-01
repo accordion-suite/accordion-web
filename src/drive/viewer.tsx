@@ -1,11 +1,12 @@
 // Shows a file from a folder over the folder's page, with the folder's other
 // files a step away. The browser shows photos, PDFs, and videos itself, from
-// Drive's preview address. Other files, and videos the browser can't play,
-// show their thumbnail or icon and offer the download.
+// Drive's preview address, and the viewer shows text files as a page of
+// text. Other files, and videos the browser can't play, show their thumbnail
+// or icon and offer the download.
 
 import { useEffect, useState } from "preact/hooks";
 
-import { t } from "../i18n.ts";
+import { formatSize, t } from "../i18n.ts";
 import { Dialog } from "../shell/dialog.tsx";
 import { ItemIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
@@ -13,6 +14,10 @@ import type { Item } from "./item.ts";
 /** Small screens open PDFs in their own tab, because phones show a PDF in a
  * page badly or not at all. Matches the phone layout in app.css. */
 const NARROW = "(max-width: 600px)";
+
+/** The most of a text file the viewer shows, so a huge log doesn't freeze
+ * the page. The download has the rest. */
+const TEXT_LIMIT = 1_000_000;
 
 function useMedia(query: string): boolean {
   const [matches, setMatches] = useState(() => matchMedia(query).matches);
@@ -88,6 +93,10 @@ function Shown({ file }: { file: Item }) {
   const narrow = useMedia(NARROW);
   const address = `/api/drive/items/${file.id}/preview`;
 
+  // The server found it's text when it made its thumbnail.
+  if (file.preview === null && file.thumbnail === "text") {
+    return <TextFile file={file} />;
+  }
   if (file.preview === null) {
     return (
       <div class="viewer-body">
@@ -176,6 +185,51 @@ function Shown({ file }: { file: Item }) {
             onError={() => setState("failed")}
           />
         </>
+      )}
+    </div>
+  );
+}
+
+/** A text file as a page of plain text, which can't run anything. */
+function TextFile({ file }: { file: Item }) {
+  const [text, setText] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const cut = (file.size ?? 0) > TEXT_LIMIT;
+
+  useEffect(() => {
+    let current = true;
+    fetch(`/api/drive/items/${file.id}/content`, { headers: { Range: `bytes=0-${TEXT_LIMIT - 1}` } })
+      .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject()))
+      .then((bytes) => {
+        if (!current) return;
+        const decoded = new TextDecoder().decode(bytes.slice(0, TEXT_LIMIT));
+        // Cutting it off can split the last character.
+        setText(cut ? decoded.replace(/\uFFFD$/, "") : decoded);
+      })
+      .catch(() => current && setFailed(true));
+    return () => {
+      current = false;
+    };
+  }, [file.id]);
+
+  if (failed) {
+    return (
+      <div class="viewer-body">
+        <p class="viewer-note error" role="alert">
+          {t("viewer.failed", { name: file.name })}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div class="viewer-body">
+      {text === null ? (
+        <p class="loading">{t("shell.loading")}</p>
+      ) : (
+        <div class="viewer-text">
+          {cut && <p class="viewer-text-cut">{t("viewer.textCut", { size: formatSize(TEXT_LIMIT) })}</p>}
+          <pre>{text}</pre>
+        </div>
       )}
     </div>
   );
