@@ -1,8 +1,9 @@
 // A list of files and folders, as rows or as a grid, and what can be done to
 // them: opening, downloading, renaming, copying, moving, starring, and moving
 // to the trash. Those are in each item's ⋮ menu and its right-click menu,
-// and on keys for what's selected. Photos and PDFs open in the viewer, over
-// the list, with the list's other photos and PDFs a step away.
+// and on keys for what's selected. Files open in the viewer, over the list,
+// with the list's other files a step away, as in Google Drive. Downloading
+// is in the menus and the viewer, never a side effect of opening.
 //
 // Every page with items uses this, so they all work the same. A list that
 // reaches across folders, such as search results, says where each item is.
@@ -15,7 +16,7 @@ import { formatDate, formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
 import { MoveDialog, NameDialog } from "./dialogs.tsx";
-import { CloseIcon, GridIcon, ItemIcon, ListIcon, MoreIcon, PlayIcon, StarIcon, kindOf } from "./icons.tsx";
+import { CloseIcon, GridIcon, ItemIcon, ListIcon, MoreIcon, StarIcon } from "./icons.tsx";
 import type { Found, Item } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { freeName } from "./names.ts";
@@ -114,7 +115,7 @@ export function ItemList({
   }, [items]);
 
   const chosenItems = items.filter((item) => selected.has(item.id));
-  const shown = items.filter((item) => item.preview !== null);
+  const shown = items.filter((item) => item.kind === "file");
   const shownFile = shown.find((file) => file.id === showing);
 
   function openFile(event: MouseEvent, file: Item) {
@@ -216,10 +217,10 @@ export function ItemList({
     if (item.kind === "folder") {
       entries.push({ label: t("drive.open"), onSelect: () => navigate(folderPath(item)) });
     } else {
-      if (item.preview) {
-        entries.push({ label: t("drive.open"), onSelect: () => navigate(filePath(item), { state: OPENED_HERE }) });
-      }
-      entries.push({ label: t("viewer.download"), onSelect: () => download(item) });
+      entries.push(
+        { label: t("drive.open"), onSelect: () => navigate(filePath(item), { state: OPENED_HERE }) },
+        { label: t("viewer.download"), onSelect: () => download(item) },
+      );
     }
     entries.push(
       SEPARATOR,
@@ -301,20 +302,8 @@ export function ItemList({
         </a>
       );
     }
-    if (item.preview) {
-      return (
-        <a class={className} href={filePath(item)} onClick={(event) => openFile(event, item)}>
-          {item.name}
-        </a>
-      );
-    }
     return (
-      <a
-        class={className}
-        href={`/api/drive/items/${item.id}/content`}
-        download={item.name}
-        aria-label={t("drive.download", { name: item.name })}
-      >
+      <a class={className} href={filePath(item)} onClick={(event) => openFile(event, item)}>
         {item.name}
       </a>
     );
@@ -553,20 +542,13 @@ function CardPreview({ item }: { item: Item }) {
   return (
     <div class={kind ? `card-preview has-thumbnail has-${kind}` : "card-preview"} aria-hidden="true">
       {kind === "picture" ? (
-        <>
-          <img
-            src={src}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            onError={() => setFailed(true)}
-          />
-          {kindOf(item) === "video" && (
-            <span class="card-play">
-              <PlayIcon />
-            </span>
-          )}
-        </>
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+        />
       ) : kind === "text" ? (
         <TextPreview src={src} onError={() => setFailed(true)} />
       ) : (

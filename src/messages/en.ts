@@ -70,7 +70,6 @@ export const en = {
   "drive.name": "Name",
   "drive.modified": "Modified",
   "drive.size": "Size",
-  "drive.download": "Download {name}",
   "drive.upload": "Upload files",
   "drive.dropHere": "Drop files to upload them to {folder}",
   "drive.uploadFolder": "Upload folder",
@@ -139,6 +138,9 @@ export const en = {
   "viewer.close": "Close",
   "viewer.pdfNarrow": "On a small screen, PDFs open in a tab of their own.",
   "viewer.openPdf": "Open the PDF",
+  "viewer.noPreview": "Accordion can't show {name} here. Download it to open it on your device.",
+  "viewer.videoFailed":
+    "This browser can't play {name}. Download it to watch it in another app, or open Accordion in another browser.",
   "viewer.failed":
     "Accordion couldn't show {name}. It may be damaged, or not the kind of file its name says. Download it to open it on your device.",
 
