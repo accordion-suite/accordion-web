@@ -15,7 +15,7 @@ import { formatDate, formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
 import { MoveDialog, NameDialog } from "./dialogs.tsx";
-import { CloseIcon, GridIcon, ItemIcon, ListIcon, MoreIcon, StarIcon } from "./icons.tsx";
+import { CloseIcon, GridIcon, ItemIcon, ListIcon, MoreIcon, PlayIcon, StarIcon, kindOf } from "./icons.tsx";
 import type { Found, Item } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { freeName } from "./names.ts";
@@ -553,13 +553,20 @@ function CardPreview({ item }: { item: Item }) {
   return (
     <div class={kind ? `card-preview has-thumbnail has-${kind}` : "card-preview"} aria-hidden="true">
       {kind === "picture" ? (
-        <img
-          src={src}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          onError={() => setFailed(true)}
-        />
+        <>
+          <img
+            src={src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onError={() => setFailed(true)}
+          />
+          {kindOf(item) === "video" && (
+            <span class="card-play">
+              <PlayIcon />
+            </span>
+          )}
+        </>
       ) : kind === "text" ? (
         <TextPreview src={src} onError={() => setFailed(true)} />
       ) : (

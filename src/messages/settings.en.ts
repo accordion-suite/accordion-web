@@ -351,5 +351,5 @@ export const settingsEn = {
   "driveSettings.myDriveHint": "All your folders and files.",
   "driveSettings.thumbnailsTitle": "Thumbnails",
   "driveSettings.thumbnailsHint":
-    "In grid view, photos show a small picture of themselves, PDFs show their first page, and text files show their first lines. Turn this off for smaller cards, so more fit on the screen.",
+    "In grid view, photos show a small picture of themselves, videos show a frame, PDFs show their first page, and text files show their first lines. Turn this off for smaller cards, so more fit on the screen.",
 } as const;

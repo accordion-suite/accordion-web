@@ -66,6 +66,13 @@ export const ListIcon = () => (
   </Icon>
 );
 
+/** The triangle on a video's thumbnail, so it isn't mistaken for a photo. */
+export const PlayIcon = () => (
+  <Icon class="play">
+    <path d="M8 5.5v13l10.5-6.5z" fill="currentColor" />
+  </Icon>
+);
+
 export const GridIcon = () => (
   <Icon>
     <path d="M3 3h8v8H3zm2 2v4h4V5zm8-2h8v8h-8zm2 2v4h4V5zM3 13h8v8H3zm2 2v4h4v-4zm8-2h8v8h-8zm2 2v4h4v-4z" fill="currentColor" />

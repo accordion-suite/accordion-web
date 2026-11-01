@@ -1016,14 +1016,36 @@ table.items .actions {
 /* A thumbnail fills the card's picture, cropped to fit, as in Google
    Drive's grid. */
 .card-preview.has-thumbnail {
+  /* One cell the card's size, so a tall picture can't stretch it and push
+     a video's play symbol out of sight. */
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   overflow: hidden;
   background: var(--surface);
 }
 
 .card-preview img {
+  grid-area: 1 / 1;
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* A video's frame has a play symbol in the middle, on a dark circle that
+   shows on light and dark frames alike. */
+.card-play {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+  border-radius: 50%;
+}
+
+.card-play .icon {
+  width: 22px;
+  height: 22px;
 }
 
 /* A text file's first lines, as the top of a page that fades out at the
