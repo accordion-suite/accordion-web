@@ -127,6 +127,7 @@ export const en = {
   "drive.moveOne": "Move {name}",
   "drive.moveMany": { one: "Move {count} item", other: "Move {count} items" },
   "drive.moveHere": "Move to {name}",
+  "drive.dragging": { one: "{count} item", other: "{count} items" },
   "drive.movedOne": "Moved {name} to {folder}.",
   "drive.movedMany": { one: "Moved {count} item to {folder}.", other: "Moved {count} items to {folder}." },
   "drive.noSubfolders": "There are no folders in here.",

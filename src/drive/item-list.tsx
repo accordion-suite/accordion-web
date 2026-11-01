@@ -1,7 +1,8 @@
 // A list of files and folders, as rows or as a grid, and what can be done to
 // them: opening, downloading, renaming, copying, moving, starring, and moving
 // to the trash. Those are in each item's ⋮ menu and its right-click menu,
-// and on keys for what's selected. Files open in the viewer, over the list,
+// and on keys for what's selected, or by dragging onto a folder. Files open
+// in the viewer, over the list,
 // with the list's other files a step away, as in Google Drive. Downloading
 // is in the menus and the viewer, never a side effect of opening.
 //
@@ -21,6 +22,7 @@ import type { Found, Item } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { freeName } from "./names.ts";
 import { useDriveSettings } from "./preferences.ts";
+import { dropProps, endDrag, naming, startDrag } from "./move.ts";
 import { nextSort, type SortKey, sortItems } from "./sort.ts";
 import { announceChange, useSort, useViewMode } from "./store.ts";
 import { Viewer } from "./viewer.tsx";
@@ -46,11 +48,17 @@ function filePath(file: Item): string {
  * it can go back rather than add another entry. */
 const OPENED_HERE = { viewer: true };
 
-/** Saves a file, as its download link would. */
-function download(item: Item) {
+/** Saves a file as it is, or a folder or several items as one ZIP file, as
+ * Google Drive does. The server builds the ZIP as it sends it. */
+function download(items: readonly Item[]) {
   const link = document.createElement("a");
-  link.href = `/api/drive/items/${item.id}/content`;
-  link.download = item.name;
+  const only = items.length === 1 ? items[0]! : null;
+  if (only?.kind === "file") {
+    link.href = `/api/drive/items/${only.id}/content`;
+    link.download = only.name;
+  } else {
+    link.href = `/api/drive/zip?ids=${items.map((item) => item.id).join(",")}`;
+  }
   link.click();
 }
 
@@ -58,12 +66,6 @@ function located(item: Item | Found): item is Found {
   return "folders" in item;
 }
 
-/** "Photo.jpg" for one item, or "3 items" for more. */
-function naming(items: readonly Item[], one: Parameters<typeof t>[0], many: Parameters<typeof t>[0], to = "") {
-  return items.length === 1
-    ? t(one, { name: items[0]!.name, folder: to })
-    : t(many, { count: items.length, folder: to });
-}
 
 /** Whether a key, rather than the pointer, pressed a button. A click from
  * Enter or Space counts no presses. */
@@ -97,6 +99,7 @@ export function ItemList({
   const drive = useDrive();
   const [mode] = useViewMode();
   const [sort, setSort] = useSort(showLocation ? "found" : "folder");
+  const [dropOn, setDropOn] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
@@ -211,6 +214,7 @@ export function ItemList({
     if (chosen.length > 1) {
       return [
         { label: t("drive.moveMany", { count: chosen.length }), onSelect: () => setOpen({ kind: "move", items: chosen }) },
+        { label: t("viewer.download"), onSelect: () => download(chosen) },
         starEntry,
         SEPARATOR,
         { label: t("drive.trashMany", { count: chosen.length }), shortcut: "Delete", onSelect: () => trash(chosen) },
@@ -219,11 +223,14 @@ export function ItemList({
     const item = chosen[0]!;
     const entries: MenuEntry[] = [];
     if (item.kind === "folder") {
-      entries.push({ label: t("drive.open"), onSelect: () => navigate(folderPath(item)) });
+      entries.push(
+        { label: t("drive.open"), onSelect: () => navigate(folderPath(item)) },
+        { label: t("viewer.download"), onSelect: () => download(chosen) },
+      );
     } else {
       entries.push(
         { label: t("drive.open"), onSelect: () => navigate(filePath(item), { state: OPENED_HERE }) },
-        { label: t("viewer.download"), onSelect: () => download(item) },
+        { label: t("viewer.download"), onSelect: () => download(chosen) },
         { label: t("drive.manageVersions"), onSelect: () => setOpen({ kind: "versions", item }) },
       );
     }
@@ -365,6 +372,26 @@ export function ItemList({
   const folders = ordered.filter((item) => item.kind === "folder");
   const files = ordered.filter((item) => item.kind === "file");
 
+  /** What lets an item be dragged onto a folder, with everything selected
+   * if it's selected, and lets a folder take a drag. */
+  function dragging(item: Item) {
+    return {
+      draggable: true,
+      onDragStart: (event: DragEvent) => startDrag(event, selected.has(item.id) ? chosenItems : [item]),
+      onDragEnd: () => {
+        endDrag();
+        setDropOn(null);
+      },
+      ...(item.kind === "folder" ? dropProps(item, setDropOn, drive.notify) : {}),
+    };
+  }
+
+  /** An item's classes: whether it's selected, and whether a drag is over
+   * it. */
+  function classes(item: Item, base = "") {
+    return [base, selected.has(item.id) && "selected", dropOn === item.id && "drop-target"].filter(Boolean).join(" ") || undefined;
+  }
+
   /** A column's header, which sorts the list by that column. */
   function header(key: SortKey, name: string, className?: string) {
     const active = sort?.key === key ? sort : null;
@@ -403,6 +430,9 @@ export function ItemList({
           <button type="button" class="quiet" onClick={() => setOpen({ kind: "move", items: chosenItems })}>
             {t("drive.move")}
           </button>
+          <button type="button" class="quiet" onClick={() => download(chosenItems)}>
+            {t("viewer.download")}
+          </button>
           <button
             type="button"
             class="quiet"
@@ -438,7 +468,7 @@ export function ItemList({
           </thead>
           <tbody>
             {ordered.map((item) => (
-              <tr key={item.id} data-id={item.id} class={selected.has(item.id) ? "selected" : undefined}>
+              <tr key={item.id} data-id={item.id} class={classes(item)} {...dragging(item)}>
                 <td class="select">{checkbox(item)}</td>
                 <th scope="row">
                   <span class="name-cell">
@@ -462,7 +492,7 @@ export function ItemList({
               <h2 class="section-title">{t("drive.folders")}</h2>
               <ul class="tiles">
                 {folders.map((item) => (
-                  <li key={item.id} data-id={item.id} class={selected.has(item.id) ? "tile selected" : "tile"}>
+                  <li key={item.id} data-id={item.id} class={classes(item, "tile")} {...dragging(item)}>
                     {checkbox(item, "tile-check")}
                     <ItemIcon item={item} />
                     {nameLink(item, "tile-name")}
@@ -478,7 +508,7 @@ export function ItemList({
               <h2 class="section-title">{t("drive.files")}</h2>
               <ul class="cards">
                 {files.map((item) => (
-                  <li key={item.id} data-id={item.id} class={selected.has(item.id) ? "card selected" : "card"}>
+                  <li key={item.id} data-id={item.id} class={classes(item, "card")} {...dragging(item)}>
                     <div class="card-top">
                       {checkbox(item, "tile-check")}
                       <ItemIcon item={item} />

@@ -43,6 +43,7 @@ import {
   UploadFolderIcon,
 } from "./icons.tsx";
 import type { Item } from "./item.ts";
+import { dropProps } from "./move.ts";
 import { SearchBox } from "./search-box.tsx";
 import { announceChange, useChanges } from "./store.ts";
 import { finished } from "./uploads.ts";
@@ -128,6 +129,7 @@ export function DriveLayout({
   const [menu, setMenu] = useState<{ place: MenuPlace; byKeyboard: boolean } | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [dropping, setDropping] = useState(false);
+  const [dropOn, setDropOn] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const dragDepth = useRef(0);
   const chooser = useRef<HTMLInputElement>(null);
@@ -296,7 +298,10 @@ export function DriveLayout({
               {t("drive.home")}
             </Place>
             <li>
-              <div class="place-row">
+              <div
+                class={top && dropOn === top.id ? "place-row drop-target" : "place-row"}
+                {...(top ? dropProps({ id: top.id, name: t("drive.myDrive") }, setDropOn, notify) : {})}
+              >
                 <a
                   class="place"
                   href="/drive/my-drive"
@@ -449,6 +454,8 @@ function FolderTree({
 }) {
   const [folders, setFolders] = useState<Item[] | null>(null);
   const [, setShown] = useState(0);
+  const [dropOn, setDropOn] = useState<string | null>(null);
+  const drive = useDrive();
 
   function load() {
     api<Item[]>("GET", `/api/drive/items/${parent}/children`).then(
@@ -478,7 +485,11 @@ function FolderTree({
         const href = `/drive/folder/${folder.id}`;
         return (
           <li key={folder.id}>
-            <div class="place-row" style={{ paddingLeft: `${depth * 16}px` }}>
+            <div
+              class={dropOn === folder.id ? "place-row drop-target" : "place-row"}
+              style={{ paddingLeft: `${depth * 16}px` }}
+              {...dropProps(folder, setDropOn, drive.notify)}
+            >
               <button
                 type="button"
                 class="tree-toggle"
