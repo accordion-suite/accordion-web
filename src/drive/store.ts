@@ -1,5 +1,5 @@
-// What Drive's pages share: whether items show as a list or a grid, news
-// that something changed, so the page and the sidebar load again, and the
+// What Drive's pages share: whether items show as a list or a grid, how
+// they're sorted, news that something changed, so the page and the sidebar load again, and the
 // folders the app has seen, so a folder's path shows without asking the
 // server for every folder above it each time.
 
@@ -7,11 +7,13 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import type { Item } from "./item.ts";
+import { readSort, type Sort } from "./sort.ts";
 
 export type ViewMode = "list" | "grid";
 
 const VIEW_KEY = "accordion.drive.view";
 const VIEW_CHANGED = "accordion:drive-view";
+const SORT_CHANGED = "accordion:drive-sort";
 const CHANGED = "accordion:drive-changed";
 
 const folders = new Map<string, Item>();
@@ -43,6 +45,38 @@ export function useViewMode(): [ViewMode, (mode: ViewMode) => void] {
       }
       setMode(next);
       window.dispatchEvent(new Event(VIEW_CHANGED));
+    },
+  ];
+}
+
+/** The reader's sort for folders, or for lists across folders, such as Home
+ * and search, which start in their own order. Each is kept in this browser
+ * only, and lasts until the page reloads when the browser keeps nothing. */
+export function useSort(scope: "folder" | "found"): [Sort | null, (sort: Sort) => void] {
+  const key = `accordion.drive.sort.${scope}`;
+  const read = (): Sort | null => {
+    try {
+      return readSort(localStorage.getItem(key));
+    } catch {
+      return null;
+    }
+  };
+  const [sort, setSort] = useState(read);
+  useEffect(() => {
+    const update = () => setSort(read());
+    window.addEventListener(SORT_CHANGED, update);
+    return () => window.removeEventListener(SORT_CHANGED, update);
+  }, [key]);
+  return [
+    sort,
+    (next) => {
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {
+        // The sort lasts until the page reloads.
+      }
+      setSort(next);
+      window.dispatchEvent(new Event(SORT_CHANGED));
     },
   ];
 }

@@ -10,6 +10,9 @@
   --text: #1c2430;
   --muted: #5b6573;
   --page: #f1f4f9;
+  /* The logo's folds. Its own white folds would vanish on a light page. */
+  --logo-fold: #3f3f46;
+  --logo-gap: #a1a1aa;
   --panel: #ffffff;
   --surface: #e9eef6;
   --surface-strong: #dde5f1;
@@ -56,6 +59,7 @@
     --text: #e4e8ee;
     --muted: #a4adba;
     --page: #111418;
+    --logo-fold: #fafafa;
     --panel: #1a1e24;
     --surface: #242a32;
     --surface-strong: #2e3540;
@@ -93,6 +97,7 @@
   --text: #e4e8ee;
   --muted: #a4adba;
   --page: #111418;
+  --logo-fold: #fafafa;
   --panel: #1a1e24;
   --surface: #242a32;
   --surface-strong: #2e3540;
@@ -376,6 +381,12 @@ main.narrow {
   color: var(--text);
   font-size: 1.25rem;
   text-decoration: none;
+}
+
+.brand-logo {
+  flex: none;
+  width: 24px;
+  height: 28px;
 }
 
 .brand-name {
@@ -754,6 +765,38 @@ table.items td {
 table.items thead th {
   font-weight: 500;
   color: var(--muted);
+}
+
+/* A header is a button that sorts by its column. */
+table.items .sort-button {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  margin: -4px -8px;
+  padding: 4px 8px;
+  font-weight: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+}
+
+table.items .sort-button:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+table.items th[aria-sort] .sort-button {
+  color: var(--text);
+}
+
+.icon.sort {
+  width: 16px;
+  height: 16px;
+}
+
+.icon.sort.descending {
+  transform: rotate(180deg);
 }
 
 table.items tbody th {
@@ -1516,6 +1559,47 @@ dialog.viewer h2 {
 .viewer-note .item-icon {
   width: 72px;
   height: 72px;
+}
+
+/* The note sizes itself to what's in it, so the player gets its own width. */
+.viewer-audio audio {
+  width: min(420px, calc(100vw - 64px));
+  margin-top: 16px;
+}
+
+/* A file's versions, each with its date and size, and what can be done
+   with it. */
+.versions {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+/* Wide enough for each version's date, size, and buttons on one line. */
+dialog.versions-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.versions li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.version-about {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.version-detail {
+  font-size: 0.875rem;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 /* On phones, the buttons go under the name. */

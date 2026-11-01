@@ -62,6 +62,17 @@ export const en = {
     other: "Removed {count} items from Starred.",
   },
   "drive.makeCopy": "Make a copy",
+  "drive.manageVersions": "Manage versions",
+  "drive.versionsOf": "Versions of {name}",
+  "drive.versionsHint":
+    "Accordion saves a new version each time this file changes, and keeps older ones for 30 days. Restoring one makes it the current version, and keeps the others.",
+  "drive.version": "Version {number}",
+  "drive.versionCurrent": "Version {number}, current",
+  "drive.versionAbout": "{date} · {size}",
+  "drive.downloadVersion": "Download version {number}",
+  "drive.restoreVersion": "Restore",
+  "drive.restoreVersionNamed": "Restore version {number}",
+  "drive.restoredVersion": "Restored version {number} of {name}.",
   "drive.copyName": "Copy of {name}",
   "drive.copied": "Made a copy named {name}.",
   "drive.showLocation": "Show file location",
@@ -140,6 +151,7 @@ export const en = {
   "viewer.openPdf": "Open the PDF",
   "viewer.textCut": "This file is long, so Accordion shows its first {size}. Download it to see the rest.",
   "viewer.noPreview": "Accordion can't show {name} here. Download it to open it on your device.",
+  "viewer.audioFailed": "This browser can't play {name}. Download it to listen to it in another app.",
   "viewer.videoFailed":
     "This browser can't play {name}. Download it to watch it in another app, or open Accordion in another browser.",
   "viewer.failed":
@@ -200,6 +212,7 @@ export const en = {
   "trash.emptied": "Emptied the trash.",
 
   "dialog.cancel": "Cancel",
+  "dialog.close": "Close",
 
   "uploads.title": "Uploads",
   "uploads.uploading": { one: "Uploading {count} file", other: "Uploading {count} files" },

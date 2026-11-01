@@ -1,11 +1,12 @@
 // Drive's dialogs: naming a new folder or renaming, choosing where to move
-// to, and choosing what an upload does to items with its names.
+// to, choosing what an upload does to items with its names, and a file's
+// versions.
 
 import type { TargetedSubmitEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
-import { t } from "../i18n.ts";
+import { formatDate, formatSize, t } from "../i18n.ts";
 import { Dialog, problemText as message } from "../shell/dialog.tsx";
 import type { Child } from "./folder-upload.ts";
 import type { Item } from "./item.ts";
@@ -239,6 +240,104 @@ export function MoveDialog({
         </button>
         <button type="button" class="secondary" onClick={onClose}>
           {t("dialog.cancel")}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** A saved version of a file, as `/api/drive/items/{id}/versions` lists it. */
+interface Version {
+  id: string;
+  number: number;
+  size: number;
+  sha256: string;
+  created_at: string;
+}
+
+/** A file's saved versions, newest first, to download one or make it the
+ * current version again. */
+export function VersionsDialog({
+  item,
+  onRestored,
+  onClose,
+}: {
+  item: Item;
+  onRestored: (number: number) => void;
+  onClose: () => void;
+}) {
+  const [versions, setVersions] = useState<Version[] | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api<Version[]>("GET", `/api/drive/items/${item.id}/versions`).then(setVersions, (problem) =>
+      setError(message(problem)),
+    );
+  }, [item.id]);
+
+  async function restore(version: Version) {
+    setBusy(true);
+    setError("");
+    try {
+      await api("POST", `/api/drive/items/${item.id}/versions/${version.id}/restore`);
+      onRestored(version.number);
+    } catch (problem) {
+      setError(message(problem));
+      setBusy(false);
+    }
+  }
+
+  const current = versions?.[0];
+  return (
+    <Dialog title={t("drive.versionsOf", { name: item.name })} class="versions-dialog" onClose={onClose}>
+      <p class="hint">{t("drive.versionsHint")}</p>
+      {versions ? (
+        <ul class="versions">
+          {versions.map((version) => (
+            <li key={version.id}>
+              <div class="version-about">
+                <span class="version-name">
+                  {version === current
+                    ? t("drive.versionCurrent", { number: version.number })
+                    : t("drive.version", { number: version.number })}
+                </span>
+                <span class="version-detail">
+                  {t("drive.versionAbout", { date: formatDate(version.created_at), size: formatSize(version.size) })}
+                </span>
+              </div>
+              <a
+                class="button secondary"
+                href={`/api/drive/items/${item.id}/versions/${version.id}/content`}
+                download={item.name}
+                aria-label={t("drive.downloadVersion", { number: version.number })}
+              >
+                {t("viewer.download")}
+              </a>
+              {/* Restoring what's already current would change nothing. */}
+              {version.sha256 !== current?.sha256 && (
+                <button
+                  type="button"
+                  class="secondary"
+                  disabled={busy}
+                  aria-label={t("drive.restoreVersionNamed", { number: version.number })}
+                  onClick={() => restore(version)}
+                >
+                  {t("drive.restoreVersion")}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        !error && <p class="loading">{t("shell.loading")}</p>
+      )}
+      <p class="error" role="alert">
+        {error}
+      </p>
+      <div class="dialog-buttons">
+        <button type="button" onClick={onClose}>
+          {t("dialog.close")}
         </button>
       </div>
     </Dialog>

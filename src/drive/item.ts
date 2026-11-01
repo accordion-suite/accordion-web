@@ -8,7 +8,7 @@ export interface Item {
   /** For files: the SHA-256 hash of the current version's contents. */
   sha256: string | null;
   /** For files the browser can show itself. */
-  preview: "image" | "pdf" | "video" | null;
+  preview: "image" | "pdf" | "video" | "audio" | null;
   /** What thumbnail the server has of the file yet: a small picture, or a
    * text file's first lines. */
   thumbnail: "picture" | "text" | null;

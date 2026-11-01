@@ -66,6 +66,13 @@ export const ListIcon = () => (
   </Icon>
 );
 
+/** Points up for A to Z and oldest first, and down for the other way. */
+export const SortIcon = ({ descending }: { descending: boolean }) => (
+  <Icon class={descending ? "sort descending" : "sort"}>
+    <path d="M11 20V7.8l-5.6 5.6L4 12l8-8 8 8-1.4 1.4L13 7.8V20z" fill="currentColor" />
+  </Icon>
+);
+
 export const GridIcon = () => (
   <Icon>
     <path d="M3 3h8v8H3zm2 2v4h4V5zm8-2h8v8h-8zm2 2v4h4V5zM3 13h8v8H3zm2 2v4h4v-4zm8-2h8v8h-8zm2 2v4h4v-4z" fill="currentColor" />

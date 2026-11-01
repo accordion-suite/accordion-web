@@ -15,13 +15,14 @@ import { ApiError, api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
-import { MoveDialog, NameDialog } from "./dialogs.tsx";
-import { CloseIcon, GridIcon, ItemIcon, ListIcon, MoreIcon, StarIcon } from "./icons.tsx";
+import { MoveDialog, NameDialog, VersionsDialog } from "./dialogs.tsx";
+import { CloseIcon, GridIcon, ItemIcon, ListIcon, MoreIcon, SortIcon, StarIcon } from "./icons.tsx";
 import type { Found, Item } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { freeName } from "./names.ts";
 import { useDriveSettings } from "./preferences.ts";
-import { announceChange, useViewMode } from "./store.ts";
+import { nextSort, type SortKey, sortItems } from "./sort.ts";
+import { announceChange, useSort, useViewMode } from "./store.ts";
 import { Viewer } from "./viewer.tsx";
 
 /** A folder's page. My Drive has its own address. */
@@ -79,7 +80,7 @@ interface OpenMenu {
   owner?: string;
 }
 
-type Open = { kind: "rename"; item: Item } | { kind: "move"; items: Item[] };
+type Open = { kind: "rename"; item: Item } | { kind: "move"; items: Item[] } | { kind: "versions"; item: Item };
 
 export function ItemList({
   items,
@@ -95,6 +96,7 @@ export function ItemList({
   const thumbnails = useDriveSettings()?.thumbnails ?? true;
   const drive = useDrive();
   const [mode] = useViewMode();
+  const [sort, setSort] = useSort(showLocation ? "found" : "folder");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
@@ -115,7 +117,9 @@ export function ItemList({
   }, [items]);
 
   const chosenItems = items.filter((item) => selected.has(item.id));
-  const shown = items.filter((item) => item.kind === "file");
+  // The grid and the viewer's Previous and Next follow the list's sort too.
+  const ordered = sortItems(items, sort);
+  const shown = ordered.filter((item) => item.kind === "file");
   const shownFile = shown.find((file) => file.id === showing);
 
   function openFile(event: MouseEvent, file: Item) {
@@ -220,6 +224,7 @@ export function ItemList({
       entries.push(
         { label: t("drive.open"), onSelect: () => navigate(filePath(item), { state: OPENED_HERE }) },
         { label: t("viewer.download"), onSelect: () => download(item) },
+        { label: t("drive.manageVersions"), onSelect: () => setOpen({ kind: "versions", item }) },
       );
     }
     entries.push(
@@ -357,8 +362,25 @@ export function ItemList({
     );
   }
 
-  const folders = items.filter((item) => item.kind === "folder");
-  const files = items.filter((item) => item.kind === "file");
+  const folders = ordered.filter((item) => item.kind === "folder");
+  const files = ordered.filter((item) => item.kind === "file");
+
+  /** A column's header, which sorts the list by that column. */
+  function header(key: SortKey, name: string, className?: string) {
+    const active = sort?.key === key ? sort : null;
+    return (
+      <th
+        scope="col"
+        class={className}
+        aria-sort={active ? (active.descending ? "descending" : "ascending") : undefined}
+      >
+        <button type="button" class="sort-button" onClick={() => setSort(nextSort(sort, key))}>
+          {name}
+          {active && <SortIcon descending={active.descending} />}
+        </button>
+      </th>
+    );
+  }
 
   return (
     <div class="item-list" onContextMenu={contextMenu}>
@@ -407,23 +429,15 @@ export function ItemList({
                   onChange={toggleAll}
                 />
               </td>
-              <th scope="col">{t("drive.name")}</th>
-              {showLocation && (
-                <th scope="col" class="location">
-                  {t("drive.location")}
-                </th>
-              )}
-              <th scope="col" class="modified">
-                {t("drive.modified")}
-              </th>
-              <th scope="col" class="size">
-                {t("drive.size")}
-              </th>
+              {header("name", t("drive.name"))}
+              {showLocation && header("location", t("drive.location"), "location")}
+              {header("modified", t("drive.modified"), "modified")}
+              {header("size", t("drive.size"), "size")}
               <td class="more-cell" />
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
+            {ordered.map((item) => (
               <tr key={item.id} data-id={item.id} class={selected.has(item.id) ? "selected" : undefined}>
                 <td class="select">{checkbox(item)}</td>
                 <th scope="row">
@@ -513,6 +527,16 @@ export function ItemList({
           onMoved={(to) => {
             setOpen(null);
             done(naming(open.items, "drive.movedOne", "drive.movedMany", to));
+          }}
+          onClose={() => setOpen(null)}
+        />
+      )}
+      {open?.kind === "versions" && (
+        <VersionsDialog
+          item={open.item}
+          onRestored={(number) => {
+            setOpen(null);
+            done(t("drive.restoredVersion", { number, name: open.item.name }));
           }}
           onClose={() => setOpen(null)}
         />

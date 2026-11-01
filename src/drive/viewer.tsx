@@ -1,8 +1,8 @@
 // Shows a file from a folder over the folder's page, with the folder's other
-// files a step away. The browser shows photos, PDFs, and videos itself, from
-// Drive's preview address, and the viewer shows text files as a page of
-// text. Other files, and videos the browser can't play, show their thumbnail
-// or icon and offer the download.
+// files a step away. The browser shows photos, PDFs, videos, and audio itself,
+// from Drive's preview address, and the viewer shows text files as a page of
+// text. Other files, and videos and songs the browser can't play, show their
+// thumbnail or icon and offer the download.
 
 import { useEffect, useState } from "preact/hooks";
 
@@ -114,6 +114,27 @@ function Shown({ file }: { file: Item }) {
           <a class="button" href={`/api/drive/items/${file.id}/content`} download={file.name}>
             {t("viewer.download")}
           </a>
+        </div>
+      </div>
+    );
+  }
+  if (file.preview === "audio") {
+    return (
+      <div class="viewer-body">
+        <div class="viewer-note viewer-audio">
+          <ItemIcon item={file} />
+          {state === "failed" ? (
+            <>
+              <p role="alert">{t("viewer.audioFailed", { name: file.name })}</p>
+              <a class="button" href={`/api/drive/items/${file.id}/content`} download={file.name}>
+                {t("viewer.download")}
+              </a>
+            </>
+          ) : (
+            // Opening the viewer is a click, so browsers let it play right
+            // away.
+            <audio src={address} controls autoplay onError={() => setState("failed")} />
+          )}
         </div>
       </div>
     );
