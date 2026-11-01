@@ -1013,6 +1013,19 @@ table.items .actions {
   height: 56px;
 }
 
+/* A thumbnail fills the card's picture, cropped to fit, as in Google
+   Drive's grid. */
+.card-preview.has-thumbnail {
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.card-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .card-meta {
   margin: 8px 14px 0;
   overflow: hidden;

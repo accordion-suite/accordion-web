@@ -483,14 +483,7 @@ export function ItemList({
                       {starMark(item)}
                       {moreButton(item)}
                     </div>
-                    {/* The tile's name link covers the card, so this only
-                        shows what kind of file it is. Thumbnails are
-                        planned, and the same setting will show them. */}
-                    {thumbnails && (
-                      <div class="card-preview" aria-hidden="true">
-                        <ItemIcon item={item} />
-                      </div>
-                    )}
+                    {thumbnails && <CardPreview item={item} />}
                     <p class="card-meta">
                       {located(item) ? where(item) : formatDate(item.modified_at)}
                     </p>
@@ -549,6 +542,31 @@ export function ItemList({
 }
 
 /** Switches every list between rows and a grid. */
+/** The picture on a grid card: the file's thumbnail if the server has one,
+ * or a large icon that shows what kind of file it is. The card's name link
+ * covers it, so screen readers skip it. */
+function CardPreview({ item }: { item: Item }) {
+  const [failed, setFailed] = useState(false);
+  // The hash changes with each version, so browsers keep each thumbnail
+  // and fetch a new one when the file changes.
+  const thumbnail = item.thumbnail && item.sha256 && !failed;
+  return (
+    <div class={thumbnail ? "card-preview has-thumbnail" : "card-preview"} aria-hidden="true">
+      {thumbnail ? (
+        <img
+          src={`/api/drive/items/${item.id}/thumbnail?v=${item.sha256}`}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <ItemIcon item={item} />
+      )}
+    </div>
+  );
+}
+
 export function ViewToggle() {
   const [mode, setMode] = useViewMode();
   return (
