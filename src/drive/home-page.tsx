@@ -13,12 +13,12 @@ import { type SortScope, useChanges } from "./store.ts";
 
 /** A page that lists what an address of Drive's API returns, such as
  * recent or starred files. */
-export function useFound(address: string): { items: Found[] | null; error: string } {
+export function useFound<T extends Found = Found>(address: string): { items: T[] | null; error: string } {
   const drive = useDrive();
-  const [items, setItems] = useState<Found[] | null>(null);
+  const [items, setItems] = useState<T[] | null>(null);
   const [error, setError] = useState("");
   const refresh = () => {
-    api<Found[]>("GET", address).then(
+    api<T[]>("GET", address).then(
       (found) => {
         setItems(found);
         setError("");
@@ -55,6 +55,7 @@ export function FoundList({
   label,
   empty,
   owners = false,
+  shares = false,
   sortScope,
 }: {
   items: Found[] | null;
@@ -63,6 +64,8 @@ export function FoundList({
   empty: string;
   /** Shows who owns each item rather than where it is. */
   owners?: boolean;
+  /** Shows who each item is shared with and when, for Shared by me. */
+  shares?: boolean;
   sortScope?: SortScope;
 }) {
   if (error) {
@@ -75,5 +78,15 @@ export function FoundList({
   if (!items) return <p class="loading">{t("shell.loading")}</p>;
   // The list says when it's empty, under its filters, so a filter that
   // matches nothing can be changed.
-  return <ItemList items={items} label={label} location owners={owners} empty={empty} sortScope={sortScope} />;
+  return (
+    <ItemList
+      items={items}
+      label={label}
+      location
+      owners={owners}
+      shares={shares}
+      empty={empty}
+      sortScope={sortScope}
+    />
+  );
 }

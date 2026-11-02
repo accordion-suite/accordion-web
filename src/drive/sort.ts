@@ -2,9 +2,11 @@
 // Folders stay above files, as in the grid, and names sort the way people
 // read them, so "Photo 2" comes before "Photo 10".
 
-import type { Found, Item } from "./item.ts";
+import type { Found, Item, SharedOut } from "./item.ts";
 
-export type SortKey = "name" | "location" | "modified" | "size";
+/** `with` and `shared` are Shared by me's columns: who an item is shared
+ * with, and when. */
+export type SortKey = "name" | "location" | "modified" | "size" | "with" | "shared";
 
 export interface Sort {
   key: SortKey;
@@ -18,6 +20,8 @@ const FIRST_DESCENDING: Record<SortKey, boolean> = {
   location: false,
   modified: true,
   size: true,
+  with: false,
+  shared: true,
 };
 
 const names = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -55,6 +59,10 @@ export function sortItems<T extends Item | Found>(items: readonly T[], sort: Sor
         return Date.parse(a.modified_at) - Date.parse(b.modified_at);
       case "size":
         return (a.size ?? 0) - (b.size ?? 0);
+      case "with":
+        return names.compare(sharedWith(a), sharedWith(b));
+      case "shared":
+        return Date.parse(sharedAt(a)) - Date.parse(sharedAt(b));
     }
   };
   return [...items].sort(
@@ -70,4 +78,12 @@ export function sortItems<T extends Item | Found>(items: readonly T[], sort: Sor
  * who shared what. */
 function place(item: Item | Found): string {
   return "folders" in item ? [item.owner ?? "", ...item.folders].join("/") : "";
+}
+
+function sharedWith(item: Item | Found): string {
+  return "shared_with" in item ? (item as SharedOut).shared_with.map((share) => share.display_name).join(", ") : "";
+}
+
+function sharedAt(item: Item | Found): string {
+  return "shared_with" in item ? (item as SharedOut).shared_at : item.modified_at;
 }

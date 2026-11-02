@@ -209,6 +209,17 @@ export const en = {
   "shared.owner": "Owner",
   "shared.sharedOn": "Shared",
 
+  "sharedByMe.title": "Shared by me",
+  "sharedByMe.empty":
+    "You haven't shared anything yet. To share a file or folder, open its menu and select Share.",
+  "sharedByMe.with": "Shared with",
+  "sharedByMe.withMore": "{name} +{count}",
+  "sharedByMe.sharedOn": "Shared",
+  "sharedByMe.stop": "Stop sharing",
+  "sharedByMe.stopTitle": "Stop sharing {name}?",
+  "sharedByMe.stopBody":
+    "Everyone you shared it with loses access. If it's in a folder you shared, people with that folder can still open it.",
+  "sharedByMe.stopped": "Stopped sharing {name}.",
   "share.title": "Share {name}",
   "share.open": "Share",
   "share.who": "People with access",
@@ -267,6 +278,7 @@ export const en = {
   "filters.ownedByMe": "Owned by me",
   "filters.sharedByMe": "Shared by me",
   "filters.ownedBy": "Owned by {name}",
+  "filters.sharedWith": "Shared with {name}",
   "filters.source": "Source",
   "filters.anywhere": "Anywhere",
   "filters.none": "Nothing here matches these filters.",

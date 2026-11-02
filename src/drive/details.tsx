@@ -8,10 +8,10 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../api.ts";
 import { formatMoment, formatSize, type MessageKey, t } from "../i18n.ts";
 import { followLink } from "../shell/router.ts";
-import { ShareDialog, type ShareEntry } from "./dialogs.tsx";
+import { ShareDialog } from "./dialogs.tsx";
 import { CloseIcon, InfoIcon, ItemIcon, kindOf } from "./icons.tsx";
 import { CardPreview, folderPath } from "./item-list.tsx";
-import type { Item } from "./item.ts";
+import type { Item, ShareEntry } from "./item.ts";
 import { announceChange, pathTo } from "./store.ts";
 
 const TYPES: Record<string, MessageKey> = {

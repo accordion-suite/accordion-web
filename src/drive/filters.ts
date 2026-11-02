@@ -4,7 +4,7 @@
 // them. The search page sends Type and Modified to the server as well, so
 // they reach every folder.
 
-import type { Found, Item } from "./item.ts";
+import type { Found, Item, SharedOut } from "./item.ts";
 import { kindOf } from "./icons.tsx";
 import { modifiedRange } from "./search.ts";
 
@@ -36,12 +36,24 @@ export function ownedBy(name: string): string {
   return `by:${name}`;
 }
 
+/** The people filter's value for what the reader shared with someone, on
+ * Shared by me. */
+export function sharedWith(username: string): string {
+  return `with:${username}`;
+}
+
 /** Whether `item` passes every filter that's set. */
 export function matches(item: Item | Found, filters: Filters, now = new Date()): boolean {
   if (filters.type && kindOf(item) !== TYPE_KINDS[filters.type]) return false;
   if (filters.people === "me" && item.owner !== null) return false;
   if (filters.people === "shared" && !item.shared) return false;
   if (filters.people.startsWith("by:") && item.owner !== filters.people.slice(3)) return false;
+  if (filters.people.startsWith("with:")) {
+    const username = filters.people.slice(5);
+    if (!("shared_with" in item) || !(item as SharedOut).shared_with.some((share) => share.username === username)) {
+      return false;
+    }
+  }
   if (filters.source === "my-drive" && item.owner !== null) return false;
   if (filters.source === "shared" && item.owner === null) return false;
   if (filters.modified) {
@@ -57,4 +69,15 @@ export function matches(item: Item | Found, filters: Filters, now = new Date()):
 export function owners(items: readonly Item[]): string[] {
   const names = new Set(items.flatMap((item) => (item.owner === null ? [] : [item.owner])));
   return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+/** Everyone the reader shared `items` with, by username and name, for the
+ * people filter on Shared by me. */
+export function sharees(items: readonly Item[]): [string, string][] {
+  const people = new Map<string, string>();
+  for (const item of items) {
+    if (!("shared_with" in item)) continue;
+    for (const share of (item as SharedOut).shared_with) people.set(share.username, share.display_name);
+  }
+  return [...people].sort((a, b) => a[1].localeCompare(b[1]));
 }

@@ -39,6 +39,7 @@ import {
   HomeIcon,
   NewFolderIcon,
   PeopleIcon,
+  SharedOutIcon,
   PlusIcon,
   StarIcon,
   TrashIcon,
@@ -369,6 +370,9 @@ export function DriveLayout({
               </div>
               {top && <FolderTree parent={top.id} trail={target.trail} current={path} depth={1} />}
             </li>
+            <Place href="/drive/shared-by-me" current={path === "/drive/shared-by-me"} icon={<SharedOutIcon />}>
+              {t("sharedByMe.title")}
+            </Place>
             <Place href="/drive/shared" current={path === "/drive/shared"} icon={<PeopleIcon />}>
               {t("shared.title")}
             </Place>

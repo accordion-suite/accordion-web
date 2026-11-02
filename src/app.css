@@ -1129,6 +1129,16 @@ table.items tbody tr.selected {
   color: var(--kind-file);
 }
 
+/* The shared and starred marks sit together, just after the name, closer
+   to it than the gap between the icon and the name. */
+.marks {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: -6px;
+}
+
 .star-mark {
   display: inline-flex;
   color: var(--star);
@@ -1151,9 +1161,16 @@ table.items tbody tr.selected {
 
 table.items .modified,
 table.items .location,
+table.items .with,
 table.items .size {
   color: var(--muted);
   white-space: nowrap;
+}
+
+table.items td.with {
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 table.items .location a,
@@ -1185,6 +1202,7 @@ table.items .actions {
 @media (max-width: 700px) {
   table.items .modified,
   table.items .location,
+  table.items .with,
   table.items .size {
     display: none;
   }
@@ -1248,7 +1266,7 @@ table.items .actions {
 }
 
 .tile-name {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--text);
@@ -1274,6 +1292,8 @@ table.items .actions {
 .card .more {
   position: relative;
   z-index: 1;
+  /* The name and its marks stay together on the left. */
+  margin-left: auto;
 }
 
 .card-preview {

@@ -118,3 +118,19 @@ test("someone else's items sort by their owner first", () => {
     "Beach.jpg",
   ]);
 });
+
+test("Shared by me sorts by who has each item and when it was shared", () => {
+  const shared = (name: string, people: string[], at: string) => ({
+    ...item(name, "file", "2026-10-01T09:00:00Z", 1),
+    shared_with: people.map((display_name) => ({ user: display_name, username: display_name, display_name, level: "viewer" as const })),
+    shared_at: at,
+  });
+  const items = [
+    shared("a.txt", ["Sam Rivera"], "2026-10-02T09:00:00Z"),
+    shared("b.txt", ["Kim Lee", "Sam Rivera"], "2026-10-05T09:00:00Z"),
+    shared("c.txt", ["Alex Park"], "2026-10-03T09:00:00Z"),
+  ];
+  const by = (key: "with" | "shared") => sortItems(items, nextSort(null, key)).map((one) => one.name);
+  assert.deepEqual(by("with"), ["c.txt", "b.txt", "a.txt"]);
+  assert.deepEqual(by("shared"), ["b.txt", "c.txt", "a.txt"]);
+});

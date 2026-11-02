@@ -6,7 +6,7 @@ import { useState } from "preact/hooks";
 import { type MessageKey, t } from "../i18n.ts";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
 import { navigate, useQuery } from "../shell/router.ts";
-import { FILTER_NAMES, type Filters, ownedBy, owners } from "./filters.ts";
+import { FILTER_NAMES, type Filters, ownedBy, owners, sharedWith, sharees } from "./filters.ts";
 import { CheckIcon, DropdownIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
 
@@ -65,6 +65,7 @@ export function FilterBar({
   filters,
   source,
   mine,
+  shares = false,
 }: {
   /** Every item on the page, before filtering, for the people to offer. */
   items: readonly Item[];
@@ -74,8 +75,13 @@ export function FilterBar({
   source: boolean;
   /** Whether the reader may own any of the items, unlike in Shared with me. */
   mine: boolean;
+  /** Whether the items are all the reader's own and shared, as in Shared by
+   * me, so People offers who they're shared with. */
+  shares?: boolean;
 }) {
-  const people: [string, string][] = [
+  const people: [string, string][] = shares
+    ? sharees(items).map(([username, name]): [string, string] => [sharedWith(username), t("filters.sharedWith", { name })])
+    : [
     ...(mine
       ? ([
           ["me", t("filters.ownedByMe")],

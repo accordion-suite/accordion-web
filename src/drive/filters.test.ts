@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { type Filters, matches, ownedBy, owners } from "./filters.ts";
+import { type Filters, matches, ownedBy, owners, sharedWith, sharees } from "./filters.ts";
 import type { Item } from "./item.ts";
 
 const NOW = new Date("2026-11-02T12:00:00");
@@ -65,4 +65,18 @@ test("modified keeps what changed in the time chosen", () => {
 test("source keeps My Drive's or what's shared with the reader", () => {
   assert.deepEqual(kept({ source: "shared" }), ["Budget.xlsx"]);
   assert.deepEqual(kept({ source: "my-drive", type: "folders" }), ["Trip"]);
+});
+
+test("Shared by me filters by who an item is shared with", () => {
+  const out = (name: string, people: [string, string][]) => ({
+    ...ALL[0]!,
+    id: name,
+    name,
+    shared_with: people.map(([username, display_name]) => ({ user: username, username, display_name, level: "viewer" as const })),
+    shared_at: "2026-10-01T09:00:00Z",
+  });
+  const items = [out("a.txt", [["sam", "Sam Rivera"]]), out("b.txt", [["kim", "Kim Lee"], ["sam", "Sam Rivera"]])];
+  const filters = { type: "", people: sharedWith("kim"), modified: "", source: "" };
+  assert.deepEqual(items.filter((one) => matches(one, filters)).map((one) => one.name), ["b.txt"]);
+  assert.deepEqual(sharees(items), [["kim", "Kim Lee"], ["sam", "Sam Rivera"]]);
 });

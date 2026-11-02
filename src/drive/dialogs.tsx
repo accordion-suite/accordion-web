@@ -9,7 +9,7 @@ import { ApiError, api } from "../api.ts";
 import { formatDate, formatSize, type MessageKey, t } from "../i18n.ts";
 import { Dialog, problemText as message } from "../shell/dialog.tsx";
 import type { Child } from "./folder-upload.ts";
-import { FOLDER_COLORS, type FolderColor, type Item } from "./item.ts";
+import { FOLDER_COLORS, type FolderColor, type Item, type ShareEntry } from "./item.ts";
 import { ItemIcon } from "./icons.tsx";
 import { freeName, stemLength } from "./names.ts";
 
@@ -367,15 +367,6 @@ interface Person {
   username: string;
   display_name: string;
   you: boolean;
-}
-
-/** Someone an item is shared with, as `/api/drive/items/{id}/shares` lists
- * them. */
-export interface ShareEntry {
-  user: string;
-  username: string;
-  display_name: string;
-  level: "viewer" | "editor";
 }
 
 /** Who can open an item, to share it with more people, change what each

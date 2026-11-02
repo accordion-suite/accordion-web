@@ -11,6 +11,7 @@ import { uploads } from "../drive/http-transport.ts";
 import { CloseIcon } from "../drive/icons.tsx";
 import { DriveLayout, forgetSidebar } from "../drive/layout.tsx";
 import { SearchPage } from "../drive/search-page.tsx";
+import { SharedByMePage } from "../drive/shared-by-me-page.tsx";
 import { SharedPage } from "../drive/shared-page.tsx";
 import { StarredPage } from "../drive/starred-page.tsx";
 import { StoragePage } from "../drive/storage-page.tsx";
@@ -161,6 +162,8 @@ function drivePage(path: string) {
       return <FolderPage key={trimmed} folder={null} />;
     case "/drive/shared":
       return <SharedPage key={trimmed} />;
+    case "/drive/shared-by-me":
+      return <SharedByMePage key={trimmed} />;
     case "/drive/starred":
       return <StarredPage key={trimmed} />;
     case "/drive/trash":

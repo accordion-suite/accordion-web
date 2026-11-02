@@ -22,6 +22,7 @@ import { ApiError, api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
+import { ConfirmDialog } from "../shell/dialog.tsx";
 import { ColorDialog, MoveDialog, NameDialog, ShareDialog, VersionsDialog } from "./dialogs.tsx";
 import {
   CloseIcon,
@@ -38,7 +39,7 @@ import {
   StarIcon,
   TrashIcon,
 } from "./icons.tsx";
-import { type Found, type Item, canEdit } from "./item.ts";
+import { type Found, type Item, type SharedOut, canEdit } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { freeName } from "./names.ts";
 import { useDriveSettings } from "./preferences.ts";
@@ -92,6 +93,14 @@ function located(item: Item | Found): item is Found {
   return "folders" in item;
 }
 
+/** Who an item is shared with, as short as fits a column: the first
+ * person's name, and how many more. */
+function sharedWithText(item: SharedOut): string {
+  const [first, ...more] = item.shared_with;
+  if (!first) return "";
+  return more.length === 0 ? first.display_name : t("sharedByMe.withMore", { name: first.display_name, count: more.length });
+}
+
 
 const ARROWS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
 type Arrow = "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight";
@@ -116,6 +125,7 @@ type Open =
   | { kind: "move"; items: Item[] }
   | { kind: "versions"; item: Item }
   | { kind: "share"; item: Item }
+  | { kind: "unshare"; item: Item }
   | { kind: "color"; item: Item };
 
 export function ItemList({
@@ -123,6 +133,7 @@ export function ItemList({
   label,
   location: showLocation = false,
   owners = false,
+  shares = false,
   empty,
   sortScope,
 }: {
@@ -133,6 +144,9 @@ export function ItemList({
   location?: boolean;
   /** Whether that's who owns each item instead, for Shared with me. */
   owners?: boolean;
+  /** Whether to show who each item is shared with and when, for Shared by
+   * me, in place of when it changed. */
+  shares?: boolean;
   /** What to say when there are no items at all. */
   empty?: string;
   /** Which sort to remember, when the page isn't a folder or a search,
@@ -340,6 +354,9 @@ export function ItemList({
     });
     entries.push(SEPARATOR);
     if (item.access === "owner") entries.push({ label: t("share.open"), onSelect: () => setOpen({ kind: "share", item }) });
+    if (item.access === "owner" && item.shared) {
+      entries.push({ label: t("sharedByMe.stop"), onSelect: () => setOpen({ kind: "unshare", item }) });
+    }
     if (item.kind === "folder") entries.push({ label: t("color.open"), onSelect: () => setOpen({ kind: "color", item }) });
     if (editable) {
       entries.push({ label: t("drive.rename"), shortcut: "F2", onSelect: () => setOpen({ kind: "rename", item }) });
@@ -559,11 +576,14 @@ export function ItemList({
     );
   }
 
-  /** Marks for a starred item, and for one the reader shared. */
+  /** Marks for a starred item, and for one the reader shared, apart from
+   * on Shared by me, where everything is. */
   function starMark(item: Item) {
+    const shared = item.shared && !shares;
+    if (!shared && !item.starred) return null;
     return (
-      <>
-        {item.shared && (
+      <span class="marks">
+        {shared && (
           <span class="shared-mark" title={t("share.sharedMark")}>
             <PeopleIcon />
             <span class="visually-hidden">{t("share.sharedMark")}</span>
@@ -575,7 +595,7 @@ export function ItemList({
             <span class="visually-hidden">{t("drive.starred")}</span>
           </span>
         )}
-      </>
+      </span>
     );
   }
 
@@ -651,8 +671,9 @@ export function ItemList({
             items={all}
             filters={filters}
             // The storage page lists only the reader's own files.
-            source={showLocation && !owners && sortScope !== "storage"}
+            source={showLocation && !owners && !shares && sortScope !== "storage"}
             mine={!owners}
+            shares={shares}
           />
         ) : (
           <div class="selection-bar" role="group" aria-label={t("drive.selection")}>
@@ -717,7 +738,10 @@ export function ItemList({
             <tr>
               {header("name", t("drive.name"))}
               {showLocation && header("location", owners ? t("shared.owner") : t("drive.location"), "location")}
-              {header("modified", t("drive.modified"), "modified")}
+              {shares && header("with", t("sharedByMe.with"), "with")}
+              {shares
+                ? header("shared", t("sharedByMe.sharedOn"), "modified")
+                : header("modified", t("drive.modified"), "modified")}
               {header("size", t("drive.size"), "size")}
               <td class="more-cell" />
             </tr>
@@ -733,7 +757,12 @@ export function ItemList({
                   </span>
                 </th>
                 {showLocation && <td class="location">{where(item)}</td>}
-                <td class="modified">{formatDate(item.modified_at)}</td>
+                {shares && (
+                  <td class="with" title={(item as SharedOut).shared_with.map((share) => share.display_name).join(", ")}>
+                    {sharedWithText(item as SharedOut)}
+                  </td>
+                )}
+                <td class="modified">{formatDate(shares ? (item as SharedOut).shared_at : item.modified_at)}</td>
                 <td class="size">{item.size === null ? "—" : formatSize(item.size)}</td>
                 <td class="more-cell">{moreButton(item)}</td>
               </tr>
@@ -851,6 +880,19 @@ export function ItemList({
             setOpen(null);
             if (changed) announceChange();
           }}
+        />
+      )}
+      {open?.kind === "unshare" && (
+        <ConfirmDialog
+          title={t("sharedByMe.stopTitle", { name: open.item.name })}
+          body={t("sharedByMe.stopBody")}
+          confirm={t("sharedByMe.stop")}
+          onConfirm={async () => {
+            await api("DELETE", `/api/drive/items/${open.item.id}/shares`);
+            setOpen(null);
+            done(t("sharedByMe.stopped", { name: open.item.name }));
+          }}
+          onClose={() => setOpen(null)}
         />
       )}
       {open?.kind === "color" && (

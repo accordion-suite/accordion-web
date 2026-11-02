@@ -51,6 +51,22 @@ export interface Found extends Item {
   folders: string[];
 }
 
+/** Someone an item is shared with, as `/api/drive/items/{id}/shares` lists
+ * them. */
+export interface ShareEntry {
+  user: string;
+  username: string;
+  display_name: string;
+  level: "viewer" | "editor";
+}
+
+/** Something the reader shared, with who has it, for Shared by me. */
+export interface SharedOut extends Found {
+  shared_with: ShareEntry[];
+  /** When it was last shared with someone new. */
+  shared_at: string;
+}
+
 /** Something someone else shared with the reader. */
 export interface Shared extends Found {
   shared_at: string;

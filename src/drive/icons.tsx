@@ -55,6 +55,16 @@ export const PeopleIcon = () => (
   </Icon>
 );
 
+/** A person with an arrow going out, for what the reader shared. */
+export const SharedOutIcon = () => (
+  <Icon>
+    <path
+      d="M10 4a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7m0 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m0 7c1.2 0 2.3.2 3.3.6l-.9 1.8c-.7-.3-1.5-.4-2.4-.4-2.4 0-4.2 1-4.5 2h6.1v2H3v-2c0-2.4 3.1-4 7-4m8-1 4 3.5-4 3.5v-2.5h-4v-2h4z"
+      fill="currentColor"
+    />
+  </Icon>
+);
+
 export const TrashIcon = () => (
   <Icon>
     <path d="M9 3h6l1 2h4v2H4V5h4zM6 8h12l-1 13H7zm3 2v9h2v-9zm4 0v9h2v-9z" fill="currentColor" />
