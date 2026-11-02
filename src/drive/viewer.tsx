@@ -96,6 +96,8 @@ function Shown({ file }: { file: Item }) {
   const [state, setState] = useState<"loading" | "shown" | "failed">("loading");
   const narrow = useMedia(NARROW);
   const address = `/api/drive/items/${file.id}/preview`;
+  // Browsers' PDF viewers take their title from the end of the address.
+  const named = `${address}/${encodeURIComponent(file.name)}`;
 
   // The server found it's text when it made its thumbnail.
   if (file.preview === null && file.thumbnail === "text") {
@@ -183,7 +185,7 @@ function Shown({ file }: { file: Item }) {
         {narrow ? (
           <div class="viewer-note">
             <p>{t("viewer.documentNarrow")}</p>
-            <a class="button" href={address} target="_blank" rel="noopener">
+            <a class="button" href={named} target="_blank" rel="noopener">
               {t("viewer.openPreview")}
             </a>
           </div>
@@ -192,7 +194,7 @@ function Shown({ file }: { file: Item }) {
             <p class="viewer-document-note">
               {file.preview_partial ? t("viewer.documentCut", { pages: PREVIEW_PAGES }) : t("viewer.document")}
             </p>
-            <iframe src={address} title={file.name} />
+            <iframe src={named} title={file.name} />
           </div>
         )}
       </div>
@@ -204,12 +206,12 @@ function Shown({ file }: { file: Item }) {
         {narrow ? (
           <div class="viewer-note">
             <p>{t("viewer.pdfNarrow")}</p>
-            <a class="button" href={address} target="_blank" rel="noopener">
+            <a class="button" href={named} target="_blank" rel="noopener">
               {t("viewer.openPdf")}
             </a>
           </div>
         ) : (
-          <iframe src={address} title={file.name} />
+          <iframe src={named} title={file.name} />
         )}
       </div>
     );

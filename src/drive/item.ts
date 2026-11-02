@@ -28,7 +28,13 @@ export interface Item {
   owner: string | null;
   /** For the owner: whether they shared it with anyone. */
   shared: boolean;
+  /** For a folder: the color the reader picked for it, if any. */
+  color: FolderColor | null;
 }
+
+/** The colors a folder can have, as Drive's API names them. */
+export const FOLDER_COLORS = ["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "brown"] as const;
+export type FolderColor = (typeof FOLDER_COLORS)[number];
 
 /** Whether the reader can change an item: rename it, move it, delete it, or
  * add to it. */

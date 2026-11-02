@@ -13,6 +13,7 @@ import { DriveLayout, forgetSidebar } from "../drive/layout.tsx";
 import { SearchPage } from "../drive/search-page.tsx";
 import { SharedPage } from "../drive/shared-page.tsx";
 import { StarredPage } from "../drive/starred-page.tsx";
+import { StoragePage } from "../drive/storage-page.tsx";
 import { forgetFolders } from "../drive/store.ts";
 import { TrashPage } from "../drive/trash-page.tsx";
 import { UploadPanel } from "../drive/upload-panel.tsx";
@@ -164,6 +165,8 @@ function drivePage(path: string) {
       return <StarredPage key={trimmed} />;
     case "/drive/trash":
       return <TrashPage key={trimmed} />;
+    case "/drive/storage":
+      return <StoragePage key={trimmed} />;
     case "/drive/search":
       return <SearchPage key={trimmed} />;
   }

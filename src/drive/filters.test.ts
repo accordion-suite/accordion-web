@@ -24,6 +24,7 @@ function item(name: string, modified: string, more: Partial<Item> = {}): Item {
     access: "owner",
     owner: null,
     shared: false,
+    color: null,
     ...more,
   };
 }

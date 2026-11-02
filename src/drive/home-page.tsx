@@ -9,7 +9,7 @@ import { PageTitle } from "../shell/page.tsx";
 import { ItemList, PageTools } from "./item-list.tsx";
 import type { Found } from "./item.ts";
 import { useDrive, useTarget } from "./layout.tsx";
-import { useChanges } from "./store.ts";
+import { type SortScope, useChanges } from "./store.ts";
 
 /** A page that lists what an address of Drive's API returns, such as
  * recent or starred files. */
@@ -55,6 +55,7 @@ export function FoundList({
   label,
   empty,
   owners = false,
+  sortScope,
 }: {
   items: Found[] | null;
   error: string;
@@ -62,6 +63,7 @@ export function FoundList({
   empty: string;
   /** Shows who owns each item rather than where it is. */
   owners?: boolean;
+  sortScope?: SortScope;
 }) {
   if (error) {
     return (
@@ -73,5 +75,5 @@ export function FoundList({
   if (!items) return <p class="loading">{t("shell.loading")}</p>;
   // The list says when it's empty, under its filters, so a filter that
   // matches nothing can be changed.
-  return <ItemList items={items} label={label} location owners={owners} empty={empty} />;
+  return <ItemList items={items} label={label} location owners={owners} empty={empty} sortScope={sortScope} />;
 }

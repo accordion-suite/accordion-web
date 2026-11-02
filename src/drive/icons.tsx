@@ -245,10 +245,17 @@ const SHAPES: Record<string, ComponentChildren> = {
 };
 
 /** An item's icon, colored by its kind. */
-export function ItemIcon({ item }: { item: Pick<Item, "kind" | "name"> }) {
+export function ItemIcon({ item }: { item: Pick<Item, "kind" | "name"> & { color?: Item["color"] } }) {
   const kind = kindOf(item);
+  const color = item.kind === "folder" && item.color ? ` folder-${item.color}` : "";
   return (
-    <svg class={`icon item-icon kind-${kind}`} viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor">
+    <svg
+      class={`icon item-icon kind-${kind}${color}`}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      fill="currentColor"
+    >
       {SHAPES[kind]}
     </svg>
   );

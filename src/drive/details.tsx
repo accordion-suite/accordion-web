@@ -3,7 +3,7 @@
 // selected, or the folder that's open when nothing is, and stays open as the
 // reader moves between pages.
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { formatMoment, formatSize, type MessageKey, t } from "../i18n.ts";
@@ -80,6 +80,79 @@ export function DetailsPanel({ items, onClose }: { items: readonly Item[]; onClo
         </p>
       )}
     </aside>
+  );
+}
+
+/** An item's description, which anyone who can edit it changes in place,
+ * as in Google Drive. It saves when the field loses focus, and when the
+ * panel closes or moves to another item, so nothing typed is lost. */
+function Description({ item }: { item: Item }) {
+  const editable = item.access !== "viewer";
+  const address = `/api/drive/items/${item.id}/description`;
+  const [saved, setSaved] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let current = true;
+    api<{ description: string }>("GET", address).then(
+      ({ description }) => {
+        if (!current) return;
+        setSaved(description);
+        setText(description);
+      },
+      (problem: Error) => current && setError(problem.message),
+    );
+    return () => {
+      current = false;
+    };
+  }, [address]);
+
+  async function save() {
+    if (saved === null || text.trim() === saved) return;
+    setError("");
+    try {
+      const { description } = await api<{ description: string }>("PUT", address, { description: text });
+      setSaved(description);
+      setText(description);
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : t("error.problem"));
+    }
+  }
+
+  const unsaved = useRef<() => void>(() => undefined);
+  unsaved.current = () => {
+    if (saved !== null && text.trim() !== saved) {
+      void api("PUT", address, { description: text }).catch(() => undefined);
+    }
+  };
+  useEffect(() => () => unsaved.current(), []);
+
+  // Someone who can only view sees nothing when there's nothing to read.
+  if (saved === null || (!editable && !saved)) return null;
+  return (
+    <section class="details-section details-description">
+      <h3>
+        <label for={`description-${item.id}`}>{t("description.title")}</label>
+      </h3>
+      {editable ? (
+        <textarea
+          id={`description-${item.id}`}
+          placeholder={t("description.add")}
+          maxLength={2000}
+          value={text}
+          onInput={(event) => setText(event.currentTarget.value)}
+          onBlur={() => void save()}
+        />
+      ) : (
+        <p id={`description-${item.id}`}>{saved}</p>
+      )}
+      {error && (
+        <p class="error" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -162,10 +235,10 @@ function About({ item }: { item: Item }) {
         <dl class="details-facts">
           <dt>{t("details.type")}</dt>
           <dd>{t(TYPES[kindOf(item)] ?? "details.file")}</dd>
-          {item.kind === "file" && (
+          {item.size !== null && (
             <>
               <dt>{t("drive.size")}</dt>
-              <dd>{formatSize(item.size ?? 0)}</dd>
+              <dd>{formatSize(item.size)}</dd>
             </>
           )}
           {path && item.parent !== null && (
@@ -192,6 +265,8 @@ function About({ item }: { item: Item }) {
           <dd>{formatMoment(item.created_at)}</dd>
         </dl>
       </section>
+
+      <Description key={item.id} item={item} />
 
       {sharing && (
         <ShareDialog

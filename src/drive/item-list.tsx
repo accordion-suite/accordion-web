@@ -22,7 +22,7 @@ import { ApiError, api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
-import { MoveDialog, NameDialog, ShareDialog, VersionsDialog } from "./dialogs.tsx";
+import { ColorDialog, MoveDialog, NameDialog, ShareDialog, VersionsDialog } from "./dialogs.tsx";
 import {
   CloseIcon,
   DownloadIcon,
@@ -47,7 +47,7 @@ import { nextSort, type SortKey, sortItems } from "./sort.ts";
 import { clearFilters, FilterBar, useFilters } from "./filter-bar.tsx";
 import { matches } from "./filters.ts";
 import { neighbor, range, useSelectionBand } from "./selection.ts";
-import { announceChange, useDetailsOpen, useSort, useViewMode } from "./store.ts";
+import { announceChange, type SortScope, useDetailsOpen, useSort, useViewMode } from "./store.ts";
 import { useThumbnailWait } from "./thumbnails.ts";
 import { Viewer } from "./viewer.tsx";
 
@@ -115,7 +115,8 @@ type Open =
   | { kind: "rename"; item: Item }
   | { kind: "move"; items: Item[] }
   | { kind: "versions"; item: Item }
-  | { kind: "share"; item: Item };
+  | { kind: "share"; item: Item }
+  | { kind: "color"; item: Item };
 
 export function ItemList({
   items: all,
@@ -123,6 +124,7 @@ export function ItemList({
   location: showLocation = false,
   owners = false,
   empty,
+  sortScope,
 }: {
   items: readonly (Item | Found)[];
   /** Names the list for screen readers, such as the folder's name. */
@@ -133,6 +135,9 @@ export function ItemList({
   owners?: boolean;
   /** What to say when there are no items at all. */
   empty?: string;
+  /** Which sort to remember, when the page isn't a folder or a search,
+   * such as the storage page, which starts largest first. */
+  sortScope?: SortScope;
 }) {
   const thumbnails = useDriveSettings()?.thumbnails ?? true;
   const drive = useDrive();
@@ -145,7 +150,7 @@ export function ItemList({
     [all, filters.type, filters.people, filters.modified, filters.source],
   );
   const [mode] = useViewMode();
-  const [sort, setSort] = useSort(showLocation ? "found" : "folder");
+  const [sort, setSort] = useSort(sortScope ?? (showLocation ? "found" : "folder"));
   const [dropOn, setDropOn] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** Where a Shift range starts: the item last chosen on its own. */
@@ -335,6 +340,7 @@ export function ItemList({
     });
     entries.push(SEPARATOR);
     if (item.access === "owner") entries.push({ label: t("share.open"), onSelect: () => setOpen({ kind: "share", item }) });
+    if (item.kind === "folder") entries.push({ label: t("color.open"), onSelect: () => setOpen({ kind: "color", item }) });
     if (editable) {
       entries.push({ label: t("drive.rename"), shortcut: "F2", onSelect: () => setOpen({ kind: "rename", item }) });
     }
@@ -641,7 +647,13 @@ export function ItemList({
           the items under the pointer. */}
       <div class="list-toolbar">
         {chosenItems.length === 0 ? (
-          <FilterBar items={all} filters={filters} source={showLocation && !owners} mine={!owners} />
+          <FilterBar
+            items={all}
+            filters={filters}
+            // The storage page lists only the reader's own files.
+            source={showLocation && !owners && sortScope !== "storage"}
+            mine={!owners}
+          />
         ) : (
           <div class="selection-bar" role="group" aria-label={t("drive.selection")}>
             <button
@@ -722,7 +734,7 @@ export function ItemList({
                 </th>
                 {showLocation && <td class="location">{where(item)}</td>}
                 <td class="modified">{formatDate(item.modified_at)}</td>
-                <td class="size">{item.kind === "folder" ? "—" : formatSize(item.size ?? 0)}</td>
+                <td class="size">{item.size === null ? "—" : formatSize(item.size)}</td>
                 <td class="more-cell">{moreButton(item)}</td>
               </tr>
             ))}
@@ -808,9 +820,12 @@ export function ItemList({
           initial={open.item.name}
           file={open.item.kind === "file"}
           onSubmit={async (name) => {
-            await api("PATCH", `/api/drive/items/${open.item.id}`, { name });
+            const { id, name: before } = open.item;
+            await api("PATCH", `/api/drive/items/${id}`, { name });
             setOpen(null);
-            done(t("drive.renamed", { name }));
+            done(t("drive.renamed", { name }), async () => {
+              await api("PATCH", `/api/drive/items/${id}`, { name: before });
+            });
           }}
           onClose={() => setOpen(null)}
         />
@@ -818,9 +833,13 @@ export function ItemList({
       {open?.kind === "move" && (
         <MoveDialog
           items={open.items}
-          onMoved={(to) => {
+          onMoved={(to, id) => {
             setOpen(null);
-            done(naming(open.items, "drive.movedOne", "drive.movedMany", to));
+            // Each goes back to the folder it came from.
+            const moved = open.items.filter((item) => item.parent !== id);
+            done(naming(open.items, "drive.movedOne", "drive.movedMany", to), async () => {
+              for (const item of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: item.parent });
+            });
           }}
           onClose={() => setOpen(null)}
         />
@@ -832,6 +851,16 @@ export function ItemList({
             setOpen(null);
             if (changed) announceChange();
           }}
+        />
+      )}
+      {open?.kind === "color" && (
+        <ColorDialog
+          item={open.item}
+          onChosen={() => {
+            setOpen(null);
+            announceChange();
+          }}
+          onClose={() => setOpen(null)}
         />
       )}
       {open?.kind === "versions" && (

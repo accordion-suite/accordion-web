@@ -6,10 +6,11 @@ import type { TargetedSubmitEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { ApiError, api } from "../api.ts";
-import { formatDate, formatSize, t } from "../i18n.ts";
+import { formatDate, formatSize, type MessageKey, t } from "../i18n.ts";
 import { Dialog, problemText as message } from "../shell/dialog.tsx";
 import type { Child } from "./folder-upload.ts";
-import type { Item } from "./item.ts";
+import { FOLDER_COLORS, type FolderColor, type Item } from "./item.ts";
+import { ItemIcon } from "./icons.tsx";
 import { freeName, stemLength } from "./names.ts";
 
 /** Asks for a name, such as for a new folder. `onSubmit` throws to show a
@@ -169,7 +170,8 @@ export function MoveDialog({
   onClose,
 }: {
   items: readonly Item[];
-  onMoved: (to: string) => void;
+  /** With the folder's name and ID. */
+  onMoved: (to: string, id: string) => void;
   onClose: () => void;
 }) {
   const moving = new Set(items.map((item) => item.id));
@@ -200,7 +202,7 @@ export function MoveDialog({
           await api("PATCH", `/api/drive/items/${item.id}`, { parent: here.id });
         }
       }
-      onMoved(name(here));
+      onMoved(name(here), here.id);
     } catch (problem) {
       setError(message(problem));
       setBusy(false);
@@ -533,6 +535,118 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
       <div class="dialog-buttons">
         <button type="button" onClick={() => onClose(changed.current)}>
           {t("dialog.done")}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** Drive's keyboard shortcuts, by what they're for. Ctrl is Cmd on a Mac. */
+const SHORTCUTS: readonly [MessageKey, readonly [string, MessageKey][]][] = [
+  [
+    "shortcuts.anywhere",
+    [
+      ["/", "shortcuts.search"],
+      ["?", "shortcuts.help"],
+      ["Ctrl+Z", "shortcuts.undo"],
+    ],
+  ],
+  [
+    "shortcuts.choosing",
+    [
+      ["↑ ↓ ← →", "shortcuts.move"],
+      ["Shift+↑ ↓ ← →", "shortcuts.extend"],
+      ["Space", "shortcuts.toggle"],
+      ["Ctrl+A", "shortcuts.all"],
+      ["Esc", "shortcuts.clear"],
+    ],
+  ],
+  [
+    "shortcuts.acting",
+    [
+      ["Enter", "shortcuts.open"],
+      ["F2", "shortcuts.rename"],
+      ["Delete", "shortcuts.trash"],
+      ["Ctrl+V", "shortcuts.paste"],
+    ],
+  ],
+  [
+    "shortcuts.viewing",
+    [
+      ["← →", "shortcuts.step"],
+      ["Esc", "shortcuts.close"],
+    ],
+  ],
+];
+
+export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <Dialog title={t("shortcuts.title")} class="shortcuts" onClose={onClose}>
+      <p class="hint">{t("shortcuts.mac")}</p>
+      {SHORTCUTS.map(([group, keys]) => (
+        <section key={group}>
+          <h3>{t(group)}</h3>
+          <dl>
+            {keys.map(([key, does]) => (
+              <div key={key + does}>
+                <dt>
+                  <kbd>{key}</kbd>
+                </dt>
+                <dd>{t(does)}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ))}
+      <div class="dialog-buttons">
+        <button type="button" onClick={onClose}>
+          {t("dialog.close")}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** Picks a folder's color, for the reader only, as in Google Drive. */
+export function ColorDialog({ item, onChosen, onClose }: { item: Item; onChosen: () => void; onClose: () => void }) {
+  const [error, setError] = useState("");
+  async function choose(color: FolderColor | null) {
+    setError("");
+    try {
+      if (color) await api("PUT", `/api/drive/items/${item.id}/color`, { color });
+      else await api("DELETE", `/api/drive/items/${item.id}/color`);
+      onChosen();
+    } catch (problem) {
+      setError(message(problem));
+    }
+  }
+  return (
+    <Dialog title={t("color.title", { name: item.name })} class="color-dialog" onClose={onClose}>
+      <p class="hint">{t("color.onlyYou")}</p>
+      <div class="swatches" role="radiogroup" aria-label={t("color.label")}>
+        {[null, ...FOLDER_COLORS].map((color) => (
+          <button
+            key={color ?? "none"}
+            type="button"
+            role="radio"
+            aria-checked={item.color === color}
+            class="swatch"
+            title={t(color ? `color.${color}` : "color.none")}
+            onClick={() => void choose(color)}
+          >
+            <ItemIcon item={{ kind: "folder", name: item.name, color }} />
+            <span class="visually-hidden">{t(color ? `color.${color}` : "color.none")}</span>
+          </button>
+        ))}
+      </div>
+      {error && (
+        <p class="error" role="alert">
+          {error}
+        </p>
+      )}
+      <div class="dialog-buttons">
+        <button type="button" class="secondary" onClick={onClose}>
+          {t("dialog.cancel")}
         </button>
       </div>
     </Dialog>

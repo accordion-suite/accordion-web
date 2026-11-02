@@ -19,7 +19,7 @@ import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
 import { followLink, usePath } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
 import { DetailsPanel } from "./details.tsx";
-import { ClashDialog, NameDialog } from "./dialogs.tsx";
+import { ClashDialog, NameDialog, ShortcutsDialog } from "./dialogs.tsx";
 import {
   type Child,
   type Folders,
@@ -115,7 +115,10 @@ export function typing(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest("input:not([type=checkbox]), textarea, [contenteditable]") !== null;
 }
 
-type Open = { kind: "newFolder" } | { kind: "clash"; clashes: Child[]; answer: (replace: boolean | null) => void };
+type Open =
+  | { kind: "newFolder" }
+  | { kind: "shortcuts" }
+  | { kind: "clash"; clashes: Child[]; answer: (replace: boolean | null) => void };
 
 /** How long a notice stays, unless it's a problem. */
 const NOTICE_MS = 8000;
@@ -162,6 +165,39 @@ export function DriveLayout({
 
   // A page on a phone starts with the sidebar out of the way.
   useEffect(() => setSidebarOpen(false), [path]);
+
+  // A file pasted on a page, such as a screenshot, uploads there, as one
+  // dropped does.
+  useEffect(() => {
+    const paste = (event: ClipboardEvent) => {
+      const files = [...(event.clipboardData?.files ?? [])];
+      if (!target.drops || files.length === 0 || typing(event.target)) return;
+      if (event.target instanceof Element && event.target.closest("dialog")) return;
+      event.preventDefault();
+      notify(null);
+      void upload({ files: files.map((file) => ({ file, path: [] })), folders: [] });
+    };
+    document.addEventListener("paste", paste);
+    return () => document.removeEventListener("paste", paste);
+  });
+
+  // "/" goes to the search box and "?" lists the keyboard shortcuts, as in
+  // Google Drive.
+  useEffect(() => {
+    const keys = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || typing(event.target)) return;
+      if (document.querySelector("dialog[open]")) return;
+      if (event.key === "/") {
+        event.preventDefault();
+        document.querySelector<HTMLInputElement>(".search input")?.focus();
+      } else if (event.key === "?") {
+        event.preventDefault();
+        setOpen({ kind: "shortcuts" });
+      }
+    };
+    document.addEventListener("keydown", keys);
+    return () => document.removeEventListener("keydown", keys);
+  }, []);
 
   // Ctrl+Z undoes what the notice says, as its Undo button does.
   useEffect(() => {
@@ -408,6 +444,7 @@ export function DriveLayout({
           onClose={() => setOpen(null)}
         />
       )}
+      {open?.kind === "shortcuts" && <ShortcutsDialog onClose={() => setOpen(null)} />}
       {open?.kind === "clash" && (
         <ClashDialog
           clashes={open.clashes}
@@ -554,7 +591,7 @@ function FolderTree({
   );
 }
 
-interface Usage {
+export interface Usage {
   used: number;
   uploading: number;
   quota: number | null;
@@ -571,8 +608,9 @@ function StorageMeter() {
   useChanges(load);
   if (!usage) return null;
   const used = formatSize(usage.used);
+  // The whole meter leads to the storage page, as in Google Drive.
   return (
-    <div class="storage">
+    <a class="storage" href="/drive/storage" onClick={followLink}>
       <CloudIcon />
       <div class="storage-text">
         <span class="storage-title">{t("drive.storage")}</span>
@@ -589,6 +627,6 @@ function StorageMeter() {
             : t("drive.storageUsed", { used, quota: formatSize(usage.quota) })}
         </span>
       </div>
-    </div>
+    </a>
   );
 }

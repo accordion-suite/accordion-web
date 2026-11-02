@@ -87,7 +87,11 @@ export function useDetailsOpen(): [boolean, (open: boolean) => void] {
 /** The reader's sort for folders, or for lists across folders, such as Home
  * and search, which start in their own order. Each is kept in this browser
  * only, and lasts until the page reloads when the browser keeps nothing. */
-export function useSort(scope: "folder" | "found"): [Sort | null, (sort: Sort) => void] {
+/** Where a sort is remembered: folders, lists across folders, and the
+ * storage page. */
+export type SortScope = "folder" | "found" | "storage";
+
+export function useSort(scope: SortScope): [Sort | null, (sort: Sort) => void] {
   const key = `accordion.drive.sort.${scope}`;
   const read = (): Sort | null => {
     try {

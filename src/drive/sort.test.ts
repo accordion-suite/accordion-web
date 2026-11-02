@@ -28,6 +28,7 @@ function item(
     access: owner === null ? "owner" : "viewer",
     owner,
     shared: false,
+    color: null,
     folders,
   };
 }

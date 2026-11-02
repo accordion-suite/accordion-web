@@ -35,6 +35,15 @@
 
   /* File icons, by kind. */
   --kind-folder: #5f6b7a;
+  --folder-red: #d93025;
+  --folder-orange: #e8710a;
+  --folder-yellow: #c99a06;
+  --folder-green: #188038;
+  --folder-teal: #0f8a8a;
+  --folder-blue: #1a73e8;
+  --folder-purple: #8e44c4;
+  --folder-pink: #d0397f;
+  --folder-brown: #8d6e63;
   --kind-document: #2f6fd6;
   --kind-spreadsheet: #1e8e4e;
   --kind-presentation: #d98a00;
@@ -81,6 +90,15 @@
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.5);
 
     --kind-folder: #aab4c2;
+    --folder-red: #f28b82;
+    --folder-orange: #fcad70;
+    --folder-yellow: #fdd663;
+    --folder-green: #81c995;
+    --folder-teal: #78d9d9;
+    --folder-blue: #8ab4f8;
+    --folder-purple: #c58af9;
+    --folder-pink: #ff8bcb;
+    --folder-brown: #bcaaa4;
     --kind-document: #7aa8f0;
     --kind-spreadsheet: #5cc98a;
     --kind-presentation: #f2bb4d;
@@ -119,6 +137,15 @@
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.5);
 
   --kind-folder: #aab4c2;
+  --folder-red: #f28b82;
+  --folder-orange: #fcad70;
+  --folder-yellow: #fdd663;
+  --folder-green: #81c995;
+  --folder-teal: #78d9d9;
+  --folder-blue: #8ab4f8;
+  --folder-purple: #c58af9;
+  --folder-pink: #ff8bcb;
+  --folder-brown: #bcaaa4;
   --kind-document: #7aa8f0;
   --kind-spreadsheet: #5cc98a;
   --kind-presentation: #f2bb4d;
@@ -561,6 +588,13 @@ main.narrow {
   margin-top: auto;
   padding: 16px 16px 0;
   color: var(--muted);
+  text-decoration: none;
+}
+
+/* The meter leads to the storage page. */
+a.storage:hover .storage-title {
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .storage-text {
@@ -1029,6 +1063,43 @@ table.items tbody tr.selected {
 
 .kind-folder {
   color: var(--kind-folder);
+}
+
+/* A folder's own color, which the reader picked. */
+.kind-folder.folder-red {
+  color: var(--folder-red);
+}
+
+.kind-folder.folder-orange {
+  color: var(--folder-orange);
+}
+
+.kind-folder.folder-yellow {
+  color: var(--folder-yellow);
+}
+
+.kind-folder.folder-green {
+  color: var(--folder-green);
+}
+
+.kind-folder.folder-teal {
+  color: var(--folder-teal);
+}
+
+.kind-folder.folder-blue {
+  color: var(--folder-blue);
+}
+
+.kind-folder.folder-purple {
+  color: var(--folder-purple);
+}
+
+.kind-folder.folder-pink {
+  color: var(--folder-pink);
+}
+
+.kind-folder.folder-brown {
+  color: var(--folder-brown);
 }
 .kind-document {
   color: var(--kind-document);
@@ -2428,4 +2499,97 @@ input.switch:checked::before {
 .selecting,
 .selecting * {
   user-select: none;
+}
+
+/* The keyboard shortcuts, each key beside what it does. */
+dialog.shortcuts {
+  width: min(560px, calc(100vw - 32px));
+}
+
+dialog.shortcuts h3 {
+  margin: 16px 0 4px;
+  font-size: 1rem;
+}
+
+dialog.shortcuts dl {
+  margin: 0;
+}
+
+dialog.shortcuts dl > div {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+dialog.shortcuts dt,
+dialog.shortcuts dd {
+  margin: 0;
+}
+
+dialog.shortcuts kbd {
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* The folder colors to pick from. */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 12px 0;
+}
+
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: var(--surface);
+  border: 2px solid transparent;
+  border-radius: 12px;
+}
+
+.swatch[aria-checked="true"] {
+  border-color: var(--accent);
+}
+
+.swatch .item-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* A description, which editors change in place. */
+.details-description textarea {
+  width: 100%;
+  min-height: 72px;
+  box-sizing: border-box;
+  font: inherit;
+  resize: vertical;
+}
+
+.details-description label {
+  font: inherit;
+}
+
+.details-description p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The storage page's summary above its list. */
+.storage-summary {
+  margin: 0 0 16px;
+}
+
+.storage-summary progress {
+  width: min(420px, 100%);
 }

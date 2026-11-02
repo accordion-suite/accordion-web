@@ -23,6 +23,7 @@ function file(id: string, modified: string, thumbnail: Item["thumbnail"] = null)
     access: "owner",
     owner: null,
     shared: false,
+    color: null,
   };
 }
 

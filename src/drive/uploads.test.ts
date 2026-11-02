@@ -88,6 +88,7 @@ class FakeServer implements Transport {
       access: "owner",
       owner: null,
       shared: false,
+      color: null,
     };
   }
 
