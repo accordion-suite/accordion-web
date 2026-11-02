@@ -113,6 +113,37 @@ export const ChevronIcon = () => (
   </Icon>
 );
 
+export const RenameIcon = () => (
+  <Icon>
+    <path
+      d="M3 17.2V21h3.8l11-11-3.8-3.8zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.7 3.7z"
+      fill="currentColor"
+    />
+  </Icon>
+);
+
+export const MoveIcon = () => (
+  <Icon>
+    <path
+      d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2m-6 12v-3h-4v-4h4V8l5 5z"
+      fill="currentColor"
+    />
+  </Icon>
+);
+
+export const DownloadIcon = () => (
+  <Icon>
+    <path d="M5 20h14v-2H5zm7-3 5-5-1.4-1.4-2.6 2.6V4h-2v9.2l-2.6-2.6L7 12z" fill="currentColor" />
+  </Icon>
+);
+
+/** The small arrow on a button that opens a menu of choices. */
+export const DropdownIcon = () => (
+  <Icon class="dropdown">
+    <path d="m7 10 5 5 5-5z" fill="currentColor" />
+  </Icon>
+);
+
 export const CloseIcon = () => (
   <Icon>
     <path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z" fill="currentColor" />

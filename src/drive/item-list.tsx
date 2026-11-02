@@ -1,17 +1,22 @@
 // A list of files and folders, as rows or as a grid, and what can be done to
 // them: opening, downloading, sharing, renaming, copying, moving, starring,
 // and moving to the trash. Each item's menus offer only what the reader may
-// do with it, so a viewer of someone else's folder sees no Rename. Those are in each item's ⋮ menu and its right-click menu,
-// and on keys for what's selected, or by dragging onto a folder. Files open
-// in the viewer, over the list,
-// with the list's other files a step away, as in Google Drive. Downloading
-// is in the menus and the viewer, never a side effect of opening.
+// do with it, so a viewer of someone else's folder sees no Rename. Those are
+// in each item's ⋮ menu and its right-click menu, and on keys for what's
+// selected, or by dragging onto a folder.
+//
+// As in Google Drive, a click selects an item and a double-click opens it,
+// with Ctrl, Cmd, and Shift for more than one, and a box drawn across empty
+// space (selection.ts). On a touch screen, a tap opens, and a long press
+// starts selecting. Files open in the viewer, over the list, with the list's
+// other files a step away. Downloading is in the menus and the viewer, never
+// a side effect of opening.
 //
 // Every page with items uses this, so they all work the same. A list that
 // reaches across folders, such as search results, says where each item is.
 
-import type { TargetedMouseEvent } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import type { ComponentChildren, TargetedMouseEvent } from "preact";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { ApiError, api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
@@ -20,14 +25,18 @@ import { followLink, navigate, useQuery } from "../shell/router.ts";
 import { MoveDialog, NameDialog, ShareDialog, VersionsDialog } from "./dialogs.tsx";
 import {
   CloseIcon,
+  DownloadIcon,
   GridIcon,
   InfoIcon,
   ItemIcon,
   ListIcon,
   MoreIcon,
+  MoveIcon,
   PeopleIcon,
+  RenameIcon,
   SortIcon,
   StarIcon,
+  TrashIcon,
 } from "./icons.tsx";
 import { type Found, type Item, canEdit } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
@@ -35,6 +44,9 @@ import { freeName } from "./names.ts";
 import { useDriveSettings } from "./preferences.ts";
 import { dropProps, endDrag, naming, startDrag } from "./move.ts";
 import { nextSort, type SortKey, sortItems } from "./sort.ts";
+import { clearFilters, FilterBar, useFilters } from "./filter-bar.tsx";
+import { matches } from "./filters.ts";
+import { neighbor, range, useSelectionBand } from "./selection.ts";
 import { announceChange, useDetailsOpen, useSort, useViewMode } from "./store.ts";
 import { useThumbnailWait } from "./thumbnails.ts";
 import { Viewer } from "./viewer.tsx";
@@ -81,6 +93,9 @@ function located(item: Item | Found): item is Found {
 }
 
 
+const ARROWS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+type Arrow = "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight";
+
 /** Whether a key, rather than the pointer, pressed a button. A click from
  * Enter or Space counts no presses. */
 function keyed(event: MouseEvent): boolean {
@@ -103,10 +118,11 @@ type Open =
   | { kind: "share"; item: Item };
 
 export function ItemList({
-  items,
+  items: all,
   label,
   location: showLocation = false,
   owners = false,
+  empty,
 }: {
   items: readonly (Item | Found)[];
   /** Names the list for screen readers, such as the folder's name. */
@@ -115,14 +131,28 @@ export function ItemList({
   location?: boolean;
   /** Whether that's who owns each item instead, for Shared with me. */
   owners?: boolean;
+  /** What to say when there are no items at all. */
+  empty?: string;
 }) {
   const thumbnails = useDriveSettings()?.thumbnails ?? true;
   const drive = useDrive();
-  useThumbnailWait(items);
+  useThumbnailWait(all);
+  const filters = useFilters();
+  // The same list until the items or the filters change, since effects
+  // below run when it does.
+  const items = useMemo(
+    () => all.filter((item) => matches(item, filters)),
+    [all, filters.type, filters.people, filters.modified, filters.source],
+  );
   const [mode] = useViewMode();
   const [sort, setSort] = useSort(showLocation ? "found" : "folder");
   const [dropOn, setDropOn] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  /** Where a Shift range starts: the item last chosen on its own. */
+  const anchor = useRef<string | null>(null);
+  /** What the last press was, since a tap on a touch screen opens. */
+  const pointer = useRef("mouse");
+  const root = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
   const [, setDetailsOpen] = useDetailsOpen();
@@ -151,12 +181,13 @@ export function ItemList({
   // The grid and the viewer's Previous and Next follow the list's sort too.
   const ordered = sortItems(items, sort);
   const shown = ordered.filter((item) => item.kind === "file");
+  const folders = ordered.filter((item) => item.kind === "folder");
+  const files = shown;
   const shownFile = shown.find((file) => file.id === showing);
 
-  function openFile(event: MouseEvent, file: Item) {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    navigate(filePath(file), { state: OPENED_HERE });
+  function openItem(item: Item) {
+    if (item.kind === "folder") navigate(folderPath(item));
+    else navigate(filePath(item), { state: OPENED_HERE });
   }
 
   function closeFile() {
@@ -337,6 +368,19 @@ export function ItemList({
     event.stopPropagation();
     // The context menu key may give no position, so the menu opens under
     // the item.
+    // A long press on a touch screen starts selecting, and the ⋮ button
+    // has the menu.
+    if (pointer.current === "touch") {
+      anchor.current = item.id;
+      toggle(item.id);
+      return;
+    }
+    // As in Google Drive, the menu is for what's selected, so an item
+    // outside it becomes the selection.
+    if (!selected.has(item.id)) {
+      anchor.current = item.id;
+      setSelected(new Set([item.id]));
+    }
     const byKeyboard = !event.clientX && !event.clientY;
     const place: MenuPlace = byKeyboard ? { under: holder } : { x: event.clientX, y: event.clientY };
     setMenu(itemMenu(item, place, byKeyboard));
@@ -359,11 +403,111 @@ export function ItemList({
       setSelected(new Set(items.map((item) => item.id)));
     } else if (event.key === "Escape" && selected.size > 0) {
       setSelected(new Set());
+    } else if (focusedItem && event.key === " " && !event.altKey) {
+      anchor.current = focusedItem.id;
+      toggle(focusedItem.id);
+    } else if (focusedItem && ARROWS.includes(event.key) && !event.altKey) {
+      // In a list, left and right are for scrolling across.
+      if (mode === "list" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) return;
+      const next = arrowTo(focusedItem.id, event.key as Arrow);
+      if (!next) return;
+      focusItem(next);
+      if (event.shiftKey) {
+        selectRange(next, command);
+      } else if (!command) {
+        anchor.current = next;
+        setSelected(new Set([next]));
+      }
     } else {
       return;
     }
     event.preventDefault();
   };
+
+  /** The items' IDs in the order they're shown, folders first in a grid. */
+  const order = (mode === "list" ? ordered : [...folders, ...files]).map((item) => item.id);
+
+  /** Where an arrow key goes from `id`, by where the items are on the
+   * screen. */
+  function arrowTo(id: string, key: Arrow): string | null {
+    const boxes = [...(root.current?.querySelectorAll<HTMLElement>("[data-id]") ?? [])].map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { id: element.dataset["id"]!, box: rect };
+    });
+    return neighbor(boxes, id, key);
+  }
+
+  function focusItem(id: string) {
+    const link = root.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"] [data-open]`);
+    link?.focus();
+    link?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** Selects from the anchor to `id`, adding to what's selected with
+   * `adding`. The anchor stays, so the range can grow or shrink. */
+  function selectRange(id: string, adding: boolean) {
+    const ids = range(order, anchor.current, id);
+    if (anchor.current === null) anchor.current = id;
+    setSelected((before) => new Set([...(adding ? before : []), ...ids]));
+  }
+
+  /** A click on an item: selects it, or with Ctrl, Cmd, or Shift, more
+   * than one. On a touch screen, a tap opens, unless something's selected
+   * already. Other links and buttons in the item do their own thing. */
+  function itemClick(event: MouseEvent, item: Item) {
+    const control = (event.target as Element).closest("a, button");
+    if (keyed(event) || (control && !control.hasAttribute("data-open"))) return;
+    if (pointer.current === "touch") {
+      if (selected.size === 0) {
+        openItem(item);
+      } else {
+        anchor.current = item.id;
+        toggle(item.id);
+      }
+      return;
+    }
+    if (event.shiftKey) {
+      selectRange(item.id, event.ctrlKey || event.metaKey);
+    } else if (event.ctrlKey || event.metaKey) {
+      anchor.current = item.id;
+      toggle(item.id);
+    } else {
+      anchor.current = item.id;
+      setSelected(new Set([item.id]));
+    }
+  }
+
+  function itemDoubleClick(event: MouseEvent, item: Item) {
+    const control = (event.target as Element).closest("a, button");
+    if (pointer.current === "touch" || (control && !control.hasAttribute("data-open"))) return;
+    if (event.ctrlKey || event.metaKey || event.shiftKey) return;
+    openItem(item);
+  }
+
+  /** What each item's element needs for choosing and opening it. */
+  function choosing(item: Item) {
+    return {
+      onClick: (event: MouseEvent) => itemClick(event, item),
+      onDblClick: (event: MouseEvent) => itemDoubleClick(event, item),
+    };
+  }
+
+  /** What was selected when a box started, which it adds to with Ctrl,
+   * Cmd, or Shift. */
+  const bandBase = useRef<ReadonlySet<string> | null>(null);
+  const band = useSelectionBand(root, {
+    allowed: () => !open && !menu && !shownFile,
+    touch: (ids, adding) => {
+      setSelected((before) => {
+        const base = adding ? (bandBase.current ??= before) : new Set<string>();
+        return new Set([...base, ...ids]);
+      });
+    },
+    click: (adding) => {
+      if (!adding) setSelected(new Set());
+    },
+  });
+  if (!band) bandBase.current = null;
 
   function toggle(id: string) {
     setSelected((before) => {
@@ -373,35 +517,24 @@ export function ItemList({
     });
   }
 
-  function toggleAll() {
-    setSelected(chosenItems.length === items.length ? new Set() : new Set(items.map((item) => item.id)));
-  }
-
-  /** The item's name, as a link that opens it. */
+  /** The item's name, as a link to it. A click selects the item, and Enter
+   * opens it. A middle click opens it in a new tab, as links do. */
   function nameLink(item: Item, className?: string) {
-    if (item.kind === "folder") {
-      return (
-        <a class={className} href={folderPath(item)} onClick={followLink}>
-          {item.name}
-        </a>
-      );
-    }
     return (
-      <a class={className} href={filePath(item)} onClick={(event) => openFile(event, item)}>
-        {item.name}
-      </a>
-    );
-  }
-
-  function checkbox(item: Item, className?: string) {
-    return (
-      <input
-        type="checkbox"
+      <a
         class={className}
-        aria-label={t("drive.select", { name: item.name })}
-        checked={selected.has(item.id)}
-        onChange={() => toggle(item.id)}
-      />
+        href={item.kind === "folder" ? folderPath(item) : filePath(item)}
+        data-open
+        draggable={false}
+        onClick={(event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          if (keyed(event)) openItem(item);
+        }}
+      >
+        {item.name}
+        {selected.has(item.id) && <span class="visually-hidden">{t("drive.selectedMark")}</span>}
+      </a>
     );
   }
 
@@ -451,15 +584,20 @@ export function ItemList({
     );
   }
 
-  const folders = ordered.filter((item) => item.kind === "folder");
-  const files = ordered.filter((item) => item.kind === "file");
-
   /** What lets an item be dragged onto a folder, with everything selected
    * if it's selected, and lets a folder take a drag. */
   function dragging(item: Item) {
     return {
       draggable: canEdit(item),
-      onDragStart: (event: DragEvent) => startDrag(event, selected.has(item.id) ? chosenItems : [item]),
+      onDragStart: (event: DragEvent) => {
+        // As in Google Drive, dragging an item outside the selection
+        // selects it instead.
+        if (!selected.has(item.id)) {
+          anchor.current = item.id;
+          setSelected(new Set([item.id]));
+        }
+        startDrag(event, selected.has(item.id) ? chosenItems : [item]);
+      },
       onDragEnd: () => {
         endDrag();
         setDropOn(null);
@@ -492,59 +630,79 @@ export function ItemList({
   }
 
   return (
-    <div class="item-list" onContextMenu={contextMenu}>
-      {chosenItems.length > 0 && (
-        <div class="selection-bar" role="group" aria-label={t("drive.selection")}>
-          <button
-            type="button"
-            class="icon-button"
-            aria-label={t("drive.clearSelection")}
-            onClick={() => setSelected(new Set())}
-          >
-            <CloseIcon />
-          </button>
-          <span class="selection-count">{t("drive.selected", { count: chosenItems.length })}</span>
-          {chosenItems.length === 1 && chosenEditable && (
-            <button type="button" class="quiet" onClick={() => setOpen({ kind: "rename", item: chosenItems[0]! })}>
-              {t("drive.rename")}
+    <div
+      class="item-list"
+      ref={root}
+      onContextMenu={contextMenu}
+      onPointerDown={(event) => (pointer.current = event.pointerType)}
+    >
+      {/* Filters fill the row until something is selected, then the
+          selection's actions take their place, so selecting doesn't move
+          the items under the pointer. */}
+      <div class="list-toolbar">
+        {chosenItems.length === 0 ? (
+          <FilterBar items={all} filters={filters} source={showLocation && !owners} mine={!owners} />
+        ) : (
+          <div class="selection-bar" role="group" aria-label={t("drive.selection")}>
+            <button
+              type="button"
+              class="icon-button"
+              aria-label={t("drive.clearSelection")}
+              onClick={() => setSelected(new Set())}
+            >
+              <CloseIcon />
             </button>
-          )}
-          {chosenEditable && (
-            <button type="button" class="quiet" onClick={() => setOpen({ kind: "move", items: chosenItems })}>
-              {t("drive.move")}
-            </button>
-          )}
-          <button type="button" class="quiet" onClick={() => download(chosenItems)}>
-            {t("viewer.download")}
-          </button>
-          <button
-            type="button"
-            class="quiet"
-            onClick={() => star(chosenItems, chosenItems.some((item) => !item.starred))}
-          >
-            {chosenItems.some((item) => !item.starred) ? t("drive.addStar") : t("drive.removeStar")}
-          </button>
-          {chosenEditable && (
-            <button type="button" class="quiet" onClick={() => trash(chosenItems)}>
-              {t("drive.toTrash")}
-            </button>
+            <span class="selection-count">{t("drive.selected", { count: chosenItems.length })}</span>
+            {/* Icons with names in tooltips, as in Google Drive, so the bar
+                fits on one line and never pushes the list down. */}
+            {chosenItems.length === 1 && chosenEditable && (
+              <BarButton label={t("drive.rename")} onClick={() => setOpen({ kind: "rename", item: chosenItems[0]! })}>
+                <RenameIcon />
+              </BarButton>
+            )}
+            {chosenEditable && (
+              <BarButton label={t("drive.move")} onClick={() => setOpen({ kind: "move", items: chosenItems })}>
+                <MoveIcon />
+              </BarButton>
+            )}
+            <BarButton label={t("viewer.download")} onClick={() => download(chosenItems)}>
+              <DownloadIcon />
+            </BarButton>
+            {chosenItems.some((item) => !item.starred) ? (
+              <BarButton label={t("drive.addStar")} onClick={() => star(chosenItems, true)}>
+                <StarIcon />
+              </BarButton>
+            ) : (
+              <BarButton label={t("drive.removeStar")} onClick={() => star(chosenItems, false)}>
+                <StarIcon filled />
+              </BarButton>
+            )}
+            {chosenEditable && (
+              <BarButton label={t("drive.toTrash")} onClick={() => trash(chosenItems)}>
+                <TrashIcon />
+              </BarButton>
+            )}
+          </div>
+        )}
+      </div>
+
+      {items.length === 0 ? (
+        <div class="empty">
+          {all.length > 0 ? (
+            <>
+              <p class="hint">{t("filters.none")}</p>
+              <button type="button" class="secondary" onClick={clearFilters}>
+                {t("search.clearFilters")}
+              </button>
+            </>
+          ) : (
+            <p class="hint">{empty}</p>
           )}
         </div>
-      )}
-
-      {mode === "list" ? (
+      ) : mode === "list" ? (
         <table class="items" aria-label={label}>
           <thead>
             <tr>
-              <td class="select">
-                <input
-                  type="checkbox"
-                  aria-label={t("drive.selectAll")}
-                  checked={chosenItems.length === items.length}
-                  indeterminate={chosenItems.length > 0 && chosenItems.length < items.length}
-                  onChange={toggleAll}
-                />
-              </td>
               {header("name", t("drive.name"))}
               {showLocation && header("location", owners ? t("shared.owner") : t("drive.location"), "location")}
               {header("modified", t("drive.modified"), "modified")}
@@ -554,8 +712,7 @@ export function ItemList({
           </thead>
           <tbody>
             {ordered.map((item) => (
-              <tr key={item.id} data-id={item.id} class={classes(item)} {...dragging(item)}>
-                <td class="select">{checkbox(item)}</td>
+              <tr key={item.id} data-id={item.id} class={classes(item)} {...dragging(item)} {...choosing(item)}>
                 <th scope="row">
                   <span class="name-cell">
                     <ItemIcon item={item} />
@@ -578,8 +735,13 @@ export function ItemList({
               <h2 class="section-title">{t("drive.folders")}</h2>
               <ul class="tiles">
                 {folders.map((item) => (
-                  <li key={item.id} data-id={item.id} class={classes(item, "tile")} {...dragging(item)}>
-                    {checkbox(item, "tile-check")}
+                  <li
+                    key={item.id}
+                    data-id={item.id}
+                    class={classes(item, "tile")}
+                    {...dragging(item)}
+                    {...choosing(item)}
+                  >
                     <ItemIcon item={item} />
                     {nameLink(item, "tile-name")}
                     {starMark(item)}
@@ -594,9 +756,14 @@ export function ItemList({
               <h2 class="section-title">{t("drive.files")}</h2>
               <ul class="cards">
                 {files.map((item) => (
-                  <li key={item.id} data-id={item.id} class={classes(item, "card")} {...dragging(item)}>
+                  <li
+                    key={item.id}
+                    data-id={item.id}
+                    class={classes(item, "card")}
+                    {...dragging(item)}
+                    {...choosing(item)}
+                  >
                     <div class="card-top">
-                      {checkbox(item, "tile-check")}
                       <ItemIcon item={item} />
                       {nameLink(item, "tile-name")}
                       {starMark(item)}
@@ -614,6 +781,17 @@ export function ItemList({
         </div>
       )}
 
+      {band && (
+        <div
+          class="selection-band"
+          style={{
+            left: `${band.left}px`,
+            top: `${band.top}px`,
+            width: `${Math.max(0, band.right - band.left)}px`,
+            height: `${Math.max(0, band.bottom - band.top)}px`,
+          }}
+        />
+      )}
       {menu && (
         <Menu
           label={menu.label}
@@ -676,6 +854,16 @@ export function ItemList({
         />
       )}
     </div>
+  );
+}
+
+/** An action in the selection bar: an icon, with its name in a tooltip and
+ * for screen readers. */
+function BarButton({ label, onClick, children }: { label: string; onClick: () => void; children: ComponentChildren }) {
+  return (
+    <button type="button" class="icon-button" aria-label={label} title={label} onClick={onClick}>
+      {children}
+    </button>
   );
 }
 

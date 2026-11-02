@@ -21,7 +21,7 @@
   --accent-text: #ffffff;
   --accent-soft: #d6e4f8;
   --on-accent-soft: #0e3a73;
-  --selected: #dbe7f8;
+  --selected: #c3dcfb;
   --error: #b3261e;
   --error-soft: #fbe3e1;
   --danger: #b3261e;
@@ -68,7 +68,7 @@
     --accent-text: #0b1a2e;
     --accent-soft: #23385a;
     --on-accent-soft: #d6e4f8;
-    --selected: #22344f;
+    --selected: #1f4673;
     --error: #f2b8b5;
     --error-soft: #4a1f1c;
     --danger: #8c1d18;
@@ -106,7 +106,7 @@
   --accent-text: #0b1a2e;
   --accent-soft: #23385a;
   --on-accent-soft: #d6e4f8;
-  --selected: #22344f;
+  --selected: #1f4673;
   --error: #f2b8b5;
   --error-soft: #4a1f1c;
   --danger: #8c1d18;
@@ -824,7 +824,10 @@ main.page {
 }
 
 .chip {
-  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 6px 14px;
   font-weight: 500;
   color: var(--text);
   background: transparent;
@@ -849,16 +852,37 @@ main.page {
 
 /* Items as rows. */
 
-.selection-bar {
+/* The row above a list: its filters, or what's selected. It keeps one
+   height, so swapping them doesn't move the list, and stays in view as the
+   page scrolls. It's above the cards' ⋮ buttons, so its menus open over
+   them. */
+.list-toolbar {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  min-height: 48px;
+  margin-bottom: 8px;
+  background: var(--panel);
+}
+
+.list-toolbar .filters {
+  margin-bottom: 0;
+}
+
+.selection-bar {
+  display: flex;
+  flex: 1;
+  flex-wrap: nowrap;
+  min-width: 0;
   align-items: center;
   gap: 4px;
-  margin-bottom: 8px;
-  padding: 4px 8px;
+  box-sizing: border-box;
+  /* Exactly the filters' height, with the buttons centered in it. Even
+     half a pixel more moves the list, and text previews visibly jump. */
+  min-height: 48px;
+  padding: 0 8px;
   background: var(--surface);
   border-radius: 999px;
 }
@@ -866,6 +890,22 @@ main.page {
 .selection-count {
   margin-right: 12px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Phones fit the bar by tightening it, and can scroll it sideways if
+   they still can't. */
+@media (max-width: 600px) {
+  .selection-bar {
+    gap: 0;
+    padding: 0 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .selection-count {
+    margin-right: 4px;
+  }
 }
 
 table.items {
@@ -951,6 +991,15 @@ table.items tbody th {
   font-weight: normal;
 }
 
+/* Items select on a click and open on a double-click, so their text isn't
+   selected by either. */
+table.items tbody tr,
+.tile,
+.card {
+  cursor: default;
+  user-select: none;
+}
+
 table.items tbody tr:hover {
   background: var(--surface);
 }
@@ -971,10 +1020,6 @@ table.items tbody tr.selected {
   color: var(--text);
   text-decoration: none;
   overflow-wrap: anywhere;
-}
-
-a.item-name:hover {
-  text-decoration: underline;
 }
 
 .item-icon {
@@ -1053,11 +1098,6 @@ table.items .location a:hover,
 
 table.items .size {
   text-align: right;
-}
-
-table.items .select {
-  width: 1px;
-  padding-right: 4px;
 }
 
 table.items .more-cell {
@@ -1146,8 +1186,8 @@ table.items .actions {
   text-decoration: none;
 }
 
-/* The name's link covers the whole tile, so it opens from anywhere on it.
-   The checkbox and the ⋮ button sit above it. */
+/* The name's link covers the whole tile, so a click anywhere on it selects
+   it, and Enter on it opens it. The ⋮ button sits above it. */
 .tile-name::after {
   content: "";
   position: absolute;
@@ -1159,45 +1199,10 @@ table.items .actions {
   position: static;
 }
 
-.tile .tile-check,
 .tile .more,
-.card .tile-check,
 .card .more {
   position: relative;
   z-index: 1;
-}
-
-/* The checkbox takes the icon's place when it's wanted. */
-.tile-check {
-  display: none;
-}
-
-.tile:hover .tile-check,
-.card:hover .tile-check,
-.tile.selected .tile-check,
-.card.selected .tile-check,
-.tile-check:focus-visible,
-.grid-view:has(.selected) .tile-check {
-  display: block;
-}
-
-.tile:hover .tile-check + .item-icon,
-.card:hover .tile-check + .item-icon,
-.tile.selected .tile-check + .item-icon,
-.card.selected .tile-check + .item-icon,
-.tile-check:focus-visible + .item-icon,
-.grid-view:has(.selected) .tile-check + .item-icon {
-  display: none;
-}
-
-@media (pointer: coarse) {
-  .tile-check {
-    display: block;
-  }
-
-  .tile-check + .item-icon {
-    display: none;
-  }
 }
 
 .card-preview {
@@ -2407,4 +2412,20 @@ input.switch:checked::before {
     width: 100vw;
     border-radius: 0;
   }
+}
+
+/* The box drawn across empty space to select what it touches. */
+.selection-band {
+  position: fixed;
+  z-index: 5;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+}
+
+/* While the box is drawn, nothing else in the page highlights. */
+.selecting,
+.selecting * {
+  user-select: none;
 }

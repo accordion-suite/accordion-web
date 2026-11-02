@@ -71,12 +71,7 @@ export function FoundList({
     );
   }
   if (!items) return <p class="loading">{t("shell.loading")}</p>;
-  if (items.length === 0) {
-    return (
-      <div class="empty">
-        <p class="hint">{empty}</p>
-      </div>
-    );
-  }
-  return <ItemList items={items} label={label} location owners={owners} />;
+  // The list says when it's empty, under its filters, so a filter that
+  // matches nothing can be changed.
+  return <ItemList items={items} label={label} location owners={owners} empty={empty} />;
 }
