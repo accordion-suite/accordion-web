@@ -905,6 +905,16 @@ a.item-name:hover {
   height: 16px;
 }
 
+.shared-mark {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.shared-mark .icon {
+  width: 16px;
+  height: 16px;
+}
+
 table.items .modified,
 table.items .location,
 table.items .size {
@@ -1630,6 +1640,71 @@ dialog.versions-dialog {
   font-size: 0.875rem;
   color: var(--muted);
   white-space: nowrap;
+}
+
+/* Wide enough for a name, a username, and Viewer or Editor on one line. */
+dialog.share-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.share-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
+.share-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.share-field:first-child {
+  flex: 1;
+  min-width: 200px;
+}
+
+.share-field select {
+  width: 100%;
+}
+
+.share-heading {
+  margin: 20px 0 4px;
+  font-size: 1rem;
+}
+
+.share-people {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.share-people li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.share-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.share-username,
+.share-role {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.share-status:empty {
+  display: none;
 }
 
 /* On phones, the buttons go under the name. */

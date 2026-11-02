@@ -27,7 +27,7 @@ class FakeServer implements Transport {
     return this.uploads.get(id)!.data.reduce((sum, part) => sum + part.length, 0);
   }
 
-  async start(size: number): Promise<string> {
+  async start(size: number, _folder: string): Promise<string> {
     this.calls.push(`start ${size}`);
     const error = this.fail.start?.();
     if (error) throw error;
@@ -84,6 +84,9 @@ class FakeServer implements Transport {
       thumbnail: null,
       created_at: "2026-10-29T00:00:00Z",
       modified_at: "2026-10-29T00:00:00Z",
+      access: "owner",
+      owner: null,
+      shared: false,
     };
   }
 

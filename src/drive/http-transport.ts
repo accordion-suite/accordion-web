@@ -8,8 +8,8 @@ import { type Transport, UploadQueue } from "./uploads.ts";
 const UPLOADS = "/api/drive/uploads";
 
 export const httpTransport: Transport = {
-  async start(size) {
-    return (await api<{ id: string }>("POST", UPLOADS, { size })).id;
+  async start(size, folder) {
+    return (await api<{ id: string }>("POST", UPLOADS, { size, parent: folder })).id;
   },
 
   async progress(id) {

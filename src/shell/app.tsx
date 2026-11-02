@@ -6,11 +6,13 @@ import { useEffect, useState } from "preact/hooks";
 import { ApiError, api, type Session } from "../api.ts";
 import { FolderPage } from "../drive/folder-page.tsx";
 import { HomePage } from "../drive/home-page.tsx";
-import { driveSettings, startPath } from "../drive/preferences.ts";
+import { driveSettings, forgetDriveSettings, startPath } from "../drive/preferences.ts";
 import { uploads } from "../drive/http-transport.ts";
-import { DriveLayout } from "../drive/layout.tsx";
+import { DriveLayout, forgetSidebar } from "../drive/layout.tsx";
 import { SearchPage } from "../drive/search-page.tsx";
+import { SharedPage } from "../drive/shared-page.tsx";
 import { StarredPage } from "../drive/starred-page.tsx";
+import { forgetFolders } from "../drive/store.ts";
 import { TrashPage } from "../drive/trash-page.tsx";
 import { UploadPanel } from "../drive/upload-panel.tsx";
 import { t } from "../i18n.ts";
@@ -49,7 +51,18 @@ export function App() {
     return <p class="loading">{t("shell.loading")}</p>;
   }
   if (session === null) {
-    return <SignIn onSignedIn={setSession} />;
+    return (
+      <SignIn
+        onSignedIn={(next) => {
+          // Signing out doesn't reload the page, so what Drive remembers
+          // still belongs to whoever used it before, maybe someone else.
+          forgetFolders();
+          forgetDriveSettings();
+          forgetSidebar();
+          setSession(next);
+        }}
+      />
+    );
   }
   return (
     <SignedIn
@@ -133,6 +146,8 @@ function drivePage(path: string) {
       return <HomePage key={trimmed} />;
     case "/drive/my-drive":
       return <FolderPage key={trimmed} folder={null} />;
+    case "/drive/shared":
+      return <SharedPage key={trimmed} />;
     case "/drive/starred":
       return <StarredPage key={trimmed} />;
     case "/drive/trash":

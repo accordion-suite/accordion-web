@@ -54,11 +54,14 @@ export function FoundList({
   error,
   label,
   empty,
+  owners = false,
 }: {
   items: Found[] | null;
   error: string;
   label: string;
   empty: string;
+  /** Shows who owns each item rather than where it is. */
+  owners?: boolean;
 }) {
   if (error) {
     return (
@@ -75,5 +78,5 @@ export function FoundList({
       </div>
     );
   }
-  return <ItemList items={items} label={label} location />;
+  return <ItemList items={items} label={label} location owners={owners} />;
 }

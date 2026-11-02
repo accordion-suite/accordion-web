@@ -45,6 +45,16 @@ export const StarIcon = ({ filled = false }: { filled?: boolean }) => (
   </Icon>
 );
 
+/** Two people, for what's shared. */
+export const PeopleIcon = () => (
+  <Icon>
+    <path
+      d="M9 4a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7m0 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m7.5-1a3 3 0 1 1 0 6 3 3 0 0 1 0-6M9 13c3.3 0 6 1.6 6 4v2H3v-2c0-2.4 2.7-4 6-4m0 2c-2.2 0-3.8.9-4 2h8c-.2-1.1-1.8-2-4-2m7.6-1.4c2.6.3 4.4 1.6 4.4 3.4v2h-4v-2c0-1.3-.2-2.4-.4-3.4"
+      fill="currentColor"
+    />
+  </Icon>
+);
+
 export const TrashIcon = () => (
   <Icon>
     <path d="M9 3h6l1 2h4v2H4V5h4zM6 8h12l-1 13H7zm3 2v9h2v-9zm4 0v9h2v-9z" fill="currentColor" />

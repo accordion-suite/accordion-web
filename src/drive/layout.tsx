@@ -4,8 +4,8 @@
 // bottom, with Undo where something can be undone.
 //
 // New works the same on every page. It uploads into, or makes a folder in,
-// the folder that's open, or My Drive on pages that aren't a folder, as in
-// Google Drive. A page says which folder that is with `useTarget`. Files
+// the folder that's open, or My Drive on pages that aren't a folder or in a
+// folder the reader can only view, as in Google Drive. A page says which folder that is with `useTarget`. Files
 // dropped on a folder's page, or on Home, upload there too.
 
 import type { ComponentChildren, TargetedDragEvent, TargetedEvent } from "preact";
@@ -36,6 +36,7 @@ import {
   DriveIcon,
   HomeIcon,
   NewFolderIcon,
+  PeopleIcon,
   PlusIcon,
   StarIcon,
   TrashIcon,
@@ -314,6 +315,9 @@ export function DriveLayout({
               </div>
               {top && <FolderTree parent={top.id} trail={target.trail} current={path} depth={1} />}
             </li>
+            <Place href="/drive/shared" current={path === "/drive/shared"} icon={<PeopleIcon />}>
+              {t("shared.title")}
+            </Place>
             <Place href="/drive/starred" current={path === "/drive/starred"} icon={<StarIcon />}>
               {t("starred.title")}
             </Place>
@@ -439,6 +443,12 @@ function NoticeBar({ notice, onUndo, onClose }: { notice: Notice; onUndo?: () =>
 /** The folders opened in the sidebar. They stay open while the reader moves
  * between pages. */
 const expanded = new Set<string>();
+
+/** Closes the sidebar's folders, which belong to whoever was signed in
+ * before. */
+export function forgetSidebar(): void {
+  expanded.clear();
+}
 
 /** The folders inside `parent`, each of which can open to show its own. */
 function FolderTree({

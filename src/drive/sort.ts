@@ -65,7 +65,9 @@ export function sortItems<T extends Item | Found>(items: readonly T[], sort: Sor
   );
 }
 
-/** Where an item is, as a path to compare, from a list that says so. */
+/** Where an item is, as a path to compare, from a list that says so.
+ * Someone else's items start with their owner, so Shared with me sorts by
+ * who shared what. */
 function place(item: Item | Found): string {
-  return "folders" in item ? item.folders.join("/") : "";
+  return "folders" in item ? [item.owner ?? "", ...item.folders].join("/") : "";
 }

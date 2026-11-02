@@ -33,6 +33,12 @@ export function driveSettings(): Promise<DriveSettings> {
   return loading;
 }
 
+/** Forgets the settings, which belong to whoever was signed in before. */
+export function forgetDriveSettings(): void {
+  current = null;
+  loading = null;
+}
+
 /** Saves `change`, then tells every page using the settings. */
 export async function saveDriveSettings(change: Partial<DriveSettings>): Promise<DriveSettings> {
   const next = { ...(await driveSettings()), ...change };

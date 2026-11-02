@@ -1,6 +1,7 @@
 // A list of files and folders, as rows or as a grid, and what can be done to
-// them: opening, downloading, renaming, copying, moving, starring, and moving
-// to the trash. Those are in each item's ⋮ menu and its right-click menu,
+// them: opening, downloading, sharing, renaming, copying, moving, starring,
+// and moving to the trash. Each item's menus offer only what the reader may
+// do with it, so a viewer of someone else's folder sees no Rename. Those are in each item's ⋮ menu and its right-click menu,
 // and on keys for what's selected, or by dragging onto a folder. Files open
 // in the viewer, over the list,
 // with the list's other files a step away, as in Google Drive. Downloading
@@ -16,9 +17,9 @@ import { ApiError, api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
-import { MoveDialog, NameDialog, VersionsDialog } from "./dialogs.tsx";
-import { CloseIcon, GridIcon, ItemIcon, ListIcon, MoreIcon, SortIcon, StarIcon } from "./icons.tsx";
-import type { Found, Item } from "./item.ts";
+import { MoveDialog, NameDialog, ShareDialog, VersionsDialog } from "./dialogs.tsx";
+import { CloseIcon, GridIcon, ItemIcon, ListIcon, MoreIcon, PeopleIcon, SortIcon, StarIcon } from "./icons.tsx";
+import { type Found, type Item, canEdit } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { freeName } from "./names.ts";
 import { useDriveSettings } from "./preferences.ts";
@@ -32,9 +33,11 @@ export function folderPath(item: Pick<Item, "id" | "parent">): string {
   return item.parent === null ? "/drive/my-drive" : `/drive/folder/${item.id}`;
 }
 
-/** The folder an item is in, from a list that says where items are. */
+/** The folder an item is in, from a list that says where items are.
+ * Something shared with the reader on its own is in Shared with me. */
 function locationPath(item: Found): string {
-  return item.folders.length === 0 ? "/drive/my-drive" : `/drive/folder/${item.parent}`;
+  if (item.folders.length > 0) return `/drive/folder/${item.parent}`;
+  return item.owner === null ? "/drive/my-drive" : "/drive/shared";
 }
 
 /** This page's address with `file` open in the viewer. */
@@ -82,18 +85,25 @@ interface OpenMenu {
   owner?: string;
 }
 
-type Open = { kind: "rename"; item: Item } | { kind: "move"; items: Item[] } | { kind: "versions"; item: Item };
+type Open =
+  | { kind: "rename"; item: Item }
+  | { kind: "move"; items: Item[] }
+  | { kind: "versions"; item: Item }
+  | { kind: "share"; item: Item };
 
 export function ItemList({
   items,
   label,
   location: showLocation = false,
+  owners = false,
 }: {
   items: readonly (Item | Found)[];
   /** Names the list for screen readers, such as the folder's name. */
   label: string;
   /** Whether to show where each item is. */
   location?: boolean;
+  /** Whether that's who owns each item instead, for Shared with me. */
+  owners?: boolean;
 }) {
   const thumbnails = useDriveSettings()?.thumbnails ?? true;
   const drive = useDrive();
@@ -120,6 +130,7 @@ export function ItemList({
   }, [items]);
 
   const chosenItems = items.filter((item) => selected.has(item.id));
+  const chosenEditable = chosenItems.every(canEdit);
   // The grid and the viewer's Previous and Next follow the list's sort too.
   const ordered = sortItems(items, sort);
   const shown = ordered.filter((item) => item.kind === "file");
@@ -156,6 +167,12 @@ export function ItemList({
   async function trash(chosen: Item[]) {
     try {
       for (const item of chosen) await api("DELETE", `/api/drive/items/${item.id}`);
+      // Someone else's items go to their owner's trash, and only the owner
+      // can restore them.
+      if (chosen.some((item) => item.access !== "owner")) {
+        done(naming(chosen, "drive.trashedSharedOne", "drive.trashedSharedMany"));
+        return;
+      }
       done(naming(chosen, "drive.trashedOne", "drive.trashedMany"), async () => {
         for (const item of chosen) await api("POST", `/api/drive/items/${item.id}/restore`);
         drive.notify({ message: naming(chosen, "drive.restoredOne", "drive.restoredMany") });
@@ -179,15 +196,29 @@ export function ItemList({
   }
 
   /** Copies a file into its own folder as "Copy of …", as Google Drive does,
-   * with a number if that's taken. */
+   * with a number if that's taken. A file in a folder the reader can't add
+   * to goes to My Drive, where the server picks the number. */
   async function copy(item: Item) {
+    const name = t("drive.copyName", { name: item.name });
+    const toMyDrive = async () => {
+      const made = await api<Item>("POST", `/api/drive/items/${item.id}/copy`, { name });
+      done(t("drive.copiedToMyDrive", { name: made.name }));
+    };
     try {
+      if (!canEdit(item)) return await toMyDrive();
       for (let tries = 0; ; tries++) {
-        const siblings = await api<Item[]>("GET", `/api/drive/items/${item.parent}/children`);
-        const name = freeName(t("drive.copyName", { name: item.name }), new Set(siblings.map((child) => child.name)));
+        let siblings: Item[];
         try {
-          await api("POST", `/api/drive/items/${item.id}/copy`, { name });
-          done(t("drive.copied", { name }));
+          siblings = await api<Item[]>("GET", `/api/drive/items/${item.parent}/children`);
+        } catch (problem) {
+          // Shared on its own, so the folder it's in isn't the reader's.
+          if (problem instanceof ApiError && problem.status === 404) return await toMyDrive();
+          throw problem;
+        }
+        const free = freeName(name, new Set(siblings.map((child) => child.name)));
+        try {
+          await api("POST", `/api/drive/items/${item.id}/copy`, { name: free });
+          done(t("drive.copied", { name: free }));
           return;
         } catch (problem) {
           // Something took the name since the folder was listed.
@@ -211,14 +242,24 @@ export function ItemList({
       label: starring ? t("drive.addStar") : t("drive.removeStar"),
       onSelect: () => star(chosen, starring),
     };
+    const editable = chosen.every(canEdit);
     if (chosen.length > 1) {
-      return [
-        { label: t("drive.moveMany", { count: chosen.length }), onSelect: () => setOpen({ kind: "move", items: chosen }) },
-        { label: t("viewer.download"), onSelect: () => download(chosen) },
-        starEntry,
-        SEPARATOR,
-        { label: t("drive.trashMany", { count: chosen.length }), shortcut: "Delete", onSelect: () => trash(chosen) },
-      ];
+      const entries: MenuEntry[] = [];
+      if (editable) {
+        entries.push({
+          label: t("drive.moveMany", { count: chosen.length }),
+          onSelect: () => setOpen({ kind: "move", items: chosen }),
+        });
+      }
+      entries.push({ label: t("viewer.download"), onSelect: () => download(chosen) }, starEntry);
+      if (editable) {
+        entries.push(SEPARATOR, {
+          label: t("drive.trashMany", { count: chosen.length }),
+          shortcut: "Delete",
+          onSelect: () => trash(chosen),
+        });
+      }
+      return entries;
     }
     const item = chosen[0]!;
     const entries: MenuEntry[] = [];
@@ -231,19 +272,26 @@ export function ItemList({
       entries.push(
         { label: t("drive.open"), onSelect: () => navigate(filePath(item), { state: OPENED_HERE }) },
         { label: t("viewer.download"), onSelect: () => download(chosen) },
-        { label: t("drive.manageVersions"), onSelect: () => setOpen({ kind: "versions", item }) },
       );
+      // Viewers see only the current version, as in Google Drive.
+      if (editable) {
+        entries.push({ label: t("drive.manageVersions"), onSelect: () => setOpen({ kind: "versions", item }) });
+      }
     }
-    entries.push(
-      SEPARATOR,
-      { label: t("drive.rename"), shortcut: "F2", onSelect: () => setOpen({ kind: "rename", item }) },
-    );
+    entries.push(SEPARATOR);
+    if (item.access === "owner") entries.push({ label: t("share.open"), onSelect: () => setOpen({ kind: "share", item }) });
+    if (editable) {
+      entries.push({ label: t("drive.rename"), shortcut: "F2", onSelect: () => setOpen({ kind: "rename", item }) });
+    }
     if (item.kind === "file") entries.push({ label: t("drive.makeCopy"), onSelect: () => copy(item) });
-    entries.push({ label: t("drive.move"), onSelect: () => setOpen({ kind: "move", items: chosen }) }, starEntry);
+    if (editable) entries.push({ label: t("drive.move"), onSelect: () => setOpen({ kind: "move", items: chosen }) });
+    entries.push(starEntry);
     if (located(item)) {
       entries.push({ label: t("drive.showLocation"), onSelect: () => navigate(locationPath(item)) });
     }
-    entries.push(SEPARATOR, { label: t("drive.toTrash"), shortcut: "Delete", onSelect: () => trash(chosen) });
+    if (editable) {
+      entries.push(SEPARATOR, { label: t("drive.toTrash"), shortcut: "Delete", onSelect: () => trash(chosen) });
+    }
     return entries;
   }
 
@@ -278,10 +326,10 @@ export function ItemList({
     const focusedItem = focused && items.find((item) => item.id === focused.dataset["id"]);
     const chosen = chosenItems.length > 0 ? chosenItems : focusedItem ? [focusedItem] : [];
     if (event.key === "Delete" || (event.key === "Backspace" && event.metaKey)) {
-      if (chosen.length === 0) return;
+      if (chosen.length === 0 || !chosen.every(canEdit)) return;
       void trash(chosen);
     } else if (event.key === "F2") {
-      if (chosen.length !== 1) return;
+      if (chosen.length !== 1 || !canEdit(chosen[0]!)) return;
       setOpen({ kind: "rename", item: chosen[0]! });
     } else if (command && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
       setSelected(new Set(items.map((item) => item.id)));
@@ -348,20 +396,30 @@ export function ItemList({
     );
   }
 
+  /** Marks for a starred item, and for one the reader shared. */
   function starMark(item: Item) {
     return (
-      item.starred && (
-        <span class="star-mark" title={t("drive.starred")}>
-          <StarIcon filled />
-          <span class="visually-hidden">{t("drive.starred")}</span>
-        </span>
-      )
+      <>
+        {item.shared && (
+          <span class="shared-mark" title={t("share.sharedMark")}>
+            <PeopleIcon />
+            <span class="visually-hidden">{t("share.sharedMark")}</span>
+          </span>
+        )}
+        {item.starred && (
+          <span class="star-mark" title={t("drive.starred")}>
+            <StarIcon filled />
+            <span class="visually-hidden">{t("drive.starred")}</span>
+          </span>
+        )}
+      </>
     );
   }
 
   function where(item: Item | Found) {
     if (!located(item)) return null;
-    const path = [t("drive.myDrive"), ...item.folders];
+    if (owners) return <span>{item.owner}</span>;
+    const path = [item.owner === null ? t("drive.myDrive") : t("shared.title"), ...item.folders];
     return (
       <a href={locationPath(item)} onClick={followLink} title={path.join(" › ")}>
         {path[path.length - 1]}
@@ -376,13 +434,13 @@ export function ItemList({
    * if it's selected, and lets a folder take a drag. */
   function dragging(item: Item) {
     return {
-      draggable: true,
+      draggable: canEdit(item),
       onDragStart: (event: DragEvent) => startDrag(event, selected.has(item.id) ? chosenItems : [item]),
       onDragEnd: () => {
         endDrag();
         setDropOn(null);
       },
-      ...(item.kind === "folder" ? dropProps(item, setDropOn, drive.notify) : {}),
+      ...(item.kind === "folder" && canEdit(item) ? dropProps(item, setDropOn, drive.notify) : {}),
     };
   }
 
@@ -422,14 +480,16 @@ export function ItemList({
             <CloseIcon />
           </button>
           <span class="selection-count">{t("drive.selected", { count: chosenItems.length })}</span>
-          {chosenItems.length === 1 && (
+          {chosenItems.length === 1 && chosenEditable && (
             <button type="button" class="quiet" onClick={() => setOpen({ kind: "rename", item: chosenItems[0]! })}>
               {t("drive.rename")}
             </button>
           )}
-          <button type="button" class="quiet" onClick={() => setOpen({ kind: "move", items: chosenItems })}>
-            {t("drive.move")}
-          </button>
+          {chosenEditable && (
+            <button type="button" class="quiet" onClick={() => setOpen({ kind: "move", items: chosenItems })}>
+              {t("drive.move")}
+            </button>
+          )}
           <button type="button" class="quiet" onClick={() => download(chosenItems)}>
             {t("viewer.download")}
           </button>
@@ -440,9 +500,11 @@ export function ItemList({
           >
             {chosenItems.some((item) => !item.starred) ? t("drive.addStar") : t("drive.removeStar")}
           </button>
-          <button type="button" class="quiet" onClick={() => trash(chosenItems)}>
-            {t("drive.toTrash")}
-          </button>
+          {chosenEditable && (
+            <button type="button" class="quiet" onClick={() => trash(chosenItems)}>
+              {t("drive.toTrash")}
+            </button>
+          )}
         </div>
       )}
 
@@ -460,7 +522,7 @@ export function ItemList({
                 />
               </td>
               {header("name", t("drive.name"))}
-              {showLocation && header("location", t("drive.location"), "location")}
+              {showLocation && header("location", owners ? t("shared.owner") : t("drive.location"), "location")}
               {header("modified", t("drive.modified"), "modified")}
               {header("size", t("drive.size"), "size")}
               <td class="more-cell" />
@@ -559,6 +621,15 @@ export function ItemList({
             done(naming(open.items, "drive.movedOne", "drive.movedMany", to));
           }}
           onClose={() => setOpen(null)}
+        />
+      )}
+      {open?.kind === "share" && (
+        <ShareDialog
+          item={open.item}
+          onClose={(changed) => {
+            setOpen(null);
+            if (changed) announceChange();
+          }}
         />
       )}
       {open?.kind === "versions" && (

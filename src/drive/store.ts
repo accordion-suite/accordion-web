@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
-import { api } from "../api.ts";
+import { ApiError, api } from "../api.ts";
 import type { Item } from "./item.ts";
 import { readSort, type Sort } from "./sort.ts";
 
@@ -100,6 +100,12 @@ export function useChanges(listener: () => void): void {
   }, []);
 }
 
+/** Forgets the folders seen so far, which belong to whoever was signed in
+ * before. */
+export function forgetFolders(): void {
+  folders.clear();
+}
+
 /** Remembers folders from a response, for `pathTo`. */
 export function remember(items: readonly Item[]): void {
   for (const item of items) {
@@ -116,12 +122,18 @@ async function folder(id: string): Promise<Item> {
 }
 
 /** The folders from My Drive down to `item`, outermost first, including
- * both. */
+ * both. For someone else's item, the path starts at the outermost folder
+ * the reader can open, which they reach from Shared with me. */
 export async function pathTo(item: Item): Promise<Item[]> {
   folders.set(item.id, item);
   const path = [item];
   for (let at = item; at.parent !== null; ) {
-    at = await folder(at.parent);
+    try {
+      at = await folder(at.parent);
+    } catch (problem) {
+      if (item.owner !== null && problem instanceof ApiError && problem.status === 404) break;
+      throw problem;
+    }
     path.unshift(at);
   }
   return path;

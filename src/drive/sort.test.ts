@@ -4,7 +4,14 @@ import { test } from "node:test";
 import type { Found } from "./item.ts";
 import { nextSort, readSort, sortItems } from "./sort.ts";
 
-function item(name: string, kind: "file" | "folder", modified: string, size: number | null, folders: string[] = []): Found {
+function item(
+  name: string,
+  kind: "file" | "folder",
+  modified: string,
+  size: number | null,
+  folders: string[] = [],
+  owner: string | null = null,
+): Found {
   return {
     id: name,
     parent: null,
@@ -17,6 +24,9 @@ function item(name: string, kind: "file" | "folder", modified: string, size: num
     created_at: modified,
     modified_at: modified,
     starred: false,
+    access: owner === null ? "owner" : "viewer",
+    owner,
+    shared: false,
     folders,
   };
 }
@@ -90,4 +100,19 @@ test("a kept sort is read back, and anything else isn't", () => {
   assert.equal(readSort("not json"), null);
   assert.equal(readSort('{"key":"color","descending":true}'), null);
   assert.equal(readSort('{"key":"name"}'), null);
+});
+
+test("someone else's items sort by their owner first", () => {
+  const shared = [
+    item("Recipes", "folder", "2026-10-01T09:00:00Z", null, [], "Sam"),
+    item("Mine.txt", "file", "2026-10-01T09:00:00Z", 1),
+    item("Beach.jpg", "file", "2026-10-01T09:00:00Z", 1, ["Holiday"], "Alex"),
+    item("Notes.txt", "file", "2026-10-01T09:00:00Z", 1, [], "Alex"),
+  ];
+  assert.deepEqual(names(sortItems(shared, { key: "location", descending: false })), [
+    "Recipes",
+    "Mine.txt",
+    "Notes.txt",
+    "Beach.jpg",
+  ]);
 });

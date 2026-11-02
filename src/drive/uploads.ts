@@ -23,8 +23,10 @@ const RETRY_DELAYS = [1, 2, 4, 8, 15, 30];
 /** The server's resumable uploads API, `/api/drive/uploads`. Tests use a
  * fake one. */
 export interface Transport {
-  /** Starts an upload of `size` bytes, and returns its ID. */
-  start(size: number): Promise<string>;
+  /** Starts an upload of `size` bytes that will finish in `folder`, and
+   * returns its ID. It counts toward the space of the folder's owner, who
+   * may have shared it with the reader. */
+  start(size: number, folder: string): Promise<string>;
   /** How much of the upload has arrived. */
   progress(id: string): Promise<number>;
   /** Sends `piece`, starting at `offset`, and returns how much has arrived
@@ -110,7 +112,7 @@ export async function uploadFile(
       let sending = false;
       try {
         if (id === null) {
-          id = await transport.start(size);
+          id = await transport.start(size, upload.folder.id);
         } else if (received === null) {
           received = await transport.progress(id);
           sent = received;

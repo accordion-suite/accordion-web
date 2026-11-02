@@ -1,11 +1,11 @@
 // Drive's dialogs: naming a new folder or renaming, choosing where to move
-// to, choosing what an upload does to items with its names, and a file's
-// versions.
+// to, choosing what an upload does to items with its names, a file's
+// versions, and sharing.
 
 import type { TargetedSubmitEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
-import { api } from "../api.ts";
+import { ApiError, api } from "../api.ts";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { Dialog, problemText as message } from "../shell/dialog.tsx";
 import type { Child } from "./folder-upload.ts";
@@ -133,10 +133,22 @@ interface Place {
   folders: Item[];
 }
 
+/** The folder `id` is in, or null if the reader can't open it, such as
+ * above a folder someone shared with them. */
+async function parentOf(folder: Item): Promise<Item | null> {
+  if (folder.parent === null) return null;
+  try {
+    return await api<Item>("GET", `/api/drive/items/${folder.parent}`);
+  } catch (problem) {
+    if (problem instanceof ApiError && problem.status === 404) return null;
+    throw problem;
+  }
+}
+
 async function place(id: string | null, moving: ReadonlySet<string>): Promise<Place> {
   const folder = await api<Item>("GET", id === null ? "/api/drive/top" : `/api/drive/items/${id}`);
   const [parent, children] = await Promise.all([
-    folder.parent === null ? null : api<Item>("GET", `/api/drive/items/${folder.parent}`),
+    parentOf(folder),
     api<Item[]>("GET", `/api/drive/items/${folder.id}/children`),
   ]);
   const collator = new Intl.Collator(undefined, { numeric: true });
@@ -148,7 +160,9 @@ async function place(id: string | null, moving: ReadonlySet<string>): Promise<Pl
   return { folder, parent, folders };
 }
 
-/** Lets the reader browse to a folder, then moves `items` into it. */
+/** Lets the reader browse to a folder, then moves `items` into it. Items
+ * can only move within their owner's storage, so for someone else's items
+ * it starts in the folder they're in. */
 export function MoveDialog({
   items,
   onMoved,
@@ -159,7 +173,8 @@ export function MoveDialog({
   onClose: () => void;
 }) {
   const moving = new Set(items.map((item) => item.id));
-  const [at, setAt] = useState<string | null>(null);
+  const first = items[0]!;
+  const [at, setAt] = useState<string | null>(first.access === "owner" ? null : first.parent);
   const [shown, setShown] = useState<Place | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -338,6 +353,186 @@ export function VersionsDialog({
       <div class="dialog-buttons">
         <button type="button" onClick={onClose}>
           {t("dialog.close")}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** Someone on the server, as `/api/directory` lists them. */
+interface Person {
+  id: string;
+  username: string;
+  display_name: string;
+  you: boolean;
+}
+
+/** Someone an item is shared with, as `/api/drive/items/{id}/shares` lists
+ * them. */
+interface ShareEntry {
+  user: string;
+  username: string;
+  display_name: string;
+  level: "viewer" | "editor";
+}
+
+/** Who can open an item, to share it with more people, change what each
+ * may do, or stop sharing. Only the owner opens it. `onClose` says whether
+ * anything changed, so lists can show the item as shared. */
+export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: boolean) => void }) {
+  const [shares, setShares] = useState<ShareEntry[] | null>(null);
+  const [people, setPeople] = useState<Person[] | null>(null);
+  const [adding, setAdding] = useState("");
+  const [level, setLevel] = useState<ShareEntry["level"]>("viewer");
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const changed = useRef(false);
+
+  async function load() {
+    const [nextShares, nextPeople] = await Promise.all([
+      api<ShareEntry[]>("GET", `/api/drive/items/${item.id}/shares`),
+      people ? Promise.resolve(people) : api<Person[]>("GET", "/api/directory"),
+    ]);
+    setShares(nextShares);
+    setPeople(nextPeople);
+  }
+
+  useEffect(() => {
+    load().catch((problem) => setError(message(problem)));
+  }, [item.id]);
+
+  /** Runs a change, then lists who has access again. */
+  async function change(run: () => Promise<unknown>, said: string) {
+    setBusy(true);
+    setError("");
+    setStatus("");
+    try {
+      await run();
+      changed.current = true;
+      await load();
+      setStatus(said);
+    } catch (problem) {
+      setError(message(problem));
+    }
+    setBusy(false);
+  }
+
+  const you = people?.find((person) => person.you);
+  const sharedWith = new Set(shares?.map((share) => share.user));
+  const others = people?.filter((person) => !person.you && !sharedWith.has(person.id)) ?? [];
+  const levelName = (value: ShareEntry["level"]) => t(value === "editor" ? "share.editor" : "share.viewer");
+
+  function share(event: TargetedSubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const person = others.find((other) => other.id === adding);
+    if (!person) return;
+    void change(
+      () => api("PUT", `/api/drive/items/${item.id}/shares/${person.id}`, { level }),
+      t("share.shared", { item: item.name, name: person.display_name }),
+    ).then(() => setAdding(""));
+  }
+
+  return (
+    <Dialog title={t("share.title", { name: item.name })} class="share-dialog" onClose={() => onClose(changed.current)}>
+      {shares && people ? (
+        <>
+          {others.length === 0 ? (
+            <p class="hint">{t("share.everyone")}</p>
+          ) : (
+            <form class="share-add" onSubmit={share} noValidate>
+              <div class="share-field">
+                <label for="share-person">{t("share.person")}</label>
+                <select id="share-person" value={adding} onChange={(event) => setAdding(event.currentTarget.value)}>
+                  <option value="">{t("share.choose")}</option>
+                  {others.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.display_name} ({person.username})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div class="share-field">
+                <label for="share-level">{t("share.level")}</label>
+                <select
+                  id="share-level"
+                  value={level}
+                  onChange={(event) => setLevel(event.currentTarget.value as ShareEntry["level"])}
+                >
+                  <option value="viewer">{t("share.viewer")}</option>
+                  <option value="editor">{t("share.editor")}</option>
+                </select>
+              </div>
+              <button type="submit" disabled={busy || !adding}>
+                {t("share.submit")}
+              </button>
+            </form>
+          )}
+          <p class="hint">{t("share.help")}</p>
+          <h3 class="share-heading">{t("share.who")}</h3>
+          <ul class="share-people">
+            {you && (
+              <li>
+                <span class="share-name">
+                  <span>{t("share.ownerYou", { name: you.display_name })}</span>
+                  <span class="share-username">{you.username}</span>
+                </span>
+                <span class="share-role">{t("share.ownerRole")}</span>
+              </li>
+            )}
+            {shares.map((entry) => (
+              <li key={entry.user}>
+                <span class="share-name">
+                  <span>{entry.display_name}</span>
+                  <span class="share-username">{entry.username}</span>
+                </span>
+                <select
+                  class="short"
+                  aria-label={t("share.levelFor", { name: entry.display_name })}
+                  value={entry.level}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const next = event.currentTarget.value as ShareEntry["level"];
+                    void change(
+                      () => api("PUT", `/api/drive/items/${item.id}/shares/${entry.user}`, { level: next }),
+                      t("share.changed", { name: entry.display_name, level: levelName(next).toLowerCase(), item: item.name }),
+                    );
+                  }}
+                >
+                  <option value="viewer">{t("share.viewer")}</option>
+                  <option value="editor">{t("share.editor")}</option>
+                </select>
+                <button
+                  type="button"
+                  class="secondary"
+                  disabled={busy}
+                  aria-label={t("share.removeNamed", { name: entry.display_name })}
+                  onClick={() =>
+                    void change(
+                      () => api("DELETE", `/api/drive/items/${item.id}/shares/${entry.user}`),
+                      t("share.removed", { item: item.name, name: entry.display_name }),
+                    )
+                  }
+                >
+                  {t("share.remove")}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {shares.length === 0 && <p class="hint">{t("share.nobody")}</p>}
+        </>
+      ) : (
+        !error && <p class="loading">{t("shell.loading")}</p>
+      )}
+      <p class="share-status" role="status">
+        {status}
+      </p>
+      <p class="error" role="alert">
+        {error}
+      </p>
+      <div class="dialog-buttons">
+        <button type="button" onClick={() => onClose(changed.current)}>
+          {t("dialog.done")}
         </button>
       </div>
     </Dialog>
