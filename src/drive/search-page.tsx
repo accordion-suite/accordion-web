@@ -13,7 +13,7 @@ import { PageTitle } from "../shell/page.tsx";
 import { navigate, useQuery } from "../shell/router.ts";
 import { FoundList, useFound } from "./home-page.tsx";
 import { CheckIcon } from "./icons.tsx";
-import { ViewToggle } from "./item-list.tsx";
+import { PageTools } from "./item-list.tsx";
 import { useTarget } from "./layout.tsx";
 import { searchPath } from "./search-box.tsx";
 import { searchAddress } from "./search.ts";
@@ -62,7 +62,7 @@ export function SearchPage() {
     <main class="page">
       <div class="page-head">
         <PageTitle>{words ? t("search.titleFor", { words }) : t("search.title")}</PageTitle>
-        <ViewToggle />
+        <PageTools />
       </div>
       <div class="filters" role="group" aria-label={t("search.filters")}>
         <Filter

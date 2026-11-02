@@ -599,6 +599,124 @@ main.narrow {
   border-radius: 16px;
 }
 
+/* The details panel, as a third column beside the page. */
+.frame.details-open {
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 340px;
+}
+
+.details {
+  min-height: 0;
+  margin: 0 16px 16px 0;
+  overflow-y: auto;
+  background: var(--panel);
+  border-radius: 16px;
+}
+
+.details-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 8px 8px 20px;
+  background: var(--panel);
+}
+
+.details-head > .icon {
+  flex: none;
+}
+
+.details-head h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.details-empty {
+  margin: 0;
+  padding: 8px 20px 20px;
+}
+
+.details-body {
+  padding: 0 20px 20px;
+}
+
+.details-body .card-preview {
+  height: 180px;
+  margin: 8px 0 12px;
+}
+
+.details-section {
+  padding: 12px 0;
+}
+
+.details-section + .details-section {
+  border-top: 1px solid var(--border);
+}
+
+.details-section h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.details-section p {
+  margin: 0 0 8px;
+}
+
+.details-people {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.details-people li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.details-from {
+  display: block;
+  font-size: 0.875rem;
+}
+
+.details-facts {
+  margin: 0;
+}
+
+.details-facts dt {
+  margin-top: 12px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.details-facts dt:first-child {
+  margin-top: 0;
+}
+
+.details-facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.page-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-tools .icon-button[aria-pressed="true"] {
+  color: var(--on-accent-soft);
+  background: var(--accent-soft);
+}
+
 main.page {
   min-height: 100%;
   padding: 16px 24px 32px;
@@ -2233,5 +2351,38 @@ input.switch:checked::before {
 
   body:has(.frame) {
     overflow: visible;
+  }
+}
+
+/* On smaller screens, the details panel slides over the page from the
+   right, and on a phone it takes the whole screen. */
+@media (max-width: 1100px) {
+  .frame.details-open {
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+
+  .details {
+    position: fixed;
+    top: var(--top-bar-height);
+    right: 0;
+    bottom: 0;
+    z-index: 4;
+    width: min(360px, 100vw);
+    margin: 0;
+    border-radius: 16px 0 0;
+    box-shadow: var(--shadow);
+  }
+}
+
+@media (max-width: 800px) {
+  .frame.details-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .details {
+    top: 0;
+    z-index: 6;
+    width: 100vw;
+    border-radius: 0;
   }
 }

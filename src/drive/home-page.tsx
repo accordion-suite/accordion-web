@@ -6,7 +6,7 @@ import { useEffect, useState } from "preact/hooks";
 import { api } from "../api.ts";
 import { t } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
-import { ItemList, ViewToggle } from "./item-list.tsx";
+import { ItemList, PageTools } from "./item-list.tsx";
 import type { Found } from "./item.ts";
 import { useDrive, useTarget } from "./layout.tsx";
 import { useChanges } from "./store.ts";
@@ -40,7 +40,7 @@ export function HomePage() {
     <main class="page">
       <div class="page-head">
         <PageTitle>{t("home.title")}</PageTitle>
-        <ViewToggle />
+        <PageTools />
       </div>
       <h2 class="list-title">{t("home.recent")}</h2>
       <FoundList items={items} error={error} label={t("home.recent")} empty={t("home.empty")} />

@@ -18,14 +18,24 @@ import { formatDate, formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
 import { MoveDialog, NameDialog, ShareDialog, VersionsDialog } from "./dialogs.tsx";
-import { CloseIcon, GridIcon, ItemIcon, ListIcon, MoreIcon, PeopleIcon, SortIcon, StarIcon } from "./icons.tsx";
+import {
+  CloseIcon,
+  GridIcon,
+  InfoIcon,
+  ItemIcon,
+  ListIcon,
+  MoreIcon,
+  PeopleIcon,
+  SortIcon,
+  StarIcon,
+} from "./icons.tsx";
 import { type Found, type Item, canEdit } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { freeName } from "./names.ts";
 import { useDriveSettings } from "./preferences.ts";
 import { dropProps, endDrag, naming, startDrag } from "./move.ts";
 import { nextSort, type SortKey, sortItems } from "./sort.ts";
-import { announceChange, useSort, useViewMode } from "./store.ts";
+import { announceChange, useDetailsOpen, useSort, useViewMode } from "./store.ts";
 import { Viewer } from "./viewer.tsx";
 
 /** A folder's page. My Drive has its own address. */
@@ -113,6 +123,7 @@ export function ItemList({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
+  const [, setDetailsOpen] = useDetailsOpen();
   const showing = useQuery("file");
   // The shortcuts need what's shown now, so the list sets them each time.
   const shortcuts = useRef<((event: KeyboardEvent) => void) | null>(null);
@@ -131,6 +142,10 @@ export function ItemList({
 
   const chosenItems = items.filter((item) => selected.has(item.id));
   const chosenEditable = chosenItems.every(canEdit);
+
+  // The details panel shows what's selected, as it is after each reload.
+  useEffect(() => drive.select(chosenItems), [items, selected]);
+  useEffect(() => () => drive.select([]), []);
   // The grid and the viewer's Previous and Next follow the list's sort too.
   const ordered = sortItems(items, sort);
   const shown = ordered.filter((item) => item.kind === "file");
@@ -278,6 +293,13 @@ export function ItemList({
         entries.push({ label: t("drive.manageVersions"), onSelect: () => setOpen({ kind: "versions", item }) });
       }
     }
+    entries.push({
+      label: t("details.title"),
+      onSelect: () => {
+        setSelected(new Set([item.id]));
+        setDetailsOpen(true);
+      },
+    });
     entries.push(SEPARATOR);
     if (item.access === "owner") entries.push({ label: t("share.open"), onSelect: () => setOpen({ kind: "share", item }) });
     if (editable) {
@@ -658,7 +680,7 @@ export function ItemList({
 /** The picture on a grid card: the file's thumbnail if the server has one,
  * or a large icon that shows what kind of file it is. The card's name link
  * covers it, so screen readers skip it. */
-function CardPreview({ item }: { item: Item }) {
+export function CardPreview({ item }: { item: Item }) {
   const [failed, setFailed] = useState(false);
   const kind = item.sha256 && !failed ? item.thumbnail : null;
   // The hash changes with each version, so browsers keep each thumbnail
@@ -717,9 +739,34 @@ function TextPreview({ src, onError }: { src: string; onError: () => void }) {
   );
 }
 
-/** Switches every list between rows and a grid. */
+/** The buttons beside a page's title: one that opens the details panel, and
+ * the switch between rows and a grid. */
+export function PageTools() {
+  const drive = useDrive();
+  const [detailsOpen, setDetailsOpen] = useDetailsOpen();
+  useEffect(() => {
+    drive.offerDetails(true);
+    return () => drive.offerDetails(false);
+  }, []);
+  return (
+    <div class="page-tools">
+      <button
+        type="button"
+        class="icon-button"
+        aria-pressed={detailsOpen}
+        aria-label={t("details.show")}
+        title={t("details.show")}
+        onClick={() => setDetailsOpen(!detailsOpen)}
+      >
+        <InfoIcon />
+      </button>
+      <ViewToggle />
+    </div>
+  );
+}
 
-export function ViewToggle() {
+/** Switches every list between rows and a grid. */
+function ViewToggle() {
   const [mode, setMode] = useViewMode();
   return (
     <div class="view-toggle" role="group" aria-label={t("drive.layout")}>

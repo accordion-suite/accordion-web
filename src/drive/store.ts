@@ -1,7 +1,8 @@
 // What Drive's pages share: whether items show as a list or a grid, how
-// they're sorted, news that something changed, so the page and the sidebar load again, and the
-// folders the app has seen, so a folder's path shows without asking the
-// server for every folder above it each time.
+// they're sorted, whether the details panel is open, news that something
+// changed, so the page and the sidebar load again, and the folders the app
+// has seen, so a folder's path shows without asking the server for every
+// folder above it each time.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
@@ -13,6 +14,8 @@ export type ViewMode = "list" | "grid";
 
 const VIEW_KEY = "accordion.drive.view";
 const VIEW_CHANGED = "accordion:drive-view";
+const DETAILS_KEY = "accordion.drive.details";
+const DETAILS_CHANGED = "accordion:drive-details";
 const SORT_CHANGED = "accordion:drive-sort";
 const CHANGED = "accordion:drive-changed";
 
@@ -45,6 +48,37 @@ export function useViewMode(): [ViewMode, (mode: ViewMode) => void] {
       }
       setMode(next);
       window.dispatchEvent(new Event(VIEW_CHANGED));
+    },
+  ];
+}
+
+/** Whether the details panel is open. Like the view, it's kept in this
+ * browser only, and starts closed when the browser keeps nothing. */
+export function useDetailsOpen(): [boolean, (open: boolean) => void] {
+  const read = (): boolean => {
+    try {
+      return localStorage.getItem(DETAILS_KEY) === "open";
+    } catch {
+      return false;
+    }
+  };
+  const [open, setOpen] = useState(read);
+  useEffect(() => {
+    const update = () => setOpen(read());
+    window.addEventListener(DETAILS_CHANGED, update);
+    return () => window.removeEventListener(DETAILS_CHANGED, update);
+  }, []);
+  return [
+    open,
+    (next) => {
+      try {
+        if (next) localStorage.setItem(DETAILS_KEY, "open");
+        else localStorage.removeItem(DETAILS_KEY);
+      } catch {
+        // The panel stays as it is until the page reloads.
+      }
+      setOpen(next);
+      window.dispatchEvent(new Event(DETAILS_CHANGED));
     },
   ];
 }

@@ -11,7 +11,7 @@ import { t } from "../i18n.ts";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
 import { PageTitle } from "../shell/page.tsx";
 import { followLink } from "../shell/router.ts";
-import { ItemList, ViewToggle, folderPath } from "./item-list.tsx";
+import { ItemList, PageTools, folderPath } from "./item-list.tsx";
 import { type Item, canEdit } from "./item.ts";
 import { typing, useDrive, useTarget } from "./layout.tsx";
 import { pathTo, remember, useChanges } from "./store.ts";
@@ -61,6 +61,11 @@ export function FolderPage({ folder }: { folder: string | null }) {
 
   useEffect(refresh, [folder]);
   useChanges(refresh);
+  // With nothing selected, the details panel shows the folder.
+  useEffect(() => {
+    drive.setPageItem(here);
+    return () => drive.setPageItem(null);
+  }, [here]);
   const editable = here !== null && canEdit(here);
   // New in a folder the reader can only view goes to My Drive.
   useTarget(editable ? here : null, editable, loaded?.path.map((item) => item.id) ?? []);
@@ -118,7 +123,7 @@ export function FolderPage({ folder }: { folder: string | null }) {
             </li>
           </ol>
         </nav>
-        <ViewToggle />
+        <PageTools />
       </div>
       {loaded.children.length === 0 ? (
         <div class="empty">

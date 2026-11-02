@@ -369,7 +369,7 @@ interface Person {
 
 /** Someone an item is shared with, as `/api/drive/items/{id}/shares` lists
  * them. */
-interface ShareEntry {
+export interface ShareEntry {
   user: string;
   username: string;
   display_name: string;

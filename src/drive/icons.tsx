@@ -119,6 +119,15 @@ export const CloseIcon = () => (
   </Icon>
 );
 
+export const InfoIcon = () => (
+  <Icon>
+    <path
+      d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20m0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16m-1 6h2v7h-2zm0-3h2v2h-2z"
+      fill="currentColor"
+    />
+  </Icon>
+);
+
 export const CheckIcon = () => (
   <Icon>
     <path d="m9.5 16.2-4.2-4.2-1.4 1.4 5.6 5.6 11-11-1.4-1.4z" fill="currentColor" />

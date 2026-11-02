@@ -5,7 +5,7 @@
 import { t } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
 import { FoundList, useFound } from "./home-page.tsx";
-import { ViewToggle } from "./item-list.tsx";
+import { PageTools } from "./item-list.tsx";
 import { useTarget } from "./layout.tsx";
 
 export function SharedPage() {
@@ -16,7 +16,7 @@ export function SharedPage() {
     <main class="page">
       <div class="page-head">
         <PageTitle>{t("shared.title")}</PageTitle>
-        <ViewToggle />
+        <PageTools />
       </div>
       <FoundList items={items} error={error} label={t("shared.title")} empty={t("shared.empty")} owners />
     </main>

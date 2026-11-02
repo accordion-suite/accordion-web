@@ -1,7 +1,8 @@
 // Drive's frame around each of its pages: the top bar with search, and the
 // sidebar with New, the places to go, the folders in My Drive, and how much
 // space is used. Notices, such as "Moved to the trash", appear along the
-// bottom, with Undo where something can be undone.
+// bottom, with Undo where something can be undone. The details panel, when
+// it's open, is a column on the right.
 //
 // New works the same on every page. It uploads into, or makes a folder in,
 // the folder that's open, or My Drive on pages that aren't a folder or in a
@@ -17,6 +18,7 @@ import { formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
 import { followLink, usePath } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
+import { DetailsPanel } from "./details.tsx";
 import { ClashDialog, NameDialog } from "./dialogs.tsx";
 import {
   type Child,
@@ -46,7 +48,7 @@ import {
 import type { Item } from "./item.ts";
 import { dropProps } from "./move.ts";
 import { SearchBox } from "./search-box.tsx";
-import { announceChange, useChanges } from "./store.ts";
+import { announceChange, useChanges, useDetailsOpen } from "./store.ts";
 import { finished } from "./uploads.ts";
 
 /** Something to tell the reader, such as what just changed. */
@@ -65,6 +67,14 @@ interface DriveFrame {
   /** The menu that New opens, for a page's own right-click menu. */
   newEntries(): MenuEntry[];
   notify(notice: Notice | null): void;
+  /** Tells the details panel what's selected on the page. */
+  select(items: readonly Item[]): void;
+  /** Tells the details panel what the page is about, for when nothing is
+   * selected, such as the folder that's open. */
+  setPageItem(item: Item | null): void;
+  /** Says whether the page has the details panel. Pages that offer it show
+   * the button that opens it. */
+  offerDetails(offered: boolean): void;
 }
 
 const Frame = createContext<DriveFrame | null>(null);
@@ -132,6 +142,11 @@ export function DriveLayout({
   const [dropping, setDropping] = useState(false);
   const [dropOn, setDropOn] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selection, setSelection] = useState<readonly Item[]>([]);
+  const [pageItem, setPageItem] = useState<Item | null>(null);
+  const [detailsOffered, setDetailsOffered] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useDetailsOpen();
+  const showDetails = detailsOpen && detailsOffered;
   const dragDepth = useRef(0);
   const chooser = useRef<HTMLInputElement>(null);
   const folderChooser = useRef<HTMLInputElement>(null);
@@ -267,11 +282,14 @@ export function DriveLayout({
     setTarget: (folder, drops, trail) => setTargetState({ folder, drops, trail }),
     newEntries,
     notify,
+    select: setSelection,
+    setPageItem,
+    offerDetails: setDetailsOffered,
   };
 
   return (
     <Frame.Provider value={frame}>
-      <div class={sidebarOpen ? "frame sidebar-open" : "frame"}>
+      <div class={["frame", sidebarOpen && "sidebar-open", showDetails && "details-open"].filter(Boolean).join(" ")}>
         <TopBar
           session={session}
           onSignOut={onSignOut}
@@ -343,6 +361,12 @@ export function DriveLayout({
           )}
           {children}
         </div>
+        {showDetails && (
+          <DetailsPanel
+            items={selection.length > 0 ? selection : pageItem ? [pageItem] : []}
+            onClose={() => setDetailsOpen(false)}
+          />
+        )}
         <input ref={chooser} type="file" multiple hidden onChange={(event) => chosen(event, false)} />
         <input
           ref={folderChooser}
