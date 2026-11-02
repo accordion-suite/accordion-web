@@ -24,6 +24,10 @@ export const en = {
   "shell.mainMenu": "Main menu",
   "shell.account": "Account: {name}",
 
+  "update.ready": "Accordion was updated.",
+  "update.reload": "Reload",
+  "update.close": "Not now",
+
   "settings.title": "Settings",
   "settings.loadFailed": "Accordion couldn't load Settings. Reload the page, then try again.",
 

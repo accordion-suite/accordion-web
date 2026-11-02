@@ -8,6 +8,7 @@ import { FolderPage } from "../drive/folder-page.tsx";
 import { HomePage } from "../drive/home-page.tsx";
 import { driveSettings, forgetDriveSettings, startPath } from "../drive/preferences.ts";
 import { uploads } from "../drive/http-transport.ts";
+import { CloseIcon } from "../drive/icons.tsx";
 import { DriveLayout, forgetSidebar } from "../drive/layout.tsx";
 import { SearchPage } from "../drive/search-page.tsx";
 import { SharedPage } from "../drive/shared-page.tsx";
@@ -20,8 +21,19 @@ import { PageTitle } from "./page.tsx";
 import { followLink, navigate, usePath } from "./router.ts";
 import { SignIn } from "./sign-in.tsx";
 import { TopBar } from "./top-bar.tsx";
+import { checkForUpdate, useUpdateReady } from "./update.ts";
 
 export function App() {
+  return (
+    <>
+      <Shell />
+      <UpdateNotice />
+    </>
+  );
+}
+
+/** Sign-in, or the signed-in app. */
+function Shell() {
   // Undefined while the app finds out whether someone is signed in.
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [error, setError] = useState("");
@@ -177,7 +189,10 @@ function LazySettings(props: Parameters<SettingsModule["Settings"]>[0]) {
         setLoaded(module);
       },
       // Such as after a server update, when the old code is gone.
-      () => setFailed(true),
+      () => {
+        setFailed(true);
+        void checkForUpdate();
+      },
     );
   }, []);
 
@@ -192,6 +207,35 @@ function LazySettings(props: Parameters<SettingsModule["Settings"]>[0]) {
   }
   if (!loaded) return <p class="loading">{t("shell.loading")}</p>;
   return <loaded.Settings {...props} />;
+}
+
+/** Offers to reload when the server has a newer web app. It doesn't reload
+ * by itself, because the reader may be in the middle of something. */
+function UpdateNotice() {
+  const ready = useUpdateReady();
+  const [closed, setClosed] = useState(false);
+  const shown = ready && !closed;
+
+  // Drive's notices move up out of its way.
+  useEffect(() => {
+    document.documentElement.classList.toggle("update-shown", shown);
+  }, [shown]);
+
+  return (
+    <div class="update-area" role="status">
+      {shown && (
+        <div class="notice">
+          <span>{t("update.ready")}</span>
+          <button type="button" class="link notice-undo" onClick={() => location.reload()}>
+            {t("update.reload")}
+          </button>
+          <button type="button" class="icon-button" aria-label={t("update.close")} onClick={() => setClosed(true)}>
+            <CloseIcon />
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function NotFound() {
