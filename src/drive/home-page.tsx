@@ -27,7 +27,7 @@ export function useFound(address: string): { items: Found[] | null; error: strin
     );
   };
   useEffect(refresh, [address]);
-  useChanges(refresh);
+  useChanges(refresh, { list: true });
   return { items, error };
 }
 

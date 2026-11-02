@@ -81,6 +81,7 @@ class FakeServer implements Transport {
       size: content.length,
       sha256: null,
       preview: null,
+      preview_partial: false,
       thumbnail: null,
       created_at: "2026-10-29T00:00:00Z",
       modified_at: "2026-10-29T00:00:00Z",

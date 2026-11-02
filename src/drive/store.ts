@@ -17,6 +17,7 @@ const VIEW_CHANGED = "accordion:drive-view";
 const DETAILS_KEY = "accordion.drive.details";
 const DETAILS_CHANGED = "accordion:drive-details";
 const SORT_CHANGED = "accordion:drive-sort";
+const LOOK_AGAIN = "accordion:drive-look-again";
 const CHANGED = "accordion:drive-changed";
 
 const folders = new Map<string, Item>();
@@ -123,14 +124,26 @@ export function announceChange(): void {
   window.dispatchEvent(new Event(CHANGED));
 }
 
-/** Calls the latest `listener` after each change. */
-export function useChanges(listener: () => void): void {
+/** Asks Drive's pages to load their lists again, to pick up thumbnails the
+ * server has made since. Nothing else changed, so the sidebar stays as it
+ * is. */
+export function lookAgain(): void {
+  window.dispatchEvent(new Event(LOOK_AGAIN));
+}
+
+/** Calls the latest `listener` after each change, and, for a page's list,
+ * when it should look again for thumbnails. */
+export function useChanges(listener: () => void, { list = false } = {}): void {
   const latest = useRef(listener);
   latest.current = listener;
   useEffect(() => {
     const run = () => latest.current();
     window.addEventListener(CHANGED, run);
-    return () => window.removeEventListener(CHANGED, run);
+    if (list) window.addEventListener(LOOK_AGAIN, run);
+    return () => {
+      window.removeEventListener(CHANGED, run);
+      window.removeEventListener(LOOK_AGAIN, run);
+    };
   }, []);
 }
 

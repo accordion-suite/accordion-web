@@ -36,6 +36,7 @@ import { useDriveSettings } from "./preferences.ts";
 import { dropProps, endDrag, naming, startDrag } from "./move.ts";
 import { nextSort, type SortKey, sortItems } from "./sort.ts";
 import { announceChange, useDetailsOpen, useSort, useViewMode } from "./store.ts";
+import { useThumbnailWait } from "./thumbnails.ts";
 import { Viewer } from "./viewer.tsx";
 
 /** A folder's page. My Drive has its own address. */
@@ -117,6 +118,7 @@ export function ItemList({
 }) {
   const thumbnails = useDriveSettings()?.thumbnails ?? true;
   const drive = useDrive();
+  useThumbnailWait(items);
   const [mode] = useViewMode();
   const [sort, setSort] = useSort(showLocation ? "found" : "folder");
   const [dropOn, setDropOn] = useState<string | null>(null);
@@ -686,8 +688,9 @@ export function CardPreview({ item }: { item: Item }) {
   // The hash changes with each version, so browsers keep each thumbnail
   // and fetch a new one when the file changes.
   const src = `/api/drive/items/${item.id}/thumbnail?v=${item.sha256}`;
+  const page = item.preview === "pdf" || item.preview === "document" ? " is-page" : "";
   return (
-    <div class={kind ? `card-preview has-thumbnail has-${kind}` : "card-preview"} aria-hidden="true">
+    <div class={kind ? `card-preview has-thumbnail has-${kind}${page}` : "card-preview"} aria-hidden="true">
       {kind === "picture" ? (
         <img
           src={src}

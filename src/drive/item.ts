@@ -7,8 +7,12 @@ export interface Item {
   size: number | null;
   /** For files: the SHA-256 hash of the current version's contents. */
   sha256: string | null;
-  /** For files the browser can show itself. */
-  preview: "image" | "pdf" | "video" | "audio" | null;
+  /** For files the browser can show itself, or "document" for an Office
+   * document the server has made a PDF of. */
+  preview: "image" | "pdf" | "video" | "audio" | "document" | null;
+  /** For a document: whether its preview stops at its first pages, so the
+   * document may go on past them. */
+  preview_partial: boolean;
   /** What thumbnail the server has of the file yet: a small picture, or a
    * text file's first lines. */
   thumbnail: "picture" | "text" | null;

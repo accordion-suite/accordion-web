@@ -20,6 +20,7 @@ function item(
     size,
     sha256: null,
     preview: null,
+    preview_partial: false,
     thumbnail: null,
     created_at: modified,
     modified_at: modified,

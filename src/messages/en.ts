@@ -160,6 +160,11 @@ export const en = {
   "viewer.close": "Close",
   "viewer.pdfNarrow": "On a small screen, PDFs open in a tab of their own.",
   "viewer.openPdf": "Open the PDF",
+  "viewer.document": "This is a preview, so it may look a little different from the document itself.",
+  "viewer.documentCut":
+    "This is a preview of the first {pages} pages, and it may look a little different from the document itself. Download it to see all of it.",
+  "viewer.documentNarrow": "On a small screen, previews open in a tab of their own.",
+  "viewer.openPreview": "Open the preview",
   "viewer.textCut": "This file is long, so Accordion shows its first {size}. Download it to see the rest.",
   "viewer.noPreview": "Accordion can't show {name} here. Download it to open it on your device.",
   "viewer.audioFailed": "This browser can't play {name}. Download it to listen to it in another app.",

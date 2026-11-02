@@ -60,7 +60,7 @@ export function FolderPage({ folder }: { folder: string | null }) {
   }
 
   useEffect(refresh, [folder]);
-  useChanges(refresh);
+  useChanges(refresh, { list: true });
   // With nothing selected, the details panel shows the folder.
   useEffect(() => {
     drive.setPageItem(here);

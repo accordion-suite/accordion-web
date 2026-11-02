@@ -1,8 +1,9 @@
 // Shows a file from a folder over the folder's page, with the folder's other
 // files a step away. The browser shows photos, PDFs, videos, and audio itself,
-// from Drive's preview address, and the viewer shows text files as a page of
-// text. Other files, and videos and songs the browser can't play, show their
-// thumbnail or icon and offer the download.
+// from Drive's preview address, and Office documents as the PDF the server
+// made of them. The viewer shows text files as a page of text. Other files,
+// and videos and songs the browser can't play, show their thumbnail or icon
+// and offer the download.
 
 import { useEffect, useState } from "preact/hooks";
 
@@ -14,6 +15,9 @@ import type { Item } from "./item.ts";
 /** Small screens open PDFs in their own tab, because phones show a PDF in a
  * page badly or not at all. Matches the phone layout in app.css. */
 const NARROW = "(max-width: 600px)";
+
+/** The most pages a document's preview has, as the server makes them. */
+const PREVIEW_PAGES = 50;
 
 /** The most of a text file the viewer shows, so a huge log doesn't freeze
  * the page. The download has the rest. */
@@ -169,6 +173,27 @@ function Shown({ file }: { file: Item }) {
               if (event.currentTarget.videoWidth === 0) setState("failed");
             }}
           />
+        )}
+      </div>
+    );
+  }
+  if (file.preview === "document") {
+    return (
+      <div class="viewer-body">
+        {narrow ? (
+          <div class="viewer-note">
+            <p>{t("viewer.documentNarrow")}</p>
+            <a class="button" href={address} target="_blank" rel="noopener">
+              {t("viewer.openPreview")}
+            </a>
+          </div>
+        ) : (
+          <div class="viewer-document">
+            <p class="viewer-document-note">
+              {file.preview_partial ? t("viewer.documentCut", { pages: PREVIEW_PAGES }) : t("viewer.document")}
+            </p>
+            <iframe src={address} title={file.name} />
+          </div>
         )}
       </div>
     );
