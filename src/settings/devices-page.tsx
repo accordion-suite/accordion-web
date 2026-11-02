@@ -138,6 +138,10 @@ function CreateDialog({
           <dd>
             <code>{`${location.origin}/dav/drive/`}</code>
           </dd>
+          <dt>{t("devices.sharedAddress")}</dt>
+          <dd>
+            <code>{`${location.origin}/dav/shared/`}</code>
+          </dd>
           <dt>{t("devices.username")}</dt>
           <dd>
             <code>{username}</code>

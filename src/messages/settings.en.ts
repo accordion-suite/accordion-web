@@ -60,6 +60,7 @@ export const settingsEn = {
   "devices.createdBody": "Enter it on that device now. You won't see it again.",
   "devices.spaces": "Spaces are optional.",
   "devices.address": "Address",
+  "devices.sharedAddress": "Shared with you, as a second drive",
   "devices.username": "Username",
   "devices.windows":
     "Windows: in File Explorer, right-click This PC, select Map network drive, and enter the address.",
