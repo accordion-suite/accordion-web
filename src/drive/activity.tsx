@@ -3,11 +3,12 @@
 // row by the same person, of the same kind, on the same day, show as one,
 // such as "Sam Rivera uploaded 12 items", with the items listed under it.
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { type MessageKey, t } from "../i18n.ts";
 import { detail, type EventItem, type EventPage, itemName, type LoggedEvent, personName, viaText, when, who } from "../shell/events.ts";
+import { useLive } from "../shell/live.ts";
 import { ItemIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
 
@@ -133,22 +134,32 @@ export function ActivityTab({ item, me }: { item: Item; me: string }) {
   const [loading, setLoading] = useState(false);
   const address = `/api/drive/items/${item.id}/activity`;
 
-  useEffect(() => {
-    let current = true;
-    setEvents(null);
+  // The newest page, loaded again when the server says the item or its
+  // folder changed. Older pages loaded since are let go.
+  const latest = useRef(0);
+  function load() {
+    const asked = ++latest.current;
     api<EventPage>("GET", address).then(
       (page) => {
-        if (!current) return;
+        if (asked !== latest.current) return;
         setEvents(page.events);
         setMore(page.more);
         setError("");
       },
-      (problem: Error) => current && setError(problem.message),
+      (problem: Error) => asked === latest.current && setError(problem.message),
     );
+  }
+
+  useEffect(() => {
+    setEvents(null);
+    load();
     return () => {
-      current = false;
+      latest.current++;
     };
-  }, [item]);
+  }, [item.id]);
+  useLive("drive.items", (ids) => {
+    if (ids === null || ids.includes(item.id) || (item.parent !== null && ids.includes(item.parent))) load();
+  });
 
   async function loadMore() {
     const last = events?.[events.length - 1];

@@ -1,8 +1,10 @@
 // The bell in the top bar: what the reader should hear about, such as a
 // folder shared with them, or someone adding files to one they shared
-// (decision 18). It checks every minute while the page is in view. Opening
-// it clears the count, and each notification stays highlighted until it's
-// selected. Each can be removed, or all of them at once.
+// (decision 18). It loads again when the server says the reader's
+// notifications changed (decision 19), and when the page comes back into
+// view. Opening it clears the count, and each notification stays
+// highlighted until it's selected. Each can be removed, or all of them at
+// once.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
@@ -17,10 +19,8 @@ import {
   type Notifications,
   when,
 } from "./events.ts";
+import { useLive } from "./live.ts";
 import { followLink } from "./router.ts";
-
-/** How often the bell checks, while the page is in view. */
-const EVERY_MS = 60_000;
 
 const BellIcon = () => (
   <Icon>
@@ -56,18 +56,13 @@ export function NotificationsButton({ me }: { me: string }) {
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") void load();
-    }, EVERY_MS);
     const shown = () => {
       if (document.visibilityState === "visible") void load();
     };
     document.addEventListener("visibilitychange", shown);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", shown);
-    };
+    return () => document.removeEventListener("visibilitychange", shown);
   }, []);
+  useLive("notifications", () => void load());
 
   // Closes on Escape, or a press outside the list.
   useEffect(() => {

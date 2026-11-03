@@ -19,6 +19,7 @@ import { forgetFolders } from "../drive/store.ts";
 import { TrashPage } from "../drive/trash-page.tsx";
 import { UploadPanel } from "../drive/upload-panel.tsx";
 import { t } from "../i18n.ts";
+import { startLive } from "./live.ts";
 import { PageTitle } from "./page.tsx";
 import { followLink, navigate, usePath } from "./router.ts";
 import { SignIn } from "./sign-in.tsx";
@@ -98,6 +99,9 @@ function SignedIn({
   onSignedOut: () => void;
 }) {
   const path = usePath();
+
+  // One stream of live updates for each tab while someone is signed in.
+  useEffect(startLive, []);
 
   useEffect(() => {
     // A file dropped outside a folder's page would otherwise open in the

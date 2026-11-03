@@ -49,7 +49,6 @@ import { clearFilters, FilterBar, useFilters } from "./filter-bar.tsx";
 import { matches } from "./filters.ts";
 import { neighbor, range, useSelectionBand } from "./selection.ts";
 import { announceChange, type SortScope, useDetailsOpen, useSort, useViewMode } from "./store.ts";
-import { useThumbnailWait } from "./thumbnails.ts";
 import { Viewer } from "./viewer.tsx";
 
 /** A folder's page. My Drive has its own address. */
@@ -155,7 +154,6 @@ export function ItemList({
 }) {
   const thumbnails = useDriveSettings()?.thumbnails ?? true;
   const drive = useDrive();
-  useThumbnailWait(all);
   const filters = useFilters();
   // The same list until the items or the filters change, since effects
   // below run when it does.

@@ -1,12 +1,13 @@
 // What Drive's pages share: whether items show as a list or a grid, how
 // they're sorted, whether the details panel is open, news that something
-// changed, so the page and the sidebar load again, and the folders the app
-// has seen, so a folder's path shows without asking the server for every
-// folder above it each time.
+// changed, here or on the server, so the page and the sidebar load again,
+// and the folders the app has seen, so a folder's path shows without asking
+// the server for every folder above it each time.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { ApiError, api } from "../api.ts";
+import { onLive } from "../shell/live.ts";
 import type { Item } from "./item.ts";
 import { readSort, type Sort } from "./sort.ts";
 
@@ -17,10 +18,23 @@ const VIEW_CHANGED = "accordion:drive-view";
 const DETAILS_KEY = "accordion.drive.details";
 const DETAILS_CHANGED = "accordion:drive-details";
 const SORT_CHANGED = "accordion:drive-sort";
-const LOOK_AGAIN = "accordion:drive-look-again";
 const CHANGED = "accordion:drive-changed";
+/** The server's news that folders' lists changed. Its detail is the
+ * folders' IDs, none for lists across folders such as Shared with me, or
+ * null to load everything again. */
+const LIVE = "accordion:drive-live";
 
 const folders = new Map<string, Item>();
+
+function announceLive(ids: string[] | null): void {
+  // A folder named in a hint may have been renamed or moved.
+  if (ids === null) folders.clear();
+  else for (const id of ids) folders.delete(id);
+  window.dispatchEvent(new CustomEvent(LIVE, { detail: ids }));
+}
+
+onLive("drive.items", announceLive);
+onLive("drive.shared", (ids) => announceLive(ids === null ? null : []));
 
 /** The reader's choice of list or grid. It's kept in this browser only, and
  * the list is used when the browser keeps nothing, such as in a private
@@ -128,25 +142,25 @@ export function announceChange(): void {
   window.dispatchEvent(new Event(CHANGED));
 }
 
-/** Asks Drive's pages to load their lists again, to pick up thumbnails the
- * server has made since. Nothing else changed, so the sidebar stays as it
- * is. */
-export function lookAgain(): void {
-  window.dispatchEvent(new Event(LOOK_AGAIN));
-}
-
-/** Calls the latest `listener` after each change, and, for a page's list,
- * when it should look again for thumbnails. */
-export function useChanges(listener: () => void, { list = false } = {}): void {
+/** Calls the latest `listener` after each change in this tab, and when the
+ * server says something changed: in `folder`, if there is one, or in any
+ * folder for a list across folders. */
+export function useChanges(listener: () => void, { folder }: { folder?: string } = {}): void {
   const latest = useRef(listener);
   latest.current = listener;
+  const watched = useRef(folder);
+  watched.current = folder;
   useEffect(() => {
     const run = () => latest.current();
+    const live = (event: Event) => {
+      const ids = (event as CustomEvent<string[] | null>).detail;
+      if (ids === null || watched.current === undefined || ids.includes(watched.current)) run();
+    };
     window.addEventListener(CHANGED, run);
-    if (list) window.addEventListener(LOOK_AGAIN, run);
+    window.addEventListener(LIVE, live);
     return () => {
       window.removeEventListener(CHANGED, run);
-      window.removeEventListener(LOOK_AGAIN, run);
+      window.removeEventListener(LIVE, live);
     };
   }, []);
 }

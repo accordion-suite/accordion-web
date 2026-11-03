@@ -27,7 +27,7 @@ export function useFound<T extends Found = Found>(address: string): { items: T[]
     );
   };
   useEffect(refresh, [address]);
-  useChanges(refresh, { list: true });
+  useChanges(refresh);
   return { items, error };
 }
 

@@ -548,7 +548,7 @@ function FolderTree({
   }
 
   useEffect(load, [parent]);
-  useChanges(load);
+  useChanges(load, { folder: parent });
 
   // The path to the open folder opens in the tree, so it's in view.
   for (const id of trail) expanded.add(id);
