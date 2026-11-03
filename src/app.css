@@ -457,6 +457,99 @@ main.narrow {
   outline: none;
 }
 
+/* Search options sits at the end of the box, as in Google Drive. */
+.search .search-options-button {
+  margin-right: -8px;
+}
+
+/* The panel of search options opens under the search box, with a label
+   beside each field. */
+dialog.search-options {
+  position: relative;
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100dvh - 96px);
+  margin-top: 72px;
+  overflow-y: auto;
+}
+
+dialog.search-options .dialog-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.option-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  align-items: start;
+  gap: 4px 16px;
+  margin-top: 16px;
+}
+
+.option-row > label {
+  margin: 10px 0 0;
+}
+
+.option-control > select {
+  width: auto;
+  min-width: 240px;
+  max-width: 100%;
+}
+
+.option-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 12px;
+}
+
+.option-checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-weight: 400;
+}
+
+.option-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.option-dates label {
+  flex: 1;
+  min-width: 160px;
+  margin: 0;
+  font-weight: 400;
+}
+
+/* On a phone, the panel fills the screen, with each label above its field. */
+@media (max-width: 600px) {
+  dialog.search-options {
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .option-row {
+    grid-template-columns: 1fr;
+  }
+
+  .option-row > label {
+    margin: 0;
+  }
+
+  .option-control > select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 .avatar {
   flex: none;
   width: 36px;
@@ -1600,6 +1693,37 @@ table.items .actions {
   mask-image: linear-gradient(to bottom, #000 70%, transparent);
   pointer-events: none;
   user-select: none;
+}
+
+/* A line of text from inside a search result, with the words it matched
+   in bold. */
+.snippet {
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+table.items .snippet {
+  /* Under the name, past its icon. */
+  margin-left: 38px;
+  margin-bottom: 6px;
+}
+
+.card .snippet {
+  margin: 8px 14px 0;
+}
+
+.snippet mark {
+  font-weight: 700;
+  color: var(--text);
+  background: transparent;
 }
 
 .card-meta {

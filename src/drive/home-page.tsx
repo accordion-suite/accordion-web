@@ -1,6 +1,7 @@
 // Drive's home page: the reader's files, most recently changed first, from
 // every folder, so what they're working on is a step away.
 
+import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
@@ -57,6 +58,7 @@ export function FoundList({
   owners = false,
   shares = false,
   sortScope,
+  toolbar,
 }: {
   items: Found[] | null;
   error: string;
@@ -67,6 +69,9 @@ export function FoundList({
   /** Shows who each item is shared with and when, for Shared by me. */
   shares?: boolean;
   sortScope?: SortScope;
+  /** Filters in place of the list's own, for a page whose server applies
+   * them. */
+  toolbar?: ComponentChildren;
 }) {
   if (error) {
     return (
@@ -87,6 +92,7 @@ export function FoundList({
       shares={shares}
       empty={empty}
       sortScope={sortScope}
+      toolbar={toolbar}
     />
   );
 }

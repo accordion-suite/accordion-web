@@ -101,9 +101,10 @@ export function useDetailsOpen(): [boolean, (open: boolean) => void] {
 /** The reader's sort for folders, or for lists across folders, such as Home
  * and search, which start in their own order. Each is kept in this browser
  * only, and lasts until the page reloads when the browser keeps nothing. */
-/** Where a sort is remembered: folders, lists across folders, and the
- * storage and Shared by me pages, which have their own columns or order. */
-export type SortScope = "folder" | "found" | "storage" | "shared-by-me";
+/** Where a sort is remembered: folders, lists across folders, search
+ * results, which start best match first, and the storage and Shared by me
+ * pages, which have their own columns or order. */
+export type SortScope = "folder" | "found" | "search" | "storage" | "shared-by-me";
 
 export function useSort(scope: SortScope): [Sort | null, (sort: Sort) => void] {
   const key = `accordion.drive.sort.${scope}`;

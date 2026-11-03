@@ -1,8 +1,8 @@
 // Drive's dialogs: naming a new folder or renaming, choosing where to move
-// to, choosing what an upload does to items with its names, a file's
-// versions, and sharing.
+// to or a folder to search in, choosing what an upload does to items with
+// its names, a file's versions, and sharing.
 
-import type { TargetedSubmitEvent } from "preact";
+import type { Ref, TargetedSubmitEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { ApiError, api } from "../api.ts";
@@ -221,39 +221,99 @@ export function MoveDialog({
 
   return (
     <Dialog title={title} onClose={onClose}>
-      {shown ? (
-        <>
-          <h3 ref={location} tabIndex={-1} class="move-location">
-            {name(shown.folder)}
-          </h3>
-          {shown.parent && (
-            <button type="button" class="link" onClick={() => open(shown.parent!.id)}>
-              {t("drive.up", { name: name(shown.parent) })}
-            </button>
-          )}
-          {shown.folders.length === 0 ? (
-            <p class="hint">{t("drive.noSubfolders")}</p>
-          ) : (
-            <ul class="move-folders" aria-label={t("drive.foldersIn", { name: name(shown.folder) })}>
-              {shown.folders.map((folder) => (
-                <li key={folder.id}>
-                  <button type="button" class="link" onClick={() => open(folder.id)}>
-                    {folder.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      ) : (
-        !error && <p class="loading">{t("shell.loading")}</p>
-      )}
+      <FolderBrowser shown={shown} error={error} heading={location} name={name} open={open} />
       <p class="error" role="alert">
         {error}
       </p>
       <div class="dialog-buttons">
         <button type="button" disabled={busy || !shown || already} onClick={move}>
           {shown ? t("drive.moveHere", { name: name(shown.folder) }) : t("drive.move")}
+        </button>
+        <button type="button" class="secondary" onClick={onClose}>
+          {t("dialog.cancel")}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** A folder's name, and the folders in it to open, for choosing one. */
+function FolderBrowser({
+  shown,
+  error,
+  heading,
+  name,
+  open,
+}: {
+  shown: Place | null;
+  error: string;
+  heading: Ref<HTMLHeadingElement>;
+  name: (folder: Item) => string;
+  open: (id: string) => void;
+}) {
+  if (!shown) return !error ? <p class="loading">{t("shell.loading")}</p> : null;
+  return (
+    <>
+      <h3 ref={heading} tabIndex={-1} class="move-location">
+        {name(shown.folder)}
+      </h3>
+      {shown.parent && (
+        <button type="button" class="link" onClick={() => open(shown.parent!.id)}>
+          {t("drive.up", { name: name(shown.parent) })}
+        </button>
+      )}
+      {shown.folders.length === 0 ? (
+        <p class="hint">{t("drive.noSubfolders")}</p>
+      ) : (
+        <ul class="move-folders" aria-label={t("drive.foldersIn", { name: name(shown.folder) })}>
+          {shown.folders.map((folder) => (
+            <li key={folder.id}>
+              <button type="button" class="link" onClick={() => open(folder.id)}>
+                {folder.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** Lets the reader browse to one of their folders, for a search to look
+ * in it and the folders inside it. */
+export function ChooseFolderDialog({
+  onChosen,
+  onClose,
+}: {
+  onChosen: (id: string, name: string) => void;
+  onClose: () => void;
+}) {
+  const [at, setAt] = useState<string | null>(null);
+  const [shown, setShown] = useState<Place | null>(null);
+  const [error, setError] = useState("");
+  const location = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    setError("");
+    place(at, new Set()).then(setShown, (problem) => setError(message(problem)));
+  }, [at]);
+
+  const name = (folder: Item) => (folder.parent === null ? t("drive.myDrive") : folder.name);
+
+  function open(id: string) {
+    setAt(id);
+    location.current?.focus();
+  }
+
+  return (
+    <Dialog title={t("search.chooseFolder")} onClose={onClose}>
+      <FolderBrowser shown={shown} error={error} heading={location} name={name} open={open} />
+      <p class="error" role="alert">
+        {error}
+      </p>
+      <div class="dialog-buttons">
+        <button type="button" disabled={!shown} onClick={() => shown && onChosen(shown.folder.id, name(shown.folder))}>
+          {shown ? t("search.searchIn", { name: name(shown.folder) }) : t("search.search")}
         </button>
         <button type="button" class="secondary" onClick={onClose}>
           {t("dialog.cancel")}
@@ -362,7 +422,7 @@ export function VersionsDialog({
 }
 
 /** Someone on the server, as `/api/directory` lists them. */
-interface Person {
+export interface Person {
   id: string;
   username: string;
   display_name: string;

@@ -8,9 +8,11 @@ import { Menu, type MenuPlace } from "../shell/menu.tsx";
 import { navigate, useQuery } from "../shell/router.ts";
 import { FILTER_NAMES, type Filters, ownedBy, owners, sharedWith, sharees } from "./filters.ts";
 import { CheckIcon, DropdownIcon } from "./icons.tsx";
+import { MODIFIED } from "./search.ts";
 import type { Item } from "./item.ts";
 
-const TYPES: readonly [string, string][] = [
+/** The type filter's choices, with their messages. */
+export const TYPES: readonly [string, string][] = [
   ["folders", "search.folders"],
   ["documents", "search.documents"],
   ["spreadsheets", "search.spreadsheets"],
@@ -22,13 +24,6 @@ const TYPES: readonly [string, string][] = [
   ["archives", "search.archives"],
 ];
 
-const MODIFIED: readonly [string, string][] = [
-  ["today", "search.today"],
-  ["week", "search.week"],
-  ["month", "search.month"],
-  ["year", "search.thisYear"],
-  ["last-year", "search.lastYear"],
-];
 
 /** The filters in the page's address. */
 export function useFilters(): Filters {
@@ -137,12 +132,13 @@ export function FilterBar({
   );
 }
 
-function named(choices: readonly [string, string][]): [string, string][] {
+/** Choices with their messages' keys, as choices with their words. */
+export function named(choices: readonly [string, string][]): [string, string][] {
   return choices.map(([value, key]) => [value, t(key as MessageKey)]);
 }
 
 /** A filter's button, which shows what's chosen and opens the choices. */
-function Filter({
+export function Filter({
   label,
   choices,
   chosen,

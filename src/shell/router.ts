@@ -29,6 +29,12 @@ export function useQuery(name: string): string | null {
   return useAddress(() => new URLSearchParams(location.search).get(name));
 }
 
+/** The address's whole query, such as "?q=tax", for pages that read many
+ * parts of it. */
+export function useQueryString(): string {
+  return useAddress(() => location.search);
+}
+
 function useAddress<T>(read: () => T): T {
   const [value, setValue] = useState(read);
   useEffect(() => {

@@ -169,6 +169,16 @@ export const InfoIcon = () => (
   </Icon>
 );
 
+/** Sliders, for search options. */
+export const OptionsIcon = () => (
+  <Icon>
+    <path
+      d="M3 5h10v2H3zm10-2h2v6h-2zm2 2h6v2h-6zM3 11h4v2H3zm4-2h2v6H7zm2 2h12v2H9zM3 17h12v2H3zm12-2h2v6h-2zm2 2h4v2h-4z"
+      fill="currentColor"
+    />
+  </Icon>
+);
+
 export const CheckIcon = () => (
   <Icon>
     <path d="m9.5 16.2-4.2-4.2-1.4 1.4 5.6 5.6 11-11-1.4-1.4z" fill="currentColor" />

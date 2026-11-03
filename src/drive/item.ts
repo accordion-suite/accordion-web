@@ -51,6 +51,21 @@ export interface Found extends Item {
   folders: string[];
 }
 
+/** Part of a line of text from inside a file. */
+export interface SnippetPiece {
+  text: string;
+  /** Whether it's a word the search matched. */
+  matched: boolean;
+}
+
+/** A search result, with how it matched. */
+export interface Hit extends Found {
+  /** Whether the words were in its name or inside it. Null without words. */
+  matched: "name" | "text" | null;
+  /** A line of text around where the words matched inside the file. */
+  snippet: SnippetPiece[] | null;
+}
+
 /** Someone an item is shared with, as `/api/drive/items/{id}/shares` lists
  * them. */
 export interface ShareEntry {

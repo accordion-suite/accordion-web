@@ -39,7 +39,7 @@ import {
   StarIcon,
   TrashIcon,
 } from "./icons.tsx";
-import { type Found, type Item, type SharedOut, canEdit } from "./item.ts";
+import { type Found, type Hit, type Item, type SharedOut, canEdit } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { freeName } from "./names.ts";
 import { useDriveSettings } from "./preferences.ts";
@@ -135,6 +135,7 @@ export function ItemList({
   shares = false,
   empty,
   sortScope,
+  toolbar,
 }: {
   items: readonly (Item | Found)[];
   /** Names the list for screen readers, such as the folder's name. */
@@ -151,6 +152,9 @@ export function ItemList({
   /** Which sort to remember, when the page isn't a folder or a search,
    * such as the storage page, which starts largest first. */
   sortScope?: SortScope;
+  /** Filters in place of the list's own, for the search page, whose server
+   * applies them all, so the list shows every item it's given. */
+  toolbar?: ComponentChildren;
 }) {
   const settings = useDriveSettings();
   const thumbnails = settings?.thumbnails ?? true;
@@ -160,7 +164,7 @@ export function ItemList({
   // The same list until the items or the filters change, since effects
   // below run when it does.
   const items = useMemo(
-    () => all.filter((item) => matches(item, filters)),
+    () => (toolbar ? all : all.filter((item) => matches(item, filters))),
     [all, filters.type, filters.people, filters.modified, filters.source],
   );
   const [mode] = useViewMode();
@@ -680,14 +684,14 @@ export function ItemList({
           the items under the pointer. */}
       <div class="list-toolbar">
         {chosenItems.length === 0 ? (
-          <FilterBar
+          (toolbar ?? <FilterBar
             items={all}
             filters={filters}
             // The storage page lists only the reader's own files.
             source={showLocation && !owners && !shares && sortScope !== "storage"}
             mine={!owners}
             shares={shares}
-          />
+          />)
         ) : (
           <div class="selection-bar" role="group" aria-label={t("drive.selection")}>
             <button
@@ -768,6 +772,7 @@ export function ItemList({
                     {nameLink(item, "item-name")}
                     {starMark(item)}
                   </span>
+                  <Snippet item={item} />
                 </th>
                 {showLocation && <td class="location">{where(item)}</td>}
                 {shares && (
@@ -824,6 +829,7 @@ export function ItemList({
                       {moreButton(item)}
                     </div>
                     {thumbnails && <CardPreview item={item} />}
+                    <Snippet item={item} />
                     <p class="card-meta">
                       {located(item) ? where(item) : formatDate(item.modified_at)}
                     </p>
@@ -1016,6 +1022,18 @@ function TextPreview({ src, onError }: { src: string; onError: () => void }) {
 
 /** The buttons beside a page's title: one that opens the details panel, and
  * the switch between rows and a grid. */
+/** A line of text from inside a search result, around the words it
+ * matched, which are marked. */
+function Snippet({ item }: { item: Item | Found }) {
+  const pieces = "snippet" in item ? (item as Hit).snippet : null;
+  if (!pieces?.length) return null;
+  return (
+    <span class="snippet">
+      {pieces.map((piece, index) => (piece.matched ? <mark key={index}>{piece.text}</mark> : piece.text))}
+    </span>
+  );
+}
+
 export function PageTools() {
   const drive = useDrive();
   const [detailsOpen, setDetailsOpen] = useDetailsOpen();
