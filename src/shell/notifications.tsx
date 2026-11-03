@@ -1,14 +1,22 @@
 // The bell in the top bar: what the reader should hear about, such as a
 // folder shared with them, or someone adding files to one they shared
-// (decision 18). It checks every minute while the page is in view, and
-// opening it marks everything read, as in Google's apps.
+// (decision 18). It checks every minute while the page is in view. Opening
+// it clears the count, and each notification stays highlighted until it's
+// selected. Each can be removed, or all of them at once.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { ApiError, api } from "../api.ts";
-import { Icon } from "../drive/icons.tsx";
+import { CloseIcon, Icon } from "../drive/icons.tsx";
 import { t } from "../i18n.ts";
-import { detail, notificationLink, notificationText, type Notifications, when } from "./events.ts";
+import {
+  detail,
+  type Notification,
+  notificationLink,
+  notificationText,
+  type Notifications,
+  when,
+} from "./events.ts";
 import { followLink } from "./router.ts";
 
 /** How often the bell checks, while the page is in view. */
@@ -81,6 +89,8 @@ export function NotificationsButton({ me }: { me: string }) {
     };
   }, [open]);
 
+  /** Opening the list sees everything in it, which clears the count. Each
+   * one stays highlighted until it's selected. */
   async function toggle() {
     if (open) {
       setOpen(false);
@@ -89,16 +99,52 @@ export function NotificationsButton({ me }: { me: string }) {
     setOpen(true);
     const loaded = (await load()) ?? data;
     const newest = loaded?.notifications[0];
-    if (loaded && newest && loaded.unread > 0) {
-      // The list keeps showing what was new until it closes.
-      await api("POST", "/api/drive/notifications/read", { up_to: newest.id }).catch(() => undefined);
-      setData({ ...loaded, unread: 0 });
+    if (loaded && newest && loaded.new > 0) {
+      await api("POST", "/api/drive/notifications/seen", { up_to: newest.id }).catch(() => undefined);
+      setData({ ...loaded, new: 0, notifications: loaded.notifications.map((each) => ({ ...each, seen: true })) });
+    }
+  }
+
+  function select(chosen: Notification) {
+    setOpen(false);
+    if (chosen.read || !data) return;
+    // Sent without waiting, so going to what it's about isn't held up.
+    void api("POST", "/api/drive/notifications/read", { ids: chosen.ids }).catch(() => undefined);
+    setData({
+      ...data,
+      notifications: data.notifications.map((each) => (each.id === chosen.id ? { ...each, read: true } : each)),
+    });
+  }
+
+  async function remove(chosen: Notification) {
+    if (!data) return;
+    const before = data;
+    setData({ ...data, notifications: data.notifications.filter((each) => each.id !== chosen.id) });
+    try {
+      await api("POST", "/api/drive/notifications/remove", { ids: chosen.ids });
+    } catch (problem) {
+      setData(before);
+      setError(problem instanceof Error ? problem.message : t("error.problem"));
+    }
+  }
+
+  async function clearAll() {
+    const newest = data?.notifications[0];
+    if (!data || !newest) return;
+    const before = data;
+    setData({ ...data, notifications: [] });
+    try {
+      await api("DELETE", `/api/drive/notifications?up_to=${newest.id}`);
+      button.current?.focus();
+    } catch (problem) {
+      setData(before);
+      setError(problem instanceof Error ? problem.message : t("error.problem"));
     }
   }
 
   if (!available) return null;
-  const unread = data?.unread ?? 0;
-  const label = unread > 0 ? t("notify.buttonUnread", { count: unread }) : t("notify.button");
+  const unseen = data?.new ?? 0;
+  const label = unseen > 0 ? t("notify.buttonUnread", { count: unseen }) : t("notify.button");
   return (
     <div class="notifications" ref={holder}>
       <button
@@ -112,15 +158,22 @@ export function NotificationsButton({ me }: { me: string }) {
         onClick={() => void toggle()}
       >
         <BellIcon />
-        {unread > 0 && (
+        {unseen > 0 && (
           <span class="notifications-count" aria-hidden="true">
-            {unread > 9 ? "9+" : unread}
+            {unseen > 9 ? "9+" : unseen}
           </span>
         )}
       </button>
       {open && (
         <section id="notifications-panel" class="notifications-panel" aria-labelledby="notifications-title">
-          <h2 id="notifications-title">{t("notify.title")}</h2>
+          <div class="notifications-head">
+            <h2 id="notifications-title">{t("notify.title")}</h2>
+            {data && data.notifications.length > 0 && (
+              <button type="button" class="link" onClick={() => void clearAll()}>
+                {t("notify.clearAll")}
+              </button>
+            )}
+          </div>
           {error && (
             <p class="error" role="alert">
               {error}
@@ -139,7 +192,7 @@ export function NotificationsButton({ me }: { me: string }) {
                     <a
                       href={notificationLink(notification)}
                       onClick={(event) => {
-                        setOpen(false);
+                        select(notification);
                         followLink(event);
                       }}
                     >
@@ -149,6 +202,15 @@ export function NotificationsButton({ me }: { me: string }) {
                         {level && ` · ${t(level === "editor" ? "notify.youCanEdit" : "notify.youCanView")}`}
                       </span>
                     </a>
+                    <button
+                      type="button"
+                      class="icon-button"
+                      aria-label={t("notify.remove", { text: notificationText(notification, me) })}
+                      title={t("notify.removeShort")}
+                      onClick={() => void remove(notification)}
+                    >
+                      <CloseIcon />
+                    </button>
                   </li>
                 );
               })}

@@ -56,9 +56,11 @@ test("a deleted account and Accordion itself have names", () => {
 test("notifications say what happened and lead to it", () => {
   const added = {
     id: 9,
+    ids: [9, 8, 7],
     at: "2026-11-02T10:00:00.000Z",
     action: "added",
     actor: SAM,
+    seen: false,
     read: false,
     item: { id: "one", name: "one.jpg" },
     count: 3,

@@ -90,10 +90,16 @@ export function viaText(via: LoggedEvent["via"]): string {
 
 /** One notification, or several about the same thing. */
 export interface Notification {
+  /** The newest event's ID. */
   id: number;
+  /** Every event in the group, to read or remove it whole. */
+  ids: number[];
   at: string;
   action: string;
   actor: Person | null;
+  /** Whether the reader opened the list since it arrived. */
+  seen: boolean;
+  /** Whether they selected it. */
   read: boolean;
   item: EventItem | null;
   count: number;
@@ -102,7 +108,8 @@ export interface Notification {
 }
 
 export interface Notifications {
-  unread: number;
+  /** Notifications the reader hasn't seen, for the count on the bell. */
+  new: number;
   notifications: Notification[];
 }
 

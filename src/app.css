@@ -872,9 +872,16 @@ a.storage:hover .storage-title {
   box-shadow: var(--shadow);
 }
 
+.notifications-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 8px;
+}
+
 .notifications-panel h2 {
   margin: 0;
-  padding: 16px 16px 8px;
   font-size: 1rem;
   font-weight: 500;
 }
@@ -890,26 +897,52 @@ a.storage:hover .storage-title {
   list-style: none;
 }
 
+.notifications-panel li {
+  display: flex;
+  align-items: center;
+}
+
+.notifications-panel li:hover,
+.notifications-panel li:focus-within {
+  background: var(--surface);
+}
+
+.notifications-panel li.unread {
+  background: var(--accent-soft);
+}
+
+.notifications-panel li.unread:hover,
+.notifications-panel li.unread:focus-within {
+  background: var(--selected);
+}
+
 .notifications-panel a {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 2px;
-  padding: 10px 16px;
+  min-width: 0;
+  padding: 10px 4px 10px 16px;
   color: inherit;
   text-decoration: none;
 }
 
-.notifications-panel a:hover,
-.notifications-panel a:focus-visible {
-  background: var(--surface);
+/* Remove shows on the notification the pointer or focus is on, and always
+   on touch screens, which have no pointer to rest. */
+.notifications-panel li .icon-button {
+  margin-right: 8px;
+  opacity: 0;
 }
 
-.notifications-panel .unread a {
-  background: var(--accent-soft);
+.notifications-panel li:hover .icon-button,
+.notifications-panel li:focus-within .icon-button {
+  opacity: 1;
 }
 
-.notifications-panel .unread a:hover {
-  background: var(--selected);
+@media (hover: none) {
+  .notifications-panel li .icon-button {
+    opacity: 1;
+  }
 }
 
 .notification-text {
