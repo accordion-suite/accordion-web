@@ -14,10 +14,12 @@ import { PageTitle } from "../shell/page.tsx";
 import { followLink, usePath } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
 import {
+  ActivityIcon,
   BackIcon,
   BackupIcon,
   DevicesIcon,
   HealthIcon,
+  LogIcon,
   NetworkIcon,
   PaletteIcon,
   PeopleIcon,
@@ -47,12 +49,14 @@ export const SECTIONS: readonly Section[] = [
   { id: "account", label: "settings.account", icon: PersonIcon, group: "you" },
   { id: "appearance", label: "settings.appearance", icon: PaletteIcon, group: "you" },
   { id: "devices", label: "settings.devices", icon: DevicesIcon, group: "you" },
+  { id: "activity", label: "settings.activity", icon: ActivityIcon, group: "you" },
   { id: "drive", label: "settings.driveGeneral", icon: DriveIcon, group: "drive" },
   { id: "people", label: "settings.people", icon: PeopleIcon, group: "server" },
   { id: "health", label: "settings.health", icon: HealthIcon, group: "server" },
   { id: "backups", label: "settings.backups", icon: BackupIcon, group: "server" },
   { id: "updates", label: "settings.updates", icon: UpdatesIcon, group: "server" },
   { id: "network", label: "settings.network", icon: NetworkIcon, group: "server" },
+  { id: "log", label: "settings.adminLog", icon: LogIcon, group: "server" },
 ];
 
 export function SettingsLayout({

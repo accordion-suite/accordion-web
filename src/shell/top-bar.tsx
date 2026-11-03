@@ -1,6 +1,6 @@
 // The bar along the top of every signed-in page: Accordion's name with the
-// module's, a place for the page's search, a way to Settings, and the
-// reader's account.
+// module's, a place for the page's search, notifications, a way to
+// Settings, and the reader's account.
 
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
@@ -10,6 +10,7 @@ import { MenuIcon } from "../drive/icons.tsx";
 import { SettingsIcon } from "../settings/icons.tsx";
 import { t } from "../i18n.ts";
 import { Menu, SEPARATOR, type MenuPlace } from "./menu.tsx";
+import { NotificationsButton } from "./notifications.tsx";
 import { followLink, navigate } from "./router.ts";
 
 export function TopBar({
@@ -58,6 +59,7 @@ export function TopBar({
         <span class="brand-module">{module}</span>
       </a>
       <div class="top-bar-middle">{children}</div>
+      <NotificationsButton me={session.user.id} />
       {settings && (
         <a class="icon-button" href={settings} title={t("settings.title")} aria-label={t("settings.title")} onClick={followLink}>
           <SettingsIcon />

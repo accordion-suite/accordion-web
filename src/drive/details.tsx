@@ -1,13 +1,15 @@
 // The details panel beside Drive's pages, as in Google Drive: what an item
-// is, where it is, who owns it, and who else can open it. It shows what's
-// selected, or the folder that's open when nothing is, and stays open as the
-// reader moves between pages.
+// is, where it is, who owns it, and who else can open it, and on its
+// Activity tab, what happened to it. It shows what's selected, or the folder
+// that's open when nothing is, and stays open as the reader moves between
+// pages.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { formatMoment, formatSize, type MessageKey, t } from "../i18n.ts";
 import { followLink } from "../shell/router.ts";
+import { ActivityTab } from "./activity.tsx";
 import { ShareDialog } from "./dialogs.tsx";
 import { CloseIcon, InfoIcon, ItemIcon, kindOf } from "./icons.tsx";
 import { CardPreview, folderPath } from "./item-list.tsx";
@@ -61,8 +63,19 @@ function nameOf(item: Item): string {
   return item.parent === null ? t("drive.myDrive") : item.name;
 }
 
-export function DetailsPanel({ items, onClose }: { items: readonly Item[]; onClose: () => void }) {
+export function DetailsPanel({
+  items,
+  me,
+  onClose,
+}: {
+  items: readonly Item[];
+  /** The reader's user ID, so their own changes say "You". */
+  me: string;
+  onClose: () => void;
+}) {
   const only = items.length === 1 ? items[0]! : null;
+  // The tab stays as the reader selects other items, as in Google Drive.
+  const [tab, setTab] = useState<"details" | "activity">("details");
   return (
     <aside class="details" aria-labelledby="details-title">
       <div class="details-head">
@@ -73,7 +86,26 @@ export function DetailsPanel({ items, onClose }: { items: readonly Item[]; onClo
         </button>
       </div>
       {only ? (
-        <About key={only.id} item={only} />
+        <>
+          <div class="details-tabs" role="tablist" aria-label={t("details.tabs")}>
+            {(["details", "activity"] as const).map((each) => (
+              <button
+                key={each}
+                type="button"
+                role="tab"
+                id={`details-tab-${each}`}
+                aria-controls="details-tab-panel"
+                aria-selected={tab === each}
+                onClick={() => setTab(each)}
+              >
+                {t(each === "details" ? "details.tabDetails" : "details.tabActivity")}
+              </button>
+            ))}
+          </div>
+          <div id="details-tab-panel" role="tabpanel" aria-labelledby={`details-tab-${tab}`}>
+            {tab === "details" ? <About key={only.id} item={only} /> : <ActivityTab key={only.id} item={only} me={me} />}
+          </div>
+        </>
       ) : (
         <p class="details-empty hint">
           {items.length === 0 ? t("details.none") : t("details.many", { count: items.length })}

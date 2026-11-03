@@ -76,3 +76,18 @@ export const PaletteIcon = () => (
     <circle cx="15" cy="8" r="1.2" fill="currentColor" />
   </Icon>
 );
+
+export const ActivityIcon = () => (
+  <Icon>
+    <path d="M4 6h10M4 12h7M4 18h7" {...line} />
+    <circle cx="17" cy="15" r="4.2" {...line} />
+    <path d="M17 13v2.2l1.4 1" {...line} />
+  </Icon>
+);
+
+export const LogIcon = () => (
+  <Icon>
+    <path d="M12 3.2 5 6v5.4c0 4.3 3 7.7 7 9.4 4-1.7 7-5.1 7-9.4V6z" {...line} />
+    <path d="M9 11h6M9 14.5h4" {...line} />
+  </Icon>
+);

@@ -6,6 +6,8 @@ import "./messages.ts";
 import type { Session } from "../api.ts";
 import { t } from "../i18n.ts";
 import { AccountPage } from "./account-page.tsx";
+import { ActivityPage } from "./activity-page.tsx";
+import { AdminLogPage } from "./admin-log-page.tsx";
 import { AppearancePage } from "./appearance-page.tsx";
 import { BackupsPage } from "./backups-page.tsx";
 import { DevicesPage } from "./devices-page.tsx";
@@ -60,6 +62,10 @@ function sectionPage(path: string, session: Session, onSessionChanged: () => Pro
       return <DrivePage key={id} />;
     case "devices":
       return <DevicesPage key={id} username={session.user.username} />;
+    case "activity":
+      return <ActivityPage key={id} me={session.user.id} />;
+    case "log":
+      return <AdminLogPage key={id} me={session.user.id} />;
     case "people":
       return <PeoplePage key={id} />;
     case "health":

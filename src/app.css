@@ -739,6 +739,197 @@ a.storage:hover .storage-title {
   overflow-wrap: anywhere;
 }
 
+/* Details and Activity, the panel's two tabs. */
+.details-tabs {
+  position: sticky;
+  top: 60px;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.details-tabs button {
+  padding: 10px 12px;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.details-tabs button:hover {
+  color: var(--text);
+}
+
+.details-tabs button[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+#details-tab-panel > .details-body,
+#details-tab-panel > .details-empty {
+  padding-top: 8px;
+}
+
+.activity {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-entry {
+  padding: 12px 0;
+}
+
+.activity-entry + .activity-entry {
+  border-top: 1px solid var(--border);
+}
+
+.activity-sentence {
+  margin: 0;
+  font-weight: 500;
+}
+
+.activity-when {
+  margin: 2px 0 0;
+  font-size: 0.875rem;
+}
+
+.activity-items {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-items li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.activity-items .item-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.activity-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.activity-item-name {
+  overflow-wrap: anywhere;
+}
+
+.activity-item-text .hint {
+  font-size: 0.875rem;
+}
+
+/* The bell in the top bar, and the list it opens. */
+.notifications {
+  position: relative;
+}
+
+.notifications .icon-button {
+  position: relative;
+}
+
+.notifications-count {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  background: var(--error);
+  border-radius: 9px;
+}
+
+.notifications-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 6;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(520px, calc(100vh - 80px));
+  overflow-y: auto;
+  background: var(--panel);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.notifications-panel h2 {
+  margin: 0;
+  padding: 16px 16px 8px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.notifications-panel > p {
+  margin: 0;
+  padding: 0 16px 16px;
+}
+
+.notifications-panel ul {
+  margin: 0;
+  padding: 0 0 8px;
+  list-style: none;
+}
+
+.notifications-panel a {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.notifications-panel a:hover,
+.notifications-panel a:focus-visible {
+  background: var(--surface);
+}
+
+.notifications-panel .unread a {
+  background: var(--accent-soft);
+}
+
+.notifications-panel .unread a:hover {
+  background: var(--selected);
+}
+
+.notification-text {
+  overflow-wrap: anywhere;
+}
+
+.notifications-panel .hint {
+  font-size: 0.875rem;
+}
+
+@media (max-width: 600px) {
+  .notifications-panel {
+    position: fixed;
+    top: calc(var(--top-bar-height) + 4px);
+    right: 16px;
+    left: 16px;
+    width: auto;
+  }
+}
+
 .page-tools {
   display: flex;
   flex: none;

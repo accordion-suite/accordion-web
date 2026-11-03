@@ -404,6 +404,7 @@ export function DriveLayout({
         {showDetails && (
           <DetailsPanel
             items={selection.length > 0 ? selection : pageItem ? [pageItem] : []}
+            me={session.user.id}
             onClose={() => setDetailsOpen(false)}
           />
         )}
