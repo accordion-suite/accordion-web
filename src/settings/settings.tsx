@@ -16,6 +16,7 @@ import { HealthPage } from "./health-page.tsx";
 import { SECTIONS, SettingsLayout, SettingsPage } from "./layout.tsx";
 import { NetworkPage } from "./network-page.tsx";
 import { PeoplePage } from "./people-page.tsx";
+import { RemotePage } from "./remote-page.tsx";
 import { UpdatesPage } from "./updates-page.tsx";
 
 export function Settings({
@@ -61,7 +62,9 @@ function sectionPage(path: string, session: Session, onSessionChanged: () => Pro
     case "drive":
       return <DrivePage key={id} />;
     case "devices":
-      return <DevicesPage key={id} username={session.user.username} />;
+      return (
+        <DevicesPage key={id} username={session.user.username} admin={(session.user.role === "owner" || session.user.role === "admin") && session.admin_pages} />
+      );
     case "activity":
       return <ActivityPage key={id} me={session.user.id} />;
     case "log":
@@ -76,6 +79,8 @@ function sectionPage(path: string, session: Session, onSessionChanged: () => Pro
       return <UpdatesPage key={id} />;
     case "network":
       return <NetworkPage key={id} />;
+    case "remote":
+      return <RemotePage key={id} />;
   }
   return null;
 }

@@ -95,6 +95,15 @@ export interface NetworkStatus {
   } | null;
   backups: { id: string; name: string; host: string; on: boolean; last: Last | null }[];
   backup_hour: number;
+  /** Remote access's connections, while it's on. */
+  remote: {
+    router: string | null;
+    router_last: Last | null;
+    record_host: string;
+    lookup_host: string;
+    uses_lookup: boolean;
+    record_last: Last | null;
+  } | null;
 }
 
 /** One connection the server makes: why, where, how often, the last time,
@@ -173,6 +182,28 @@ export function connections(status: NetworkStatus): Connection[] {
       often: t("network.certificateOften"),
       last,
       fixed: t("network.certificateFixed"),
+    });
+  }
+
+  const remote = status.remote;
+  if (remote) {
+    all.push({
+      title: t("network.routerTitle"),
+      purpose: t("network.routerPurpose"),
+      where: remote.router ? t("network.routerWhere", { host: remote.router }) : t("network.routerWhereUnknown"),
+      often: t("network.routerOften"),
+      last: lastLine(remote.router_last, t("network.notSinceStart")),
+      fixed: t("network.remoteFixed"),
+    });
+    all.push({
+      title: t("network.endpointTitle"),
+      purpose: t("network.endpointPurpose"),
+      where: remote.uses_lookup
+        ? t("network.endpointWhereLookup", { host: remote.record_host, lookup: remote.lookup_host })
+        : t("network.endpointWhere", { host: remote.record_host }),
+      often: t("network.endpointOften"),
+      last: lastLine(remote.record_last, t("network.notSinceStart")),
+      fixed: t("network.remoteFixed"),
     });
   }
 

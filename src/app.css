@@ -2437,6 +2437,22 @@ select.short {
   min-width: 160px;
 }
 
+/* A remote access device's setup. Black on white in both themes, so every
+   camera reads it. */
+.qr-code {
+  width: min(256px, 100%);
+  margin: 16px auto;
+  padding: 8px;
+  background: #ffffff;
+  border-radius: 8px;
+}
+
+.qr-code svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 pre {
   padding: 12px 16px;
   overflow-x: auto;
@@ -2519,6 +2535,11 @@ dialog label + .hint {
 .settings-card input:not([type="checkbox"], [type="radio"]),
 .settings-card select {
   max-width: 420px;
+}
+
+/* For a number, such as a port. */
+.settings-card input.short {
+  max-width: 10em;
 }
 
 .card-head {

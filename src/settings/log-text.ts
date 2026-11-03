@@ -49,6 +49,12 @@ export function logText(event: LoggedEvent, me: string): string {
       return t("log.appPasswordCreated", values);
     case "app_password_removed":
       return t("log.appPasswordRemoved", values);
+    case "remote_device_added":
+      return t("log.remoteDeviceAdded", values);
+    case "remote_device_removed":
+      return t("log.remoteDeviceRemoved", values);
+    case "remote_access_changed":
+      return t(event.details?.on === true ? "log.remoteAccessOn" : "log.remoteAccessOff");
     case "shared":
       return t(mine ? "log.sharedOut" : "log.sharedIn", values);
     case "share_changed":

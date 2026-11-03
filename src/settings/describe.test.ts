@@ -54,16 +54,33 @@ test("lists every connection, with a switch where there is one", () => {
     certificate: { authority_host: "acme-v02.api.letsencrypt.org", provider_host: "api.cloudflare.com", last: null, expires_at: null },
     backups: [{ id: "t1", name: "Blue USB disk", host: "nas.local", on: false, last: null }],
     backup_hour: 2,
+    remote: {
+      router: "192.168.1.1",
+      router_last: null,
+      record_host: "api.cloudflare.com",
+      lookup_host: "1.1.1.1",
+      uses_lookup: true,
+      record_last: null,
+    },
   };
   const all = connections(status);
   assert.deepEqual(
     all.map((entry) => entry.title),
-    ["Update check", "Keeping your server's name pointed at it", "Certificate renewal", "Backups to Blue USB disk"],
+    [
+      "Update check",
+      "Keeping your server's name pointed at it",
+      "Certificate renewal",
+      "Asking your router to forward remote access's port",
+      "Keeping remote access's address current",
+      "Backups to Blue USB disk",
+    ],
   );
+  assert.equal(all[3]!.where, "Connects to your router at 192.168.1.1, on your home network.");
+  assert.match(all[4]!.where, /also connects to 1\.1\.1\.1 to learn it\.$/);
   assert.ok(all[1]!.fixed && !all[1]!.toggle, "an address set by the server's setting has no switch");
   assert.equal(
     all[2]!.where,
     "Connects to acme-v02.api.letsencrypt.org, api.cloudflare.com, and your domain's nameservers, to prove the name is yours and see that the proof is live.",
   );
-  assert.equal(all[3]!.toggle?.on, false);
+  assert.equal(all[5]!.toggle?.on, false);
 });

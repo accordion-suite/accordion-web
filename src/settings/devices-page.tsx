@@ -1,15 +1,18 @@
-// Apps and devices: app passwords, which let File Explorer, Finder, and
-// phone apps open Drive (decision 3), each with its own password that can
-// be deleted without changing the reader's.
+// Apps and devices: remote access devices, which reach Accordion away from
+// home through WireGuard (decision 21), and app passwords, which let File
+// Explorer, Finder, and phone apps open Drive (decision 3), each with its
+// own password that can be deleted without changing the reader's.
 
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { formatDay, t } from "../i18n.ts";
 import { ConfirmDialog, Dialog, problemText } from "../shell/dialog.tsx";
+import { followLink } from "../shell/router.ts";
 import { SettingsPage } from "./layout.tsx";
 import { LoadState, Secret, useLoad } from "./parts.tsx";
 import { usePasswordCheck } from "./password-check.tsx";
+import { connectedLine, type RemoteDevice } from "./remote-page.tsx";
 
 interface AppPassword {
   id: string;
@@ -24,15 +27,30 @@ interface Created {
   password: string;
 }
 
-export function DevicesPage({ username }: { username: string }) {
+interface RemoteDevices {
+  on: boolean;
+  max: number;
+  devices: RemoteDevice[];
+}
+
+interface AddedDevice {
+  device: RemoteDevice;
+  config: string;
+  qr_code: string;
+  file_name: string;
+}
+
+export function DevicesPage({ username, admin }: { username: string; admin: boolean }) {
   const passwords = useLoad<AppPassword[]>("/api/app-passwords");
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<AppPassword | null>(null);
 
   return (
     <SettingsPage title={t("settings.devices")} intro={t("devices.intro")}>
+      <RemoteCard admin={admin} />
       <section class="settings-card">
         <h2>{t("devices.title")}</h2>
+        <p>{t("devices.passwordsIntro")}</p>
         {passwords.data === null ? (
           <LoadState error={passwords.error} />
         ) : passwords.data.length === 0 ? (
@@ -179,6 +197,185 @@ function CreateDialog({
         <div class="dialog-buttons">
           <button type="submit" disabled={busy}>
             {t("devices.createButton")}
+          </button>
+          <button type="button" class="secondary" onClick={onClose}>
+            {t("dialog.cancel")}
+          </button>
+        </div>
+      </form>
+      {passwordDialog}
+    </Dialog>
+  );
+}
+
+/** The reader's remote access devices, with a way to add one. */
+function RemoteCard({ admin }: { admin: boolean }) {
+  const remote = useLoad<RemoteDevices>("/api/remote-devices");
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<RemoteDevice | null>(null);
+  const data = remote.data;
+  // A server without remote access says so, and the card stays away.
+  if (data === null && remote.error) return null;
+
+  return (
+    <section class="settings-card">
+      <h2>{t("devices.remoteTitle")}</h2>
+      <p>{t("devices.remoteIntro")}</p>
+      {data === null ? (
+        <LoadState error={remote.error} />
+      ) : (
+        <>
+          {!data.on && (
+            <p class="hint">
+              {admin ? (
+                <>
+                  {t("devices.remoteOffAdmin")}{" "}
+                  <a href="/settings/remote" onClick={followLink}>
+                    {t("settings.remote")}
+                  </a>
+                </>
+              ) : (
+                t("devices.remoteOff")
+              )}
+            </p>
+          )}
+          {data.devices.length === 0 ? (
+            data.on && <p class="hint">{t("devices.remoteNone")}</p>
+          ) : (
+            <ul class="rows">
+              {data.devices.map((device) => (
+                <li key={device.id} class="row">
+                  <div class="row-text">
+                    <strong>{device.name}</strong>
+                    <span class="hint">
+                      {t("devices.remoteAdded", { created: formatDay(device.created_at) })} {connectedLine(device)}
+                    </span>
+                    {device.out_of_date && <span class="hint">{t("remote.outOfDate")}</span>}
+                  </div>
+                  <button type="button" class="secondary" onClick={() => setRemoving(device)}>
+                    {t("remote.remove")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {data.on && (
+            <div class="form-buttons">
+              <button type="button" disabled={data.devices.length >= data.max} onClick={() => setAdding(true)}>
+                {t("devices.remoteAdd")}
+              </button>
+            </div>
+          )}
+          {data.on && data.devices.length >= data.max && (
+            <p class="hint">{t("devices.remoteMax", { max: String(data.max) })}</p>
+          )}
+        </>
+      )}
+
+      {adding && <AddDeviceDialog onAdded={() => void remote.reload()} onClose={() => setAdding(false)} />}
+      {removing && (
+        <ConfirmDialog
+          title={t("remote.removeTitle", { name: removing.name })}
+          body={t("devices.remoteRemoveBody", { name: removing.name })}
+          confirm={t("remote.remove")}
+          onConfirm={async () => {
+            await api("DELETE", `/api/remote-devices/${removing.id}`);
+            setRemoving(null);
+            await remote.reload();
+          }}
+          onClose={() => setRemoving(null)}
+        />
+      )}
+    </section>
+  );
+}
+
+/** Names the device, then shows its setup once: a QR code for phones, and
+ * a file for computers. */
+function AddDeviceDialog({ onAdded, onClose }: { onAdded: () => void; onClose: () => void }) {
+  const [name, setName] = useState("");
+  const [added, setAdded] = useState<AddedDevice | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [checked, passwordDialog] = usePasswordCheck();
+  const [download, setDownload] = useState("");
+
+  // The file's address lasts as long as the dialog.
+  useEffect(() => {
+    if (!added) return;
+    const url = URL.createObjectURL(new Blob([added.config], { type: "text/plain" }));
+    setDownload(url);
+    return () => URL.revokeObjectURL(url);
+  }, [added]);
+
+  async function submit(event: SubmitEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const made = await checked(() => api<AddedDevice>("POST", "/api/remote-devices", { name }));
+      if (made) {
+        setAdded(made);
+        onAdded();
+      }
+    } catch (problem) {
+      setError(problemText(problem));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (added) {
+    return (
+      <Dialog title={t("devices.remoteAddedTitle", { name: added.device.name })} onClose={onClose}>
+        <ol class="steps">
+          <li>{t("devices.remoteStepApp")}</li>
+          <li>{t("devices.remoteStepPhone")}</li>
+          <li>{t("devices.remoteStepComputer")}</li>
+        </ol>
+        {/* The page's policy allows no data: images, so the server's SVG,
+            which it draws itself and which has no scripts, goes in as is. */}
+        <div
+          class="qr-code"
+          role="img"
+          aria-label={t("devices.remoteQrLabel", { name: added.device.name })}
+          dangerouslySetInnerHTML={{ __html: added.qr_code.replace(/^<\?xml[^>]*>\s*/, "") }}
+        />
+        <div class="form-buttons">
+          <a class="button secondary" href={download} download={added.file_name}>
+            {t("devices.remoteDownload")}
+          </a>
+        </div>
+        <p class="hint">{t("devices.remoteOnce")}</p>
+        <p class="hint">{t("devices.remoteAway")}</p>
+        <div class="dialog-buttons">
+          <button type="button" autofocus onClick={onClose}>
+            {t("devices.done")}
+          </button>
+        </div>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog title={t("devices.remoteAdd")} onClose={onClose}>
+      <form onSubmit={submit}>
+        <label for="remote-device-name">{t("devices.deviceName")}</label>
+        <p class="hint">{t("devices.remoteNameHint")}</p>
+        <input
+          id="remote-device-name"
+          maxLength={100}
+          required
+          autofocus
+          value={name}
+          onInput={(event) => setName(event.currentTarget.value)}
+        />
+        <p class="error" role="alert">
+          {error}
+        </p>
+        <div class="dialog-buttons">
+          <button type="submit" disabled={busy}>
+            {t("devices.remoteAddButton")}
           </button>
           <button type="button" class="secondary" onClick={onClose}>
             {t("dialog.cancel")}

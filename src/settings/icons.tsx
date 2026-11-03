@@ -68,6 +68,14 @@ export const NetworkIcon = () => (
   </Icon>
 );
 
+export const RemoteIcon = () => (
+  <Icon>
+    <path d="M3.5 11.5 12 4.5l8.5 7" {...line} />
+    <path d="M6 9.5V19.5h12v-10" {...line} />
+    <path d="M9.2 14.6a4 4 0 0 1 5.6 0M10.9 16.9a1.6 1.6 0 0 1 2.2 0" {...line} />
+  </Icon>
+);
+
 export const PaletteIcon = () => (
   <Icon>
     <path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.1 0 1.7-.8 1.4-1.8-.4-1.2.4-2.2 1.6-2.2h1.8a3.7 3.7 0 0 0 3.7-3.8C20.5 7.6 16.7 3.5 12 3.5" {...line} />

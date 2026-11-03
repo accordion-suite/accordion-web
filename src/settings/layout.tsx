@@ -24,6 +24,7 @@ import {
   PaletteIcon,
   PeopleIcon,
   PersonIcon,
+  RemoteIcon,
   UpdatesIcon,
 } from "./icons.tsx";
 
@@ -56,6 +57,7 @@ export const SECTIONS: readonly Section[] = [
   { id: "backups", label: "settings.backups", icon: BackupIcon, group: "server" },
   { id: "updates", label: "settings.updates", icon: UpdatesIcon, group: "server" },
   { id: "network", label: "settings.network", icon: NetworkIcon, group: "server" },
+  { id: "remote", label: "settings.remote", icon: RemoteIcon, group: "server" },
   { id: "log", label: "settings.adminLog", icon: LogIcon, group: "server" },
 ];
 
