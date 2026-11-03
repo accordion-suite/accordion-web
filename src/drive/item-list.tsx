@@ -152,7 +152,9 @@ export function ItemList({
    * such as the storage page, which starts largest first. */
   sortScope?: SortScope;
 }) {
-  const thumbnails = useDriveSettings()?.thumbnails ?? true;
+  const settings = useDriveSettings();
+  const thumbnails = settings?.thumbnails ?? true;
+  const clickAction = settings?.click ?? "select";
   const drive = useDrive();
   const filters = useFilters();
   // The same list until the items or the filters change, since effects
@@ -205,6 +207,13 @@ export function ItemList({
   function openItem(item: Item) {
     if (item.kind === "folder") navigate(folderPath(item));
     else navigate(filePath(item), { state: OPENED_HERE });
+  }
+
+  /** What a click does when it doesn't select: download a file, if the
+   * reader chose that, or open the item. */
+  function activate(item: Item) {
+    if (clickAction === "download" && item.kind === "file") download([item]);
+    else openItem(item);
   }
 
   function closeFile() {
@@ -473,14 +482,16 @@ export function ItemList({
   }
 
   /** A click on an item: selects it, or with Ctrl, Cmd, or Shift, more
-   * than one. On a touch screen, a tap opens, unless something's selected
-   * already. Other links and buttons in the item do their own thing. */
+   * than one. In Settings, the reader can choose for a click to open or
+   * download instead. On a touch screen, a tap opens or downloads, unless
+   * something's selected already. Other links and buttons in the item do
+   * their own thing. */
   function itemClick(event: MouseEvent, item: Item) {
     const control = (event.target as Element).closest("a, button");
     if (keyed(event) || (control && !control.hasAttribute("data-open"))) return;
     if (pointer.current === "touch") {
       if (selected.size === 0) {
-        openItem(item);
+        activate(item);
       } else {
         anchor.current = item.id;
         toggle(item.id);
@@ -492,15 +503,19 @@ export function ItemList({
     } else if (event.ctrlKey || event.metaKey) {
       anchor.current = item.id;
       toggle(item.id);
-    } else {
+    } else if (clickAction === "select") {
       anchor.current = item.id;
       setSelected(new Set([item.id]));
+    } else if (event.detail === 1) {
+      // The second click of a double click would open or download again.
+      activate(item);
     }
   }
 
   function itemDoubleClick(event: MouseEvent, item: Item) {
     const control = (event.target as Element).closest("a, button");
-    if (pointer.current === "touch" || (control && !control.hasAttribute("data-open"))) return;
+    if (pointer.current === "touch" || clickAction !== "select") return;
+    if (control && !control.hasAttribute("data-open")) return;
     if (event.ctrlKey || event.metaKey || event.shiftKey) return;
     openItem(item);
   }

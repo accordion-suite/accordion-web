@@ -1,13 +1,20 @@
-// Drive's settings: the page Drive opens on, and thumbnails in grid view.
+// Drive's settings: the page Drive opens on, what clicking an item does,
+// and thumbnails in grid view.
 // They save as soon as they change, and follow the reader to every device.
 
 import { useState } from "preact/hooks";
 
-import { type DriveSettings, saveDriveSettings, useDriveSettings } from "../drive/preferences.ts";
-import { t } from "../i18n.ts";
+import { type ClickAction, type DriveSettings, saveDriveSettings, useDriveSettings } from "../drive/preferences.ts";
+import { type MessageKey, t } from "../i18n.ts";
 import { problemText } from "../shell/dialog.tsx";
 import { SettingsPage } from "./layout.tsx";
 import { LoadState, type Outcome, OutcomeLine } from "./parts.tsx";
+
+const CLICK_CHOICES: { value: ClickAction; label: MessageKey; hint: MessageKey }[] = [
+  { value: "select", label: "driveSettings.clickSelect", hint: "driveSettings.clickSelectHint" },
+  { value: "open", label: "driveSettings.clickOpen", hint: "driveSettings.clickOpenHint" },
+  { value: "download", label: "driveSettings.clickDownload", hint: "driveSettings.clickDownloadHint" },
+];
 
 export function DrivePage() {
   const settings = useDriveSettings();
@@ -60,6 +67,25 @@ export function DrivePage() {
               <strong>{t("drive.myDrive")}</strong> {t("driveSettings.myDriveHint")}
             </span>
           </label>
+        </fieldset>
+      </section>
+      <section class="settings-card">
+        <h2 id="click-title">{t("driveSettings.clickTitle")}</h2>
+        <p class="hint">{t("driveSettings.clickIntro")}</p>
+        <fieldset class="choices" aria-labelledby="click-title">
+          {CLICK_CHOICES.map((choice) => (
+            <label class="choice" key={choice.value}>
+              <input
+                type="radio"
+                name="click"
+                checked={settings.click === choice.value}
+                onChange={() => void save({ click: choice.value })}
+              />
+              <span>
+                <strong>{t(choice.label)}</strong> {t(choice.hint)}
+              </span>
+            </label>
+          ))}
         </fieldset>
       </section>
       <section class="settings-card">

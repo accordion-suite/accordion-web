@@ -352,6 +352,15 @@ export const settingsEn = {
   "driveSettings.startIntro": "What Drive opens on when you go to Accordion's address.",
   "driveSettings.homeHint": "Your recently changed files.",
   "driveSettings.myDriveHint": "All your folders and files.",
+  "driveSettings.clickTitle": "Clicking an item",
+  "driveSettings.clickIntro":
+    "What happens when you click a file or folder once. To select items with any of these, hold Ctrl, Cmd, or Shift as you click, or drag a box around them.",
+  "driveSettings.clickSelect": "Select it.",
+  "driveSettings.clickSelectHint": "Double-click to open it.",
+  "driveSettings.clickOpen": "Open it.",
+  "driveSettings.clickOpenHint": "Files open in the viewer, and folders open.",
+  "driveSettings.clickDownload": "Download it.",
+  "driveSettings.clickDownloadHint": "Files download to your device, and folders open.",
   "driveSettings.thumbnailsTitle": "Thumbnails",
   "driveSettings.thumbnailsHint":
     "In grid view, photos show a small picture of themselves, videos show a frame, PDFs and Office documents show their first page, and text files show their first lines. Turn this off for smaller cards, so more fit on the screen.",

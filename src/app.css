@@ -552,6 +552,24 @@ main.narrow {
   background: var(--accent-soft);
 }
 
+/* Room on the left of each place for My Drive's arrow, so the icons line
+   up. */
+.places > li > .place-row {
+  position: relative;
+}
+
+.places > li > .place-row > .place {
+  padding-left: 36px;
+}
+
+.place-toggle {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  z-index: 1;
+  border-radius: 50%;
+}
+
 .tree .place {
   display: block;
   padding: 0 12px 0 4px;

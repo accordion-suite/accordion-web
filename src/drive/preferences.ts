@@ -1,5 +1,5 @@
-// The reader's Drive settings: the page Drive opens on, and whether grid
-// view shows thumbnails. The server keeps them, so they follow the reader
+// The reader's Drive settings: the page Drive opens on, whether grid view
+// shows thumbnails, and what a click on an item does. The server keeps them, so they follow the reader
 // to every device. They load once, and Settings changes them here, so Drive
 // sees a change without loading them again.
 
@@ -7,12 +7,17 @@ import { useEffect, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 
+/** What a click on an item does: select it, as in Google Drive, open it,
+ * or download a file. Folders open when files download. */
+export type ClickAction = "select" | "open" | "download";
+
 export interface DriveSettings {
   start_page: "home" | "my-drive";
   thumbnails: boolean;
+  click: ClickAction;
 }
 
-export const DEFAULT_SETTINGS: DriveSettings = { start_page: "home", thumbnails: true };
+export const DEFAULT_SETTINGS: DriveSettings = { start_page: "home", thumbnails: true, click: "select" };
 
 const CHANGED = "accordion:drive-settings";
 

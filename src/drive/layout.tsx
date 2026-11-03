@@ -145,6 +145,16 @@ export function DriveLayout({
   const [notice, setNotice] = useState<Notice | null>(null);
   const [dropping, setDropping] = useState(false);
   const [dropOn, setDropOn] = useState<string | null>(null);
+  const [, setShown] = useState(0);
+  const myDriveOpen = expanded.has(MY_DRIVE);
+  // Opening a folder in My Drive opens My Drive in the sidebar, once, so
+  // the reader can still close it while they're there.
+  useEffect(() => {
+    if (top && target.trail.includes(top.id) && !expanded.has(MY_DRIVE)) {
+      expanded.add(MY_DRIVE);
+      setShown((count) => count + 1);
+    }
+  }, [top, target.trail]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selection, setSelection] = useState<readonly Item[]>([]);
   const [pageItem, setPageItem] = useState<Item | null>(null);
@@ -358,6 +368,21 @@ export function DriveLayout({
                 class={top && dropOn === top.id ? "place-row drop-target" : "place-row"}
                 {...(top ? dropProps({ id: top.id, name: t("drive.myDrive") }, setDropOn, notify) : {})}
               >
+                {top && (
+                  <button
+                    type="button"
+                    class="tree-toggle place-toggle"
+                    aria-expanded={myDriveOpen}
+                    aria-label={t(myDriveOpen ? "drive.collapse" : "drive.expand", { name: t("drive.myDrive") })}
+                    onClick={() => {
+                      if (myDriveOpen) expanded.delete(MY_DRIVE);
+                      else expanded.add(MY_DRIVE);
+                      setShown((count) => count + 1);
+                    }}
+                  >
+                    <ChevronIcon />
+                  </button>
+                )}
                 <a
                   class="place"
                   href="/drive/my-drive"
@@ -368,7 +393,7 @@ export function DriveLayout({
                   {t("drive.myDrive")}
                 </a>
               </div>
-              {top && <FolderTree parent={top.id} trail={target.trail} current={path} depth={1} />}
+              {top && myDriveOpen && <FolderTree parent={top.id} trail={target.trail} current={path} depth={1} />}
             </li>
             <Place href="/drive/shared-by-me" current={path === "/drive/shared-by-me"} icon={<SharedOutIcon />}>
               {t("sharedByMe.title")}
@@ -510,6 +535,10 @@ function NoticeBar({ notice, onUndo, onClose }: { notice: Notice; onUndo?: () =>
  * between pages. */
 const expanded = new Set<string>();
 
+/** Stands for My Drive in `expanded`. It starts closed, and opens when the
+ * reader opens My Drive or a folder in it. */
+const MY_DRIVE = "my-drive";
+
 /** Closes the sidebar's folders, which belong to whoever was signed in
  * before. */
 export function forgetSidebar(): void {
@@ -563,7 +592,7 @@ function FolderTree({
           <li key={folder.id}>
             <div
               class={dropOn === folder.id ? "place-row drop-target" : "place-row"}
-              style={{ paddingLeft: `${depth * 16}px` }}
+              style={{ paddingLeft: `${depth * 16 + 16}px` }}
               {...dropProps(folder, setDropOn, drive.notify)}
             >
               <button
