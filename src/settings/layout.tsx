@@ -9,6 +9,7 @@ import { useEffect, useState } from "preact/hooks";
 
 import type { Session } from "../api.ts";
 import { DriveIcon } from "../drive/icons.tsx";
+import { lastDrivePage } from "../drive/layout.tsx";
 import { t, type MessageKey } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
 import { followLink, usePath } from "../shell/router.ts";
@@ -87,7 +88,9 @@ export function SettingsLayout({
         onMenu={() => setSidebarOpen(!sidebarOpen)}
       />
       <nav id="sidebar" class="sidebar" aria-label={t("settings.sections")}>
-        <a class="place back" href="/drive/" onClick={followLink}>
+        {/* Back to the Drive page the reader left, or their start page if
+            they came straight to Settings. */}
+        <a class="place back" href={lastDrivePage() ?? "/drive/start"} onClick={followLink}>
           <BackIcon />
           {t("settings.backToDrive")}
         </a>

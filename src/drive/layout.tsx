@@ -16,7 +16,7 @@ import { useContext, useEffect, useRef, useState } from "preact/hooks";
 import { api, type Session } from "../api.ts";
 import { formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
-import { followLink, usePath } from "../shell/router.ts";
+import { followLink, usePath, useQueryString } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
 import { DetailsPanel } from "./details.tsx";
 import { ClashDialog, NameDialog, ShortcutsDialog } from "./dialogs.tsx";
@@ -135,6 +135,10 @@ export function DriveLayout({
   children: ComponentChildren;
 }) {
   const path = usePath();
+  const query = useQueryString();
+  useEffect(() => {
+    lastPage = path + query;
+  }, [path, query]);
   const [top, setTop] = useState<Item | null>(null);
   const [target, setTargetState] = useState<{ folder: Item | null; drops: boolean; trail: readonly string[] }>({
     folder: null,
@@ -540,10 +544,19 @@ const expanded = new Set<string>();
  * reader opens My Drive or a folder in it. */
 const MY_DRIVE = "my-drive";
 
-/** Closes the sidebar's folders, which belong to whoever was signed in
- * before. */
+/** The address of the Drive page the reader was last on, such as a
+ * folder, so Settings can lead back to it. */
+let lastPage: string | null = null;
+
+export function lastDrivePage(): string | null {
+  return lastPage;
+}
+
+/** Closes the sidebar's folders and forgets the last page, which belong to
+ * whoever was signed in before. */
 export function forgetSidebar(): void {
   expanded.clear();
+  lastPage = null;
 }
 
 /** The folders inside `parent`, each of which can open to show its own. */
