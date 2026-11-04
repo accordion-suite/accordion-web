@@ -664,9 +664,19 @@ dialog.search-options .dialog-close {
 }
 
 .tree .place {
-  display: block;
+  gap: 10px;
   padding: 0 12px 0 4px;
-  line-height: 36px;
+}
+
+.tree .item-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.place-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tree-toggle {

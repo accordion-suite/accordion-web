@@ -594,18 +594,22 @@ export function ItemList({
   }
 
   /** Marks for a starred item, and for one the reader shared, apart from
-   * on Shared by me, where everything is. */
+   * on Shared by me, where everything is. A shared folder's icon shows
+   * it's shared, so only screen readers get its mark. */
   function starMark(item: Item) {
     const shared = item.shared && !shares;
     if (!shared && !item.starred) return null;
     return (
       <span class="marks">
-        {shared && (
-          <span class="shared-mark" title={t("share.sharedMark")}>
-            <PeopleIcon />
+        {shared &&
+          (item.kind === "folder" ? (
             <span class="visually-hidden">{t("share.sharedMark")}</span>
-          </span>
-        )}
+          ) : (
+            <span class="shared-mark" title={t("share.sharedMark")}>
+              <PeopleIcon />
+              <span class="visually-hidden">{t("share.sharedMark")}</span>
+            </span>
+          ))}
         {item.starred && (
           <span class="star-mark" title={t("drive.starred")}>
             <StarIcon filled />

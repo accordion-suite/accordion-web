@@ -238,16 +238,16 @@ export function kindOf(item: Pick<Item, "kind" | "name">): string {
 const SHAPES: Record<string, ComponentChildren> = {
   folder: <path d="M2 6a2 2 0 0 1 2-2h5.2l2 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z" />,
   document: (
-    <path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m2 10v1.6h8V12zm0 3.4V17h8v-1.6zm0 3.4v1.6h5v-1.6z" />
+    <path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m2 8.5v1.6h8v-1.6zm0 3.4v1.6h8v-1.6zm0 3.4v1.6h5v-1.6z" />
   ),
   spreadsheet: (
-    <path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m1.5 9.5v8h9v-8zm1.5 1.5h2.2v1.8H9zm3.7 0H15v1.8h-2.3zM9 16.2h2.2V18H9zm3.7 0H15V18h-2.3z" />
+    <path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m1.5 8v8h9v-8zm1.5 1.5h2.2v1.8H9zm3.7 0H15v1.8h-2.3zM9 14.7h2.2v1.8H9zm3.7 0H15v1.8h-2.3z" />
   ),
   presentation: (
-    <path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m1.5 10v6.5h9V12zm1.5 1.5h6V17H9z" />
+    <path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m1.5 8.5v6.5h9v-6.5zm1.5 1.5h6v3.5H9z" />
   ),
   pdf: (
-    <path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m1 11v5h1.4v-1.6h.8a1.7 1.7 0 0 0 0-3.4zm1.4 1.2h.8a.5.5 0 0 1 0 1h-.8zM11.3 13v5h1.4a2.5 2.5 0 0 0 0-5zm1.4 1.2h.1a1.3 1.3 0 0 1 0 2.6h-.1zM16 13v5h1.4v-2h1.4v-1.1h-1.4v-.7H19V13z" />
+    <path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m0 9.5v5h1.4v-1.6h.8a1.7 1.7 0 0 0 0-3.4zm1.4 1.2h.8a.5.5 0 0 1 0 1h-.8zM10.3 11.5v5h1.4a2.5 2.5 0 0 0 0-5zm1.4 1.2h.1a1.3 1.3 0 0 1 0 2.6h-.1zM15 11.5v5h1.4v-2h1.4v-1.1h-1.4v-.7H18v-1.2z" />
   ),
   image: (
     <path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2m3.5 4a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6M6 18h12l-3.8-5.2-3 3.9-2-2.4z" />
@@ -264,8 +264,22 @@ const SHAPES: Record<string, ComponentChildren> = {
   file: <path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m7 1.5V9h5.5z" />,
 };
 
-/** An item's icon, colored by its kind. */
-export function ItemIcon({ item }: { item: Pick<Item, "kind" | "name"> & { color?: Item["color"] } }) {
+/** A folder the reader shared: the folder with the two people of
+ * {@link PeopleIcon}, solid and at 60% size, cut out of it. */
+const SHARED_FOLDER = (
+  <path
+    fill-rule="evenodd"
+    d="M2 6a2 2 0 0 1 2-2h5.2l2 2H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2zm8.2 2.75a2.1 2.1 0 1 0 0 4.2 2.1 2.1 0 0 0 0-4.2m4.5.6a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6m-4.5 4.8c-1.98 0-3.6.96-3.6 2.4v1.2h7.2v-1.2c0-1.44-1.62-2.4-3.6-2.4m4.56.36c.12.6.24 1.26.24 2.04v1.2h2.4v-1.2c0-1.08-1.08-1.86-2.64-2.04"
+  />
+);
+
+/** An item's icon, colored by its kind. A folder the reader shared has
+ * people on it. */
+export function ItemIcon({
+  item,
+}: {
+  item: Pick<Item, "kind" | "name"> & { color?: Item["color"]; shared?: boolean };
+}) {
   const kind = kindOf(item);
   const color = item.kind === "folder" && item.color ? ` folder-${item.color}` : "";
   return (
@@ -276,7 +290,7 @@ export function ItemIcon({ item }: { item: Pick<Item, "kind" | "name"> & { color
       focusable="false"
       fill="currentColor"
     >
-      {SHAPES[kind]}
+      {kind === "folder" && item.shared ? SHARED_FOLDER : SHAPES[kind]}
     </svg>
   );
 }

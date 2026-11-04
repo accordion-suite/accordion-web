@@ -37,6 +37,7 @@ import {
   CloudIcon,
   DriveIcon,
   HomeIcon,
+  ItemIcon,
   NewFolderIcon,
   PeopleIcon,
   SharedOutIcon,
@@ -614,7 +615,8 @@ function FolderTree({
                 onClick={followLink}
                 aria-current={current === href ? "page" : undefined}
               >
-                {folder.name}
+                <ItemIcon item={folder} />
+                <span class="place-name">{folder.name}</span>
               </a>
             </div>
             {open && <FolderTree parent={folder.id} trail={trail} current={current} depth={depth + 1} />}
