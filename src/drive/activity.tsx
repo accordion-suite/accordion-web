@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
-import { type MessageKey, t } from "../i18n.ts";
+import { formatDay, type MessageKey, t } from "../i18n.ts";
 import { detail, type EventItem, type EventPage, itemName, type LoggedEvent, personName, viaText, when, who } from "../shell/events.ts";
 import { useLive } from "../shell/live.ts";
 import { ItemIcon } from "./icons.tsx";
@@ -58,6 +58,9 @@ const SENTENCES: Record<string, MessageKey> = {
   shared: "events.shared",
   share_changed: "events.shareChanged",
   unshared: "events.unshared",
+  link_created: "events.linkCreated",
+  link_removed: "events.linkRemoved",
+  link_opened: "events.linkOpened",
 };
 
 /** What a group says happened, such as "You uploaded 3 items". */
@@ -93,6 +96,10 @@ function note(event: LoggedEvent): string {
       });
     case "unshared":
       return t("events.noAccess", { name: personName(event.other) });
+    case "link_created": {
+      const expires = event.details?.["expires"];
+      return typeof expires === "string" ? t("events.linkExpires", { day: formatDay(expires) }) : t("events.linkNeverExpires");
+    }
     case "version_restored":
       return t("events.version", { number: detail(event, "number") });
     default:
