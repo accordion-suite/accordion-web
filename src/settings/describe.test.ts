@@ -62,6 +62,7 @@ test("lists every connection, with a switch where there is one", () => {
       uses_lookup: true,
       record_last: null,
     },
+    links: null,
   };
   const all = connections(status);
   assert.deepEqual(

@@ -3000,3 +3000,44 @@ dialog.shortcuts kbd {
 .storage-summary progress {
   width: min(420px, 100%);
 }
+
+/* Links in the share dialog (decision 22). */
+.share-links {
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.link-form label {
+  display: block;
+  margin: 12px 0 4px;
+}
+
+.link-form input:not(.short),
+.link-form select {
+  width: 100%;
+}
+
+.link-form input.short {
+  max-width: 10em;
+}
+
+.made-link {
+  margin: 12px 0;
+}
+
+.made-link label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.made-link-row {
+  display: flex;
+  gap: 8px;
+}
+
+.made-link-row input {
+  flex: 1;
+  min-width: 0;
+}

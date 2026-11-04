@@ -370,6 +370,15 @@ export const settingsEn = {
   "network.endpointWhereLookup":
     "Connects to {host}, your DNS provider. The router doesn't say what your public address is, so it also connects to {lookup} to learn it.",
   "network.endpointOften": "When remote access turns on, then every 10 minutes.",
+  "network.linksRouterTitle": "Asking your router to forward link sharing's port",
+  "network.linksRouterPurpose": "Asks your router to forward the TCP port that links use, through PCP, NAT-PMP, or UPnP.",
+  "network.linksFixed": "Turn off link sharing to stop this.",
+  "network.linksRecordTitle": "Keeping the links address current",
+  "network.linksRecordPurpose": "Points {name}, which links use, to your home's public address.",
+  "network.linksCertificateTitle": "Certificate for links",
+  "network.linksCertificatePurpose": "Gets and renews the certificate that lets link pages open securely in any browser.",
+  "network.linksCertificateWhere":
+    "Connects to Let's Encrypt and {host}, your DNS provider, to prove the name is yours.",
   "network.notCoveredTitle": "What this doesn't cover",
   "network.notCoveredSystem":
     "Connections the server's operating system makes on its own, such as system updates and setting the clock.",
@@ -514,4 +523,35 @@ export const settingsEn = {
   "remote.remove": "Remove",
   "remote.removeTitle": "Remove {name}?",
   "remote.removeBody": "{name} stops reaching Accordion from away right away. {owner} can add it again.",
+  "linkSharing.offTitle": "Link sharing is off",
+  "linkSharing.onTitle": "Link sharing is on",
+  "linkSharing.intro":
+    "Link sharing lets people share files and folders by link with anyone, such as an accountant or a grandparent, without an account. Link pages are the only thing it puts on the internet.",
+  "linkSharing.unnamed":
+    "This server doesn't have a name yet, so link sharing works only for testing: links open over plain HTTP, only on this network.",
+  "linkSharing.port": "Port for links",
+  "linkSharing.portHint": "Links use 443, the usual port for websites. Choose another only if your internet provider blocks it.",
+  "linkSharing.turnOn": "Turn on link sharing",
+  "linkSharing.turnOff": "Turn off link sharing",
+  "linkSharing.turnOffHint":
+    "Turning it off closes the port, and every link stops working at once. Links that haven't expired work again when you turn it back on.",
+  "linkSharing.address": "Links start with",
+  "linkSharing.certificate": "Certificate",
+  "linkSharing.certificateUntil": "Valid until {day}",
+  "linkSharing.certificateGetting": "Accordion is getting it",
+  "linkSharing.routerMapped": "Forwards TCP port {port} to the server, through {method}",
+  "linkSharing.routerRefused":
+    "Didn't forward the port by itself. In your router's settings, forward TCP port {port} to port {to} on {home}.",
+  "linkSharing.shared":
+    "Your internet provider shares one public address among many homes, or your router is behind another router, so links can't reach people outside the home.",
+  "linkSharing.allTitle": "Everyone's links",
+  "linkSharing.none": "Nobody has made a link yet.",
+  "linkSharing.linkLine": "{owner}'s, made by {maker}.",
+  "linkSharing.removeTitle": "Remove the link to {name}?",
+  "linkSharing.removeBody": "Anyone with the link can't open it any more. Whoever made it can make a new one.",
+  "log.linkSharingOn": "Turned on link sharing",
+  "log.linkSharingOff": "Turned off link sharing",
+  "log.linkCreated": "Link to {item} made",
+  "log.linkRemoved": "Link to {item} removed",
+  "log.linkOpened": "Someone opened a link to {item}",
 } as const;

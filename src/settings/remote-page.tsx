@@ -5,6 +5,7 @@
 import { useEffect, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
+import { type Link, linkFacts } from "../drive/links.tsx";
 import { formatDay, formatMoment, t } from "../i18n.ts";
 import { ConfirmDialog, problemText } from "../shell/dialog.tsx";
 import { SettingsPage } from "./layout.tsx";
@@ -138,6 +139,9 @@ export function RemotePage() {
       {data.on && data.named && <RouterCard data={data} />}
       {data.on && <AddressCard data={data} />}
 
+      <LinkSharingCard />
+      <AllLinksCard />
+
       <section class="settings-card">
         <h2>{t("remote.devicesTitle")}</h2>
         {data.devices.length === 0 ? (
@@ -255,6 +259,202 @@ function AddressCard({ data }: { data: Status }) {
         )}
       </dl>
       {record?.problem && <p class="error">{t("remote.recordProblem", { problem: record.problem })}</p>}
+    </section>
+  );
+}
+
+interface LinkSharing {
+  available: boolean;
+  named: boolean;
+  on: boolean;
+  port: number;
+  listen_port: number | null;
+  origin: string | null;
+  home_address: string | null;
+  listening: boolean;
+  listen_problem: string | null;
+  certificate: { renewing: boolean; expires_at: number | null; problem: string | null } | null;
+  router: { method: string | null; external_address: string | null; shared_address: boolean; problem: string | null } | null;
+  record: { ipv4: string | null; ipv4_set_by_provider: boolean; ipv6: string | null; problem: string | null } | null;
+}
+
+function linksSettling(data: LinkSharing): boolean {
+  if (!data.on) return false;
+  const router = data.router;
+  return (
+    (!data.listening && !data.listen_problem) ||
+    (router !== null && router.method === null && router.problem === null) ||
+    (data.certificate !== null && data.certificate.expires_at === null && data.certificate.problem === null)
+  );
+}
+
+/** Link sharing's switch and port, and how its parts are doing. */
+function LinkSharingCard() {
+  const status = useLoad<LinkSharing>("/api/link-sharing", SETTLING_MS, linksSettling);
+  const [port, setPort] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const data = status.data;
+
+  useEffect(() => {
+    if (data && port === "") setPort(String(data.port));
+  }, [data]);
+
+  async function save(on: boolean) {
+    setError("");
+    const number = Number(port);
+    if (!Number.isInteger(number) || number < 1 || number > 65535) {
+      setError(t("remote.badPort"));
+      return;
+    }
+    setBusy(true);
+    try {
+      await api("PUT", "/api/link-sharing", { on, port: number });
+      await status.reload();
+    } catch (problem) {
+      setError(problemText(problem));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (data === null) {
+    return status.error ? null : (
+      <section class="settings-card">
+        <LoadState error="" />
+      </section>
+    );
+  }
+  const router = data.router;
+  return (
+    <section class="settings-card">
+      <h2>{t(data.on ? "linkSharing.onTitle" : "linkSharing.offTitle")}</h2>
+      <p>{t("linkSharing.intro")}</p>
+      {!data.named && <p class="hint">{t("linkSharing.unnamed")}</p>}
+      <p class="error" role="alert">
+        {error || data.listen_problem || ""}
+      </p>
+      {data.named && (
+        <>
+          <label for="links-port">{t("linkSharing.port")}</label>
+          <p class="hint">{t("linkSharing.portHint")}</p>
+          <input
+            id="links-port"
+            class="short"
+            inputMode="numeric"
+            value={port}
+            onInput={(event) => setPort(event.currentTarget.value)}
+          />
+        </>
+      )}
+      <div class="form-buttons">
+        <button type="button" disabled={busy} onClick={() => void save(!data.on)}>
+          {t(data.on ? "linkSharing.turnOff" : "linkSharing.turnOn")}
+        </button>
+        {data.on && String(data.port) !== port && (
+          <button type="button" class="secondary" disabled={busy} onClick={() => void save(true)}>
+            {t("remote.savePort")}
+          </button>
+        )}
+      </div>
+      {data.on && <p class="hint">{t("linkSharing.turnOffHint")}</p>}
+      {data.on && (
+        <dl class="facts">
+          {data.origin && (
+            <>
+              <dt>{t("linkSharing.address")}</dt>
+              <dd>{data.origin}</dd>
+            </>
+          )}
+          {data.certificate && (
+            <>
+              <dt>{t("linkSharing.certificate")}</dt>
+              <dd>
+                {data.certificate.expires_at
+                  ? t("linkSharing.certificateUntil", { day: formatDay(data.certificate.expires_at) })
+                  : data.certificate.problem ?? t("linkSharing.certificateGetting")}
+              </dd>
+            </>
+          )}
+          {router && (
+            <>
+              <dt>{t("remote.routerTitle")}</dt>
+              <dd>
+                {router.method
+                  ? t("linkSharing.routerMapped", { port: String(data.port), method: router.method })
+                  : router.problem
+                    ? t("linkSharing.routerRefused", {
+                        port: String(data.port),
+                        to: String(data.listen_port ?? ""),
+                        home: data.home_address ?? t("remote.unknown"),
+                      })
+                    : t("remote.routerAsking", { port: String(data.port) })}
+              </dd>
+            </>
+          )}
+          {data.record && (
+            <>
+              <dt>{t("remote.publicAddress")}</dt>
+              <dd>
+                {data.record.ipv4 ??
+                  (data.record.ipv4_set_by_provider ? t("remote.setByProvider") : t("remote.unknown"))}
+              </dd>
+            </>
+          )}
+        </dl>
+      )}
+      {router?.shared_address && <p class="error">{t("linkSharing.shared")}</p>}
+      {data.record?.problem && <p class="error">{t("remote.recordProblem", { problem: data.record.problem })}</p>}
+    </section>
+  );
+}
+
+interface AdminLink extends Link {
+  item_name: string;
+  owner_name: string;
+}
+
+/** Everyone's links, so an admin can remove any of them. */
+function AllLinksCard() {
+  const links = useLoad<AdminLink[]>("/api/drive/links");
+  const [removing, setRemoving] = useState<AdminLink | null>(null);
+  if (links.data === null) return null;
+  return (
+    <section class="settings-card">
+      <h2>{t("linkSharing.allTitle")}</h2>
+      {links.data.length === 0 ? (
+        <p class="hint">{t("linkSharing.none")}</p>
+      ) : (
+        <ul class="rows">
+          {links.data.map((link) => (
+            <li key={link.id} class="row">
+              <div class="row-text">
+                <strong>{link.item_name}</strong>
+                <span class="hint">
+                  {t("linkSharing.linkLine", { owner: link.owner_name, maker: link.made_by_name })} {linkFacts(link)}
+                </span>
+                {link.note && <span class="hint">{link.note}</span>}
+              </div>
+              <button type="button" class="secondary" onClick={() => setRemoving(link)}>
+                {t("remote.remove")}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {removing && (
+        <ConfirmDialog
+          title={t("linkSharing.removeTitle", { name: removing.item_name })}
+          body={t("linkSharing.removeBody")}
+          confirm={t("remote.remove")}
+          onConfirm={async () => {
+            await api("DELETE", `/api/drive/links/${removing.id}`);
+            setRemoving(null);
+            await links.reload();
+          }}
+          onClose={() => setRemoving(null)}
+        />
+      )}
     </section>
   );
 }

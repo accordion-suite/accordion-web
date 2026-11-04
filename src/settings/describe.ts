@@ -104,6 +104,17 @@ export interface NetworkStatus {
     uses_lookup: boolean;
     record_last: Last | null;
   } | null;
+  /** Link sharing's connections, while it's on. */
+  links: {
+    name: string;
+    router: string | null;
+    router_last: Last | null;
+    record_host: string;
+    lookup_host: string;
+    uses_lookup: boolean;
+    record_last: Last | null;
+    certificate_last: Last | null;
+  } | null;
 }
 
 /** One connection the server makes: why, where, how often, the last time,
@@ -204,6 +215,36 @@ export function connections(status: NetworkStatus): Connection[] {
       often: t("network.endpointOften"),
       last: lastLine(remote.record_last, t("network.notSinceStart")),
       fixed: t("network.remoteFixed"),
+    });
+  }
+
+  const links = status.links;
+  if (links) {
+    all.push({
+      title: t("network.linksRouterTitle"),
+      purpose: t("network.linksRouterPurpose"),
+      where: links.router ? t("network.routerWhere", { host: links.router }) : t("network.routerWhereUnknown"),
+      often: t("network.routerOften"),
+      last: lastLine(links.router_last, t("network.notSinceStart")),
+      fixed: t("network.linksFixed"),
+    });
+    all.push({
+      title: t("network.linksRecordTitle"),
+      purpose: t("network.linksRecordPurpose", { name: links.name }),
+      where: links.uses_lookup
+        ? t("network.endpointWhereLookup", { host: links.record_host, lookup: links.lookup_host })
+        : t("network.endpointWhere", { host: links.record_host }),
+      often: t("network.endpointOften"),
+      last: lastLine(links.record_last, t("network.notSinceStart")),
+      fixed: t("network.linksFixed"),
+    });
+    all.push({
+      title: t("network.linksCertificateTitle"),
+      purpose: t("network.linksCertificatePurpose"),
+      where: t("network.linksCertificateWhere", { host: links.record_host }),
+      often: t("network.certificateOften"),
+      last: lastLine(links.certificate_last, t("network.notSinceStart")),
+      fixed: t("network.linksFixed"),
     });
   }
 

@@ -11,6 +11,7 @@ import { Dialog, problemText as message } from "../shell/dialog.tsx";
 import type { Child } from "./folder-upload.ts";
 import { FOLDER_COLORS, type FolderColor, type Item, type ShareEntry } from "./item.ts";
 import { ItemIcon } from "./icons.tsx";
+import { LinksSection } from "./links.tsx";
 import { freeName, stemLength } from "./names.ts";
 
 /** Asks for a name, such as for a new folder. `onSubmit` throws to show a
@@ -573,6 +574,12 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
             ))}
           </ul>
           {shares.length === 0 && <p class="hint">{t("share.nobody")}</p>}
+          <LinksSection
+            item={item}
+            onChanged={() => {
+              changed.current = true;
+            }}
+          />
         </>
       ) : (
         !error && <p class="loading">{t("shell.loading")}</p>

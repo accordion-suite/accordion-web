@@ -124,6 +124,7 @@ const SENTENCES: Record<string, MessageKey> = {
   restored: "notify.restored",
   version_restored: "notify.versionRestored",
   description_changed: "notify.descriptionChanged",
+  link_opened: "notify.linkOpened",
 };
 
 /** What a notification says, such as "Sam Rivera added 12 items to

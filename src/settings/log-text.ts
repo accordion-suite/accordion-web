@@ -53,6 +53,14 @@ export function logText(event: LoggedEvent, me: string): string {
       return t("log.remoteDeviceAdded", values);
     case "remote_device_removed":
       return t("log.remoteDeviceRemoved", values);
+    case "link_sharing_changed":
+      return t(event.details?.on === true ? "log.linkSharingOn" : "log.linkSharingOff");
+    case "link_created":
+      return t("log.linkCreated", values);
+    case "link_removed":
+      return t("log.linkRemoved", values);
+    case "link_opened":
+      return t("log.linkOpened", values);
     case "remote_access_changed":
       return t(event.details?.on === true ? "log.remoteAccessOn" : "log.remoteAccessOff");
     case "shared":
