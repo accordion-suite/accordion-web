@@ -48,6 +48,27 @@ export const settingsEn = {
   "account.passwordsDiffer": "The two new passwords don't match. Type them again.",
   "account.passwordChanged": "Your password is changed.",
   "devices.intro": "Reach Accordion from your phone and computer away from home, and open your files in other apps.",
+  "devices.appsTitle": "Accordion apps",
+  "devices.appsIntro":
+    "Accordion's apps keep your Drive files in sync on your computer. To add one, make a code here and enter it in the app. It works at home or away.",
+  "devices.appsAdd": "Add the Accordion app",
+  "devices.appsCodeTitle": "Code for the Accordion app",
+  "devices.appsCodeBody": "In the app, enter this server's address, then the code.",
+  "devices.appsServer": "Server address",
+  "devices.appsCode": "Code",
+  "devices.appsCodeOnce":
+    "The code works once, until {time}. If it runs out, select Add the Accordion app again for a new one.",
+  "devices.sessionsTitle": "Where you're signed in",
+  "devices.sessionsIntro": "The browsers and Accordion apps signed in to your account. Sign out any you don't recognize or use.",
+  "devices.sessionApp": "Accordion app.",
+  "devices.sessionBrowser": "Browser.",
+  "devices.sessionThis": "This browser.",
+  "devices.sessionUsed": "Signed in {created}, last used {used}.",
+  "devices.sessionSignOut": "Sign out",
+  "devices.sessionSignOutTitle": "Sign out {name}?",
+  "devices.sessionSignOutApp":
+    "{name} stops syncing right away. Its files stay on that device. To sync it again, add the app with a new code.",
+  "devices.sessionSignOutBrowser": "{name} is signed out right away. Signing in there again works as usual.",
   "devices.remoteTitle": "Remote access",
   "devices.remoteIntro":
     "Add your phone or laptop to reach Accordion when you're away from home. Each device connects through the WireGuard app, which makes a private, encrypted connection to your server.",

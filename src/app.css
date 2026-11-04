@@ -2879,7 +2879,6 @@ label.choice input {
   border-radius: 8px;
 }
 
-dl.details,
 dl.facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -2887,12 +2886,10 @@ dl.facts {
   margin: 12px 0;
 }
 
-dl.details dt,
 dl.facts dt {
   color: var(--muted);
 }
 
-dl.details dd,
 dl.facts dd {
   margin: 0;
   overflow-wrap: anywhere;

@@ -47,6 +47,8 @@ export function DevicesPage({ username, admin }: { username: string; admin: bool
 
   return (
     <SettingsPage title={t("settings.devices")} intro={t("devices.intro")}>
+      <AppsCard />
+      <SessionsCard />
       <RemoteCard admin={admin} />
       <section class="settings-card">
         <h2>{t("devices.title")}</h2>
@@ -151,7 +153,7 @@ function CreateDialog({
         <p>{t("devices.createdBody")}</p>
         <Secret text={created.password} />
         <p class="hint">{t("devices.spaces")}</p>
-        <dl class="details">
+        <dl class="facts">
           <dt>{t("devices.address")}</dt>
           <dd>
             <code>{`${location.origin}/dav/drive/`}</code>
@@ -205,6 +207,137 @@ function CreateDialog({
       </form>
       {passwordDialog}
     </Dialog>
+  );
+}
+
+interface AppCode {
+  code: string;
+  expires_at: string;
+}
+
+/** Adds one of Accordion's apps with a code, which works away from home
+ * too (decision 23). */
+function AppsCard() {
+  const [code, setCode] = useState<AppCode | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [checked, passwordDialog] = usePasswordCheck();
+
+  async function make() {
+    setBusy(true);
+    setError("");
+    try {
+      const made = await checked(() => api<AppCode>("POST", "/api/app-codes"));
+      if (made) setCode(made);
+    } catch (problem) {
+      setError(problemText(problem));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section class="settings-card">
+      <h2>{t("devices.appsTitle")}</h2>
+      <p>{t("devices.appsIntro")}</p>
+      <p class="error" role="alert">
+        {error}
+      </p>
+      <div class="form-buttons">
+        <button type="button" disabled={busy} onClick={() => void make()}>
+          {t("devices.appsAdd")}
+        </button>
+      </div>
+      {passwordDialog}
+      {code && (
+        <Dialog title={t("devices.appsCodeTitle")} onClose={() => setCode(null)}>
+          <p>{t("devices.appsCodeBody")}</p>
+          <dl class="facts">
+            <dt>{t("devices.appsServer")}</dt>
+            <dd>
+              <code>{location.origin}</code>
+            </dd>
+            <dt>{t("devices.appsCode")}</dt>
+          </dl>
+          <Secret text={code.code} />
+          <p class="hint">
+            {t("devices.appsCodeOnce", {
+              time: new Date(code.expires_at).toLocaleTimeString(undefined, { timeStyle: "short" }),
+            })}
+          </p>
+          <div class="dialog-buttons">
+            <button type="button" autofocus onClick={() => setCode(null)}>
+              {t("devices.done")}
+            </button>
+          </div>
+        </Dialog>
+      )}
+    </section>
+  );
+}
+
+interface SignedInSession {
+  id: string;
+  device_name: string;
+  client: "browser" | "app";
+  created_at: string;
+  last_used_at: string;
+  current: boolean;
+}
+
+/** The browsers and apps the reader is signed in on, each with a way to
+ * sign it out (decision 3). */
+function SessionsCard() {
+  const sessions = useLoad<SignedInSession[]>("/api/sessions");
+  const [ending, setEnding] = useState<SignedInSession | null>(null);
+
+  return (
+    <section class="settings-card">
+      <h2>{t("devices.sessionsTitle")}</h2>
+      <p>{t("devices.sessionsIntro")}</p>
+      {sessions.data === null ? (
+        <LoadState error={sessions.error} />
+      ) : (
+        <ul class="rows">
+          {sessions.data.map((session) => (
+            <li key={session.id} class="row">
+              <div class="row-text">
+                <strong>{session.device_name}</strong>
+                <span class="hint">
+                  {t(session.client === "app" ? "devices.sessionApp" : "devices.sessionBrowser")}{" "}
+                  {session.current
+                    ? t("devices.sessionThis")
+                    : t("devices.sessionUsed", {
+                        created: formatDay(session.created_at),
+                        used: formatDay(session.last_used_at),
+                      })}
+                </span>
+              </div>
+              {!session.current && (
+                <button type="button" class="secondary" onClick={() => setEnding(session)}>
+                  {t("devices.sessionSignOut")}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {ending && (
+        <ConfirmDialog
+          title={t("devices.sessionSignOutTitle", { name: ending.device_name })}
+          body={t(ending.client === "app" ? "devices.sessionSignOutApp" : "devices.sessionSignOutBrowser", {
+            name: ending.device_name,
+          })}
+          confirm={t("devices.sessionSignOut")}
+          onConfirm={async () => {
+            await api("DELETE", `/api/sessions/${ending.id}`);
+            setEnding(null);
+            await sessions.reload();
+          }}
+          onClose={() => setEnding(null)}
+        />
+      )}
+    </section>
   );
 }
 
