@@ -96,8 +96,21 @@ function located(item: Item | Found): item is Found {
  * person's name, and how many more. */
 function sharedWithText(item: SharedOut): string {
   const [first, ...more] = item.shared_with;
-  if (!first) return "";
-  return more.length === 0 ? first.display_name : t("sharedByMe.withMore", { name: first.display_name, count: more.length });
+  const people = !first
+    ? ""
+    : more.length === 0
+      ? first.display_name
+      : t("sharedByMe.withMore", { name: first.display_name, count: more.length });
+  if (item.links === 0) return people;
+  const links = t("sharedByMe.links", { count: item.links });
+  return people ? t("sharedByMe.withLinks", { people, links }) : links;
+}
+
+/** Everyone an item is shared with, and its links, for the tooltip. */
+function sharedWithTitle(item: SharedOut): string {
+  const names = item.shared_with.map((share) => share.display_name);
+  if (item.links > 0) names.push(t("sharedByMe.links", { count: item.links }));
+  return names.join(", ");
 }
 
 
@@ -364,7 +377,8 @@ export function ItemList({
       },
     });
     entries.push(SEPARATOR);
-    if (item.access === "owner") entries.push({ label: t("share.open"), onSelect: () => setOpen({ kind: "share", item }) });
+    // Editors share by link. Only the owner shares with people.
+    if (item.access !== "viewer") entries.push({ label: t("share.open"), onSelect: () => setOpen({ kind: "share", item }) });
     if (item.access === "owner" && item.shared) {
       entries.push({ label: t("sharedByMe.stop"), onSelect: () => setOpen({ kind: "unshare", item }) });
     }
@@ -780,7 +794,7 @@ export function ItemList({
                 </th>
                 {showLocation && <td class="location">{where(item)}</td>}
                 {shares && (
-                  <td class="with" title={(item as SharedOut).shared_with.map((share) => share.display_name).join(", ")}>
+                  <td class="with" title={sharedWithTitle(item as SharedOut)}>
                     {sharedWithText(item as SharedOut)}
                   </td>
                 )}

@@ -255,6 +255,11 @@ function About({ item }: { item: Item }) {
             {t("details.manageAccess")}
           </button>
         )}
+        {item.access === "editor" && (
+          <button type="button" class="secondary" onClick={() => setSharing(true)}>
+            {t("share.open")}
+          </button>
+        )}
       </section>
 
       <section class="details-section">

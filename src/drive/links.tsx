@@ -15,6 +15,9 @@ export interface Link {
   item: string;
   made_by: string;
   made_by_name: string;
+  /** Whether the reader may remove it: its maker, the owner, and admins
+   * may. */
+  removable: boolean;
   password: boolean;
   note: string;
   created_at: string;
@@ -135,15 +138,17 @@ export function LinksSection({ item, onChanged }: { item: Item; onChanged: () =>
                   <span>{link.note || t("links.unnamed", { name: link.made_by_name })}</span>
                   <span class="share-username">{linkFacts(link)}</span>
                 </span>
-                <button
-                  type="button"
-                  class="secondary"
-                  disabled={busy}
-                  aria-label={t("links.removeNamed", { name: link.note || t("links.thisLink") })}
-                  onClick={() => void remove(link)}
-                >
-                  {t("share.remove")}
-                </button>
+                {link.removable && (
+                  <button
+                    type="button"
+                    class="secondary"
+                    disabled={busy}
+                    aria-label={t("links.removeNamed", { name: link.note || t("links.thisLink") })}
+                    onClick={() => void remove(link)}
+                  >
+                    {t("share.remove")}
+                  </button>
+                )}
               </li>
             ))}
           </ul>

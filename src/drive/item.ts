@@ -78,7 +78,9 @@ export interface ShareEntry {
 /** Something the reader shared, with who has it, for Shared by me. */
 export interface SharedOut extends Found {
   shared_with: ShareEntry[];
-  /** When it was last shared with someone new. */
+  /** How many of its links still work. */
+  links: number;
+  /** When it was last shared with someone new, or got a new link. */
   shared_at: string;
 }
 

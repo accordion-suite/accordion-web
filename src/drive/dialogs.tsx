@@ -431,7 +431,8 @@ export interface Person {
 }
 
 /** Who can open an item, to share it with more people, change what each
- * may do, or stop sharing. Only the owner opens it. `onClose` says whether
+ * may do, or stop sharing, and its links. Only the owner shares with
+ * people, so an editor sees only the links. `onClose` says whether
  * anything changed, so lists can show the item as shared. */
 export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: boolean) => void }) {
   const [shares, setShares] = useState<ShareEntry[] | null>(null);
@@ -442,6 +443,7 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const changed = useRef(false);
+  const owner = item.access === "owner";
 
   async function load() {
     const [nextShares, nextPeople] = await Promise.all([
@@ -453,7 +455,7 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
   }
 
   useEffect(() => {
-    load().catch((problem) => setError(message(problem)));
+    if (owner) load().catch((problem) => setError(message(problem)));
   }, [item.id]);
 
   /** Runs a change, then lists who has access again. */
@@ -477,6 +479,10 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
   const others = people?.filter((person) => !person.you && !sharedWith.has(person.id)) ?? [];
   const levelName = (value: ShareEntry["level"]) => t(value === "editor" ? "share.editor" : "share.viewer");
 
+  function linksChanged() {
+    changed.current = true;
+  }
+
   function share(event: TargetedSubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const person = others.find((other) => other.id === adding);
@@ -489,7 +495,12 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
 
   return (
     <Dialog title={t("share.title", { name: item.name })} class="share-dialog" onClose={() => onClose(changed.current)}>
-      {shares && people ? (
+      {!owner ? (
+        <>
+          <p class="hint">{t("share.ownerOnly", { name: item.owner ?? "" })}</p>
+          <LinksSection item={item} onChanged={linksChanged} />
+        </>
+      ) : shares && people ? (
         <>
           {others.length === 0 ? (
             <p class="hint">{t("share.everyone")}</p>
@@ -574,12 +585,7 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
             ))}
           </ul>
           {shares.length === 0 && <p class="hint">{t("share.nobody")}</p>}
-          <LinksSection
-            item={item}
-            onChanged={() => {
-              changed.current = true;
-            }}
-          />
+          <LinksSection item={item} onChanged={linksChanged} />
         </>
       ) : (
         !error && <p class="loading">{t("shell.loading")}</p>
