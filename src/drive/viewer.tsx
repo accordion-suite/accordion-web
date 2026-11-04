@@ -1,16 +1,17 @@
 // Shows a file from a folder over the folder's page, with the folder's other
 // files a step away. The browser shows photos, PDFs, videos, and audio itself,
 // from Drive's preview address, and Office documents as the PDF the server
-// made of them. The viewer shows text files as a page of text. Other files,
-// and videos and songs the browser can't play, show their thumbnail or icon
-// and offer the download.
+// made of them. The viewer shows text files as a page of text, which people
+// who can change them can edit. Other files, and videos and songs the
+// browser can't play, show their thumbnail or icon and offer the download.
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
-import { formatSize, t } from "../i18n.ts";
-import { Dialog } from "../shell/dialog.tsx";
+import { t } from "../i18n.ts";
+import { ConfirmDialog, Dialog } from "../shell/dialog.tsx";
 import { ItemIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
+import { TextFile, canEditText, isText } from "./text-file.tsx";
 
 /** Small screens open PDFs in their own tab, because phones show a PDF in a
  * page badly or not at all. Matches the phone layout in app.css. */
@@ -18,10 +19,6 @@ const NARROW = "(max-width: 600px)";
 
 /** The most pages a document's preview has, as the server makes them. */
 const PREVIEW_PAGES = 50;
-
-/** The most of a text file the viewer shows, so a huge log doesn't freeze
- * the page. The download has the rest. */
-const TEXT_LIMIT = 1_000_000;
 
 function useMedia(query: string): boolean {
   const [matches, setMatches] = useState(() => matchMedia(query).matches);
@@ -50,10 +47,21 @@ export function Viewer({
   const position = files.indexOf(file);
   // Steps wrap around, so the buttons never turn off under keyboard focus.
   const step = (by: number) => onShow(files[(position + by + files.length) % files.length]!);
+  // A new text file opens ready to edit.
+  const [editAsked, setEditing] = useState(() => (history.state as { edit?: boolean } | null)?.edit === true);
+  const editing = editAsked && canEditText(file);
+  const dirty = useRef(false);
+  /** What to do once the reader agrees to lose their changes. */
+  const [discarding, setDiscarding] = useState<(() => void) | null>(null);
+
+  function leave(then: () => void) {
+    if (dirty.current) setDiscarding(() => then);
+    else then();
+  }
 
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
-      if (files.length < 2 || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (editing || files.length < 2 || event.altKey || event.ctrlKey || event.metaKey) return;
       // A video's controls skip back and ahead with the same keys.
       if (event.target instanceof HTMLMediaElement) return;
       if (event.key === "ArrowLeft") step(-1);
@@ -64,9 +72,9 @@ export function Viewer({
   });
 
   return (
-    <Dialog title={file.name} class="viewer" onClose={onClose}>
+    <Dialog title={file.name} class="viewer" onClose={() => leave(onClose)}>
       <div class="viewer-actions">
-        {files.length > 1 && (
+        {files.length > 1 && !editing && (
           <>
             <span class="viewer-position">
               {t("viewer.position", { position: position + 1, count: files.length })}
@@ -79,29 +87,62 @@ export function Viewer({
             </button>
           </>
         )}
+        {!editing && canEditText(file) && (
+          <button type="button" class="secondary" onClick={() => setEditing(true)}>
+            {t("viewer.edit")}
+          </button>
+        )}
         <a class="button secondary" href={`/api/drive/items/${file.id}/content`} download={file.name}>
           {t("viewer.download")}
         </a>
-        <button type="button" onClick={onClose}>
+        <button type="button" onClick={() => leave(onClose)}>
           {t("viewer.close")}
         </button>
       </div>
       {/* Keyed, so each file starts out loading. */}
-      <Shown key={file.id} file={file} />
+      <Shown
+        key={file.id}
+        file={file}
+        editing={editing}
+        onStop={() => leave(() => setEditing(false))}
+        onDirty={(changed) => (dirty.current = changed)}
+      />
+      {discarding && (
+        <ConfirmDialog
+          title={t("editor.discardTitle")}
+          body={t("editor.discardBody", { name: file.name })}
+          confirm={t("editor.discard")}
+          onConfirm={async () => {
+            dirty.current = false;
+            setDiscarding(null);
+            discarding();
+          }}
+          onClose={() => setDiscarding(null)}
+        />
+      )}
     </Dialog>
   );
 }
 
-function Shown({ file }: { file: Item }) {
+function Shown({
+  file,
+  editing,
+  onStop,
+  onDirty,
+}: {
+  file: Item;
+  editing: boolean;
+  onStop: () => void;
+  onDirty: (dirty: boolean) => void;
+}) {
   const [state, setState] = useState<"loading" | "shown" | "failed">("loading");
   const narrow = useMedia(NARROW);
   const address = `/api/drive/items/${file.id}/preview`;
   // Browsers' PDF viewers take their title from the end of the address.
   const named = `${address}/${encodeURIComponent(file.name)}`;
 
-  // The server found it's text when it made its thumbnail.
-  if (file.preview === null && file.thumbnail === "text") {
-    return <TextFile file={file} />;
+  if (isText(file)) {
+    return <TextFile file={file} editing={editing} onStop={onStop} onDirty={onDirty} />;
   }
   if (file.preview === null) {
     return (
@@ -233,51 +274,6 @@ function Shown({ file }: { file: Item }) {
             onError={() => setState("failed")}
           />
         </>
-      )}
-    </div>
-  );
-}
-
-/** A text file as a page of plain text, which can't run anything. */
-function TextFile({ file }: { file: Item }) {
-  const [text, setText] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const cut = (file.size ?? 0) > TEXT_LIMIT;
-
-  useEffect(() => {
-    let current = true;
-    fetch(`/api/drive/items/${file.id}/content`, { headers: { Range: `bytes=0-${TEXT_LIMIT - 1}` } })
-      .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject()))
-      .then((bytes) => {
-        if (!current) return;
-        const decoded = new TextDecoder().decode(bytes.slice(0, TEXT_LIMIT));
-        // Cutting it off can split the last character.
-        setText(cut ? decoded.replace(/\uFFFD$/, "") : decoded);
-      })
-      .catch(() => current && setFailed(true));
-    return () => {
-      current = false;
-    };
-  }, [file.id]);
-
-  if (failed) {
-    return (
-      <div class="viewer-body">
-        <p class="viewer-note error" role="alert">
-          {t("viewer.failed", { name: file.name })}
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div class="viewer-body">
-      {text === null ? (
-        <p class="loading">{t("shell.loading")}</p>
-      ) : (
-        <div class="viewer-text">
-          {cut && <p class="viewer-text-cut">{t("viewer.textCut", { size: formatSize(TEXT_LIMIT) })}</p>}
-          <pre>{text}</pre>
-        </div>
       )}
     </div>
   );

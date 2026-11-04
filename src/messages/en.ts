@@ -89,6 +89,9 @@ export const en = {
   "drive.upload": "Upload files",
   "drive.dropHere": "Drop files to upload them to {folder}",
   "drive.uploadFolder": "Upload folder",
+  "drive.newText": "Text file",
+  "drive.newTextTitle": "New text file",
+  "drive.untitledText": "Untitled.txt",
   "drive.emptyFolder":
     "That folder is empty, so there's nothing to upload. To make an empty folder, select New, then New folder.",
   "drive.clashTitle": "Upload options",
@@ -171,6 +174,30 @@ export const en = {
     "This browser can't play {name}. Download it to watch it in another app, or open Accordion in another browser.",
   "viewer.failed":
     "Accordion couldn't show {name}. It may be damaged, or not the kind of file its name says. Download it to open it on your device.",
+  "viewer.edit": "Edit",
+
+  "editor.label": "Text of {name}",
+  "editor.show": "Show",
+  "editor.write": "Write",
+  "editor.preview": "Preview",
+  "editor.save": "Save",
+  "editor.stop": "Stop editing",
+  "editor.saving": "Saving…",
+  "editor.saved": "Saved",
+  "editor.unsaved": "Not saved yet",
+  "editor.changed":
+    "Someone else saved changes to this file while you were editing it. Select Save anyway to replace them with yours. Their changes stay in the file's versions.",
+  "editor.saveAnyway": "Save anyway",
+  "editor.notUtf8":
+    "Accordion can only edit files saved as UTF-8 text, and {name} isn't one. Download it to edit it in another app.",
+  "editor.discardTitle": "Discard your changes?",
+  "editor.discardBody": "Your changes to {name} aren't saved, so they'll be lost.",
+  "editor.discard": "Discard changes",
+
+  "markdown.done": "Done",
+  "markdown.notDone": "Not done",
+  "markdown.picture": "Picture: {name}",
+  "markdown.pictureUnnamed": "Picture",
 
   "home.title": "Home",
   "home.recent": "Recent files",

@@ -17,13 +17,18 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return send(method, path, {
+    headers: body === undefined ? {} : { "Content-Type": "application/json" },
+    body: body === undefined ? null : JSON.stringify(body),
+  });
+}
+
+/** Like `api`, for a body that isn't JSON, such as a file's text, and
+ * headers of its own. */
+export async function send<T>(method: string, path: string, init: { headers: HeadersInit; body: BodyInit | null }): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, {
-      method,
-      headers: body === undefined ? {} : { "Content-Type": "application/json" },
-      body: body === undefined ? null : JSON.stringify(body),
-    });
+    response = await fetch(path, { method, ...init });
   } catch {
     throw new ApiError(0, t("error.offline"));
   }

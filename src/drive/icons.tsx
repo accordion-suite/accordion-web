@@ -212,6 +212,16 @@ export const NewFolderIcon = () => (
   </Icon>
 );
 
+export const NewTextIcon = () => (
+  <Icon>
+    <path
+      d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m7 1.5V9h5.5zM8 12v1.8h8V12zm0 4v1.8h5V16z"
+      fill="currentColor"
+      fill-rule="evenodd"
+    />
+  </Icon>
+);
+
 /** The kinds of file that get their own icon and color, by extension.
  * They match the search filter's types in Drive's API. */
 const KINDS: Record<string, readonly string[]> = {

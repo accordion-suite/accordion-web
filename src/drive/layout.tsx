@@ -13,10 +13,10 @@ import type { ComponentChildren, TargetedDragEvent, TargetedEvent } from "preact
 import { createContext } from "preact";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 
-import { api, type Session } from "../api.ts";
+import { api, send, type Session } from "../api.ts";
 import { formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
-import { followLink, usePath, useQueryString } from "../shell/router.ts";
+import { followLink, navigate, usePath, useQueryString } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
 import { DetailsPanel } from "./details.tsx";
 import { ClashDialog, NameDialog, ShortcutsDialog } from "./dialogs.tsx";
@@ -39,6 +39,7 @@ import {
   HomeIcon,
   ItemIcon,
   NewFolderIcon,
+  NewTextIcon,
   PeopleIcon,
   SharedOutIcon,
   PlusIcon,
@@ -52,6 +53,7 @@ import { dropProps } from "./move.ts";
 import { SearchBox } from "./search-box.tsx";
 import { announceChange, useChanges, useDetailsOpen } from "./store.ts";
 import { finished } from "./uploads.ts";
+import { folderPath } from "./item-list.tsx";
 
 /** Something to tell the reader, such as what just changed. */
 export interface Notice {
@@ -119,6 +121,7 @@ export function typing(target: EventTarget | null): boolean {
 
 type Open =
   | { kind: "newFolder" }
+  | { kind: "newText" }
   | { kind: "shortcuts" }
   | { kind: "clash"; clashes: Child[]; answer: (replace: boolean | null) => void };
 
@@ -290,6 +293,7 @@ export function DriveLayout({
   function newEntries(): MenuEntry[] {
     return [
       { label: t("drive.newFolder"), icon: <NewFolderIcon />, onSelect: () => setOpen({ kind: "newFolder" }) },
+      { label: t("drive.newText"), icon: <NewTextIcon />, onSelect: () => setOpen({ kind: "newText" }) },
       "separator",
       { label: t("drive.upload"), icon: <UploadFileIcon />, onSelect: () => chooser.current?.click() },
       { label: t("drive.uploadFolder"), icon: <UploadFolderIcon />, onSelect: () => folderChooser.current?.click() },
@@ -475,6 +479,28 @@ export function DriveLayout({
             setOpen(null);
             notify({ message: t("drive.created", { name }) });
             announceChange();
+          }}
+          onClose={() => setOpen(null)}
+        />
+      )}
+      {open?.kind === "newText" && here && (
+        <NameDialog
+          title={t("drive.newTextTitle")}
+          submit={t("drive.create")}
+          initial={t("drive.untitledText")}
+          file
+          onSubmit={async (name) => {
+            // The name must be free, so a new file never becomes a version
+            // of one that's there.
+            const file = await send<Item>("PUT", `/api/drive/items/${here.id}/children/${encodeURIComponent(name)}`, {
+              headers: { "If-None-Match": "*" },
+              body: null,
+            });
+            setOpen(null);
+            announceChange();
+            // Opens it in its folder, ready to edit. Closing it comes back
+            // here.
+            navigate(`${folderPath(here)}?file=${file.id}`, { state: { viewer: true, edit: true } });
           }}
           onClose={() => setOpen(null)}
         />
