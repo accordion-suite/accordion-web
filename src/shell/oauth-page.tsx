@@ -23,7 +23,12 @@ export function OAuthPage({ session, onSignOut }: { session: Session; onSignOut:
   useEffect(() => {
     // The server checks that the request is from one of Accordion's apps,
     // for an address on this computer, before anything goes back to it.
-    api("GET", `/api/oauth/check${location.search}`).then(
+    // Only what it checks goes, not whatever else is in the address.
+    const check = new URLSearchParams();
+    for (const name of ["response_type", "client_id", "redirect_uri", "code_challenge", "code_challenge_method"]) {
+      check.set(name, query.get(name) ?? "");
+    }
+    api("GET", `/api/oauth/check?${check.toString()}`).then(
       () => setStage("asking"),
       (error) => {
         setProblem(problemText(error));
