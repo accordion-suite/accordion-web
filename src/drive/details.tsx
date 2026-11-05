@@ -12,7 +12,8 @@ import { followLink } from "../shell/router.ts";
 import { ActivityTab } from "./activity.tsx";
 import { ShareDialog } from "./dialogs.tsx";
 import { CloseIcon, InfoIcon, ItemIcon, kindOf } from "./icons.tsx";
-import { CardPreview, folderPath } from "./item-list.tsx";
+import { folderPath } from "./item-actions.tsx";
+import { CardPreview } from "./item-list.tsx";
 import type { Item, ShareEntry } from "./item.ts";
 import { announceChange, pathTo } from "./store.ts";
 

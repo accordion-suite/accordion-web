@@ -430,7 +430,7 @@ export const settingsEn = {
   "driveSettings.clickDownloadHint": "Files download to your device, and folders open.",
   "driveSettings.thumbnailsTitle": "Thumbnails",
   "driveSettings.thumbnailsHint":
-    "In grid view, photos show a small picture of themselves, videos show a frame, PDFs and Office documents show their first page, and text files show their first lines. Turn this off for smaller cards, so more fit on the screen.",
+    "In grid view, photos show a small picture of themselves, videos show a frame, PDFs and Office documents show their first page, and text files show their first lines. When it's off, each file shows an icon for its type instead.",
 
   "log.intro":
     "Sign-ins to your account, changes to your password and app passwords, and sharing to and from you. Only you can see this.",

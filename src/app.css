@@ -635,7 +635,8 @@ dialog.search-options .dialog-close {
   border-radius: 999px;
 }
 
-.place:hover {
+.place:hover,
+.place-row.menu-open > .place {
   background: var(--surface);
 }
 
@@ -703,33 +704,16 @@ dialog.search-options .dialog-close {
   transform: rotate(90deg);
 }
 
-.storage {
+/* How much space is used, under Storage, lined up with its icon. */
+.storage-meter {
   display: flex;
-  gap: 12px;
-  margin-top: auto;
-  padding: 16px 16px 0;
-  color: var(--muted);
-  text-decoration: none;
-}
-
-/* The meter leads to the storage page. */
-a.storage:hover .storage-title {
-  color: var(--text);
-  text-decoration: underline;
-}
-
-.storage-text {
-  display: flex;
-  flex: 1;
   flex-direction: column;
   gap: 4px;
+  padding: 4px 16px 0 36px;
+  color: var(--muted);
 }
 
-.storage-title {
-  color: var(--text);
-}
-
-.storage progress {
+.storage-meter progress {
   width: 100%;
   height: 4px;
   accent-color: var(--accent);

@@ -4,12 +4,17 @@
 // bottom, with Undo where something can be undone. The details panel, when
 // it's open, is a column on the right.
 //
+// Right-clicking My Drive in the sidebar opens New's menu for it, and
+// right-clicking a folder under it opens the menu that folder has in a
+// list, so the sidebar works like the page.
+//
 // New works the same on every page. It uploads into, or makes a folder in,
 // the folder that's open, or My Drive on pages that aren't a folder or in a
-// folder the reader can only view, as in Google Drive. A page says which folder that is with `useTarget`. Files
-// dropped on a folder's page, or on Home, upload there too.
+// folder the reader can only view, as in Google Drive. A page says which
+// folder that is with `useTarget`. Files dropped on a folder's page, or on
+// Home, upload there too.
 
-import type { ComponentChildren, TargetedDragEvent, TargetedEvent } from "preact";
+import type { ComponentChildren, TargetedDragEvent, TargetedEvent, TargetedMouseEvent } from "preact";
 import { createContext } from "preact";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 
@@ -48,12 +53,12 @@ import {
   UploadFileIcon,
   UploadFolderIcon,
 } from "./icons.tsx";
+import { folderPath, useItemActions } from "./item-actions.tsx";
 import type { Item } from "./item.ts";
 import { dropProps } from "./move.ts";
 import { SearchBox } from "./search-box.tsx";
 import { announceChange, useChanges, useDetailsOpen } from "./store.ts";
 import { finished } from "./uploads.ts";
-import { folderPath } from "./item-list.tsx";
 
 /** Something to tell the reader, such as what just changed. */
 export interface Notice {
@@ -120,8 +125,8 @@ export function typing(target: EventTarget | null): boolean {
 }
 
 type Open =
-  | { kind: "newFolder" }
-  | { kind: "newText" }
+  | { kind: "newFolder"; into: Item }
+  | { kind: "newText"; into: Item }
   | { kind: "shortcuts" }
   | { kind: "clash"; clashes: Child[]; answer: (replace: boolean | null) => void };
 
@@ -149,7 +154,10 @@ export function DriveLayout({
     trail: [],
   });
   const [open, setOpen] = useState<Open | null>(null);
-  const [menu, setMenu] = useState<{ place: MenuPlace; byKeyboard: boolean } | null>(null);
+  /** New's menu, for the folder that's open or, from the sidebar, `into`. */
+  const [menu, setMenu] = useState<{ place: MenuPlace; byKeyboard: boolean; into?: Item } | null>(null);
+  /** A sidebar folder's right-click menu. */
+  const [folderMenu, setFolderMenu] = useState<{ folder: Item; place: MenuPlace; byKeyboard: boolean } | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [dropping, setDropping] = useState(false);
   const [dropOn, setDropOn] = useState<string | null>(null);
@@ -172,7 +180,24 @@ export function DriveLayout({
   const dragDepth = useRef(0);
   const chooser = useRef<HTMLInputElement>(null);
   const folderChooser = useRef<HTMLInputElement>(null);
+  /** The folder the chooser's files go to, when it isn't the one open. */
+  const chooseInto = useRef<Item | null>(null);
   const noticeTimer = useRef<number | undefined>(undefined);
+  // A sidebar folder's menu is the one it has in a list.
+  const folderActions = useItemActions({
+    notify,
+    // The folder's page shows it in the details panel.
+    details: (folder) => {
+      navigate(folderPath(folder));
+      setDetailsOpen(true);
+    },
+    // Trashing the open folder, or one it's in, goes to the folder that
+    // held it, since the page can't show it anymore.
+    trashed: (items) => {
+      const gone = items.find((item) => target.trail.includes(item.id));
+      if (gone?.parent) navigate(gone.parent === top?.id ? "/drive/my-drive" : `/drive/folder/${gone.parent}`);
+    },
+  });
 
   useEffect(() => {
     api<Item>("GET", "/api/drive/top").then(setTop, (problem: Error) =>
@@ -248,7 +273,7 @@ export function DriveLayout({
   }
 
   const here = target.folder ?? top;
-  const hereName = target.folder && target.folder.parent !== null ? target.folder.name : t("drive.myDrive");
+  const hereName = here ? nameOf(here) : t("drive.myDrive");
 
   /** Asks whether to replace what has the upload's names, or keep both.
    * Null means cancel. */
@@ -256,11 +281,11 @@ export function DriveLayout({
     return new Promise((answer) => setOpen({ kind: "clash", clashes: found, answer }));
   }
 
-  /** Uploads files and folders into the target folder, making the folders
-   * first. */
-  async function upload(tree: Tree) {
-    if (!here) return;
-    const into = { id: here.id, name: hereName };
+  /** Uploads files and folders into `folder`, or the target folder, making
+   * the folders first. */
+  async function upload(tree: Tree, folder: Item | null = here) {
+    if (!folder) return;
+    const into = { id: folder.id, name: nameOf(folder) };
     let placed;
     try {
       const found = clashes(tree, await foldersWithQueue.children(into.id));
@@ -281,23 +306,46 @@ export function DriveLayout({
 
   function chosen(event: TargetedEvent<HTMLInputElement>, folders: boolean) {
     notify(null);
+    const into = chooseInto.current ?? here;
+    chooseInto.current = null;
     const files = [...(event.currentTarget.files ?? [])];
     // A chosen folder brings only its files, so an empty one brings
     // nothing, and the browser doesn't say so.
     if (folders && files.length === 0) notify({ message: t("drive.emptyFolder"), problem: true });
-    else void upload(folders ? chosenTree(files) : { files: files.map((file) => ({ file, path: [] })), folders: [] });
+    else void upload(folders ? chosenTree(files) : { files: files.map((file) => ({ file, path: [] })), folders: [] }, into);
     // Lets the same files be chosen again.
     event.currentTarget.value = "";
   }
 
-  function newEntries(): MenuEntry[] {
+  /** New's menu, for `into` or the target folder. */
+  function newEntries(into: Item | null = here): MenuEntry[] {
+    if (!into) return [];
+    const choose = (input: HTMLInputElement | null) => {
+      chooseInto.current = into;
+      input?.click();
+    };
     return [
-      { label: t("drive.newFolder"), icon: <NewFolderIcon />, onSelect: () => setOpen({ kind: "newFolder" }) },
-      { label: t("drive.newText"), icon: <NewTextIcon />, onSelect: () => setOpen({ kind: "newText" }) },
+      { label: t("drive.newFolder"), icon: <NewFolderIcon />, onSelect: () => setOpen({ kind: "newFolder", into }) },
+      { label: t("drive.newText"), icon: <NewTextIcon />, onSelect: () => setOpen({ kind: "newText", into }) },
       "separator",
-      { label: t("drive.upload"), icon: <UploadFileIcon />, onSelect: () => chooser.current?.click() },
-      { label: t("drive.uploadFolder"), icon: <UploadFolderIcon />, onSelect: () => folderChooser.current?.click() },
+      { label: t("drive.upload"), icon: <UploadFileIcon />, onSelect: () => choose(chooser.current) },
+      { label: t("drive.uploadFolder"), icon: <UploadFolderIcon />, onSelect: () => choose(folderChooser.current) },
     ];
+  }
+
+  /** Where a right-click menu opens: at the pointer, or under `holder` for
+   * the context menu key, which gives no position. */
+  function menuPlace(event: MouseEvent, holder: Element): { place: MenuPlace; byKeyboard: boolean } {
+    const byKeyboard = !event.clientX && !event.clientY;
+    return { place: byKeyboard ? { under: holder } : { x: event.clientX, y: event.clientY }, byKeyboard };
+  }
+
+  /** Right-clicking a folder in the sidebar opens the menu it has in a
+   * list. */
+  function openFolderMenu(folder: Item, event: TargetedMouseEvent<HTMLElement>) {
+    event.preventDefault();
+    setMenu(null);
+    setFolderMenu({ folder, ...menuPlace(event, event.currentTarget) });
   }
 
   function dragEnter(event: TargetedDragEvent<HTMLElement>) {
@@ -336,7 +384,7 @@ export function DriveLayout({
 
   const frame: DriveFrame = {
     setTarget: (folder, drops, trail) => setTargetState({ folder, drops, trail }),
-    newEntries,
+    newEntries: () => newEntries(),
     notify,
     select: setSelection,
     setPageItem,
@@ -360,7 +408,7 @@ export function DriveLayout({
             type="button"
             class="new-button"
             aria-haspopup="menu"
-            aria-expanded={menu !== null}
+            aria-expanded={menu !== null && !menu.into}
             onClick={(event) =>
               setMenu({ place: { under: event.currentTarget }, byKeyboard: event.detail === 0 })
             }
@@ -374,8 +422,20 @@ export function DriveLayout({
             </Place>
             <li>
               <div
-                class={top && dropOn === top.id ? "place-row drop-target" : "place-row"}
+                class={
+                  ["place-row", top && dropOn === top.id && "drop-target", menu?.into && menu.into === top && "menu-open"]
+                    .filter(Boolean)
+                    .join(" ")
+                }
                 {...(top ? dropProps({ id: top.id, name: t("drive.myDrive") }, setDropOn, notify) : {})}
+                // Right-clicking My Drive opens New's menu for it, as
+                // right-clicking empty space on its page does.
+                onContextMenu={(event) => {
+                  if (!top) return;
+                  event.preventDefault();
+                  setFolderMenu(null);
+                  setMenu({ ...menuPlace(event, event.currentTarget), into: top });
+                }}
               >
                 {top && (
                   <button
@@ -402,7 +462,16 @@ export function DriveLayout({
                   {t("drive.myDrive")}
                 </a>
               </div>
-              {top && myDriveOpen && <FolderTree parent={top.id} trail={target.trail} current={path} depth={1} />}
+              {top && myDriveOpen && (
+                <FolderTree
+                  parent={top.id}
+                  trail={target.trail}
+                  current={path}
+                  depth={1}
+                  menuOn={folderMenu?.folder.id ?? null}
+                  onMenu={openFolderMenu}
+                />
+              )}
             </li>
             <Place href="/drive/shared-by-me" current={path === "/drive/shared-by-me"} icon={<SharedOutIcon />}>
               {t("sharedByMe.title")}
@@ -416,8 +485,8 @@ export function DriveLayout({
             <Place href="/drive/trash" current={path === "/drive/trash"} icon={<TrashIcon />}>
               {t("trash.title")}
             </Place>
+            <StoragePlace current={path === "/drive/storage"} />
           </ul>
-          <StorageMeter />
         </nav>
         {/* Closes the sidebar on a phone when the reader taps beside it. */}
         <div class="sidebar-scrim" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
@@ -462,20 +531,30 @@ export function DriveLayout({
 
       {menu && (
         <Menu
-          label={t("drive.newIn", { folder: hereName })}
-          entries={newEntries()}
+          label={t("drive.newIn", { folder: menu.into ? nameOf(menu.into) : hereName })}
+          entries={newEntries(menu.into ?? here)}
           place={menu.place}
           byKeyboard={menu.byKeyboard}
           onClose={() => setMenu(null)}
         />
       )}
-      {open?.kind === "newFolder" && here && (
+      {folderMenu && (
+        <Menu
+          label={t("drive.actionsFor", { name: folderMenu.folder.name })}
+          entries={folderActions.entries([folderMenu.folder])}
+          place={folderMenu.place}
+          byKeyboard={folderMenu.byKeyboard}
+          onClose={() => setFolderMenu(null)}
+        />
+      )}
+      {folderActions.dialog}
+      {open?.kind === "newFolder" && (
         <NameDialog
           title={t("drive.newFolder")}
           submit={t("drive.create")}
           initial={t("drive.untitledFolder")}
           onSubmit={async (name) => {
-            await api("POST", `/api/drive/items/${here.id}/children`, { name });
+            await api("POST", `/api/drive/items/${open.into.id}/children`, { name });
             setOpen(null);
             notify({ message: t("drive.created", { name }) });
             announceChange();
@@ -483,7 +562,7 @@ export function DriveLayout({
           onClose={() => setOpen(null)}
         />
       )}
-      {open?.kind === "newText" && here && (
+      {open?.kind === "newText" && (
         <NameDialog
           title={t("drive.newTextTitle")}
           submit={t("drive.create")}
@@ -492,7 +571,7 @@ export function DriveLayout({
           onSubmit={async (name) => {
             // The name must be free, so a new file never becomes a version
             // of one that's there.
-            const file = await send<Item>("PUT", `/api/drive/items/${here.id}/children/${encodeURIComponent(name)}`, {
+            const file = await send<Item>("PUT", `/api/drive/items/${open.into.id}/children/${encodeURIComponent(name)}`, {
               headers: { "If-None-Match": "*" },
               body: null,
             });
@@ -500,7 +579,7 @@ export function DriveLayout({
             announceChange();
             // Opens it in its folder, ready to edit. Closing it comes back
             // here.
-            navigate(`${folderPath(here)}?file=${file.id}`, { state: { viewer: true, edit: true } });
+            navigate(`${folderPath(open.into)}?file=${file.id}`, { state: { viewer: true, edit: true } });
           }}
           onClose={() => setOpen(null)}
         />
@@ -521,6 +600,11 @@ export function DriveLayout({
       )}
     </Frame.Provider>
   );
+}
+
+/** A folder's name, or "My Drive" for the top folder. */
+function nameOf(folder: Item): string {
+  return folder.parent === null ? t("drive.myDrive") : folder.name;
 }
 
 function Place({
@@ -591,11 +675,16 @@ function FolderTree({
   trail,
   current,
   depth,
+  menuOn,
+  onMenu,
 }: {
   parent: string;
   trail: readonly string[];
   current: string;
   depth: number;
+  /** The folder whose menu is open. */
+  menuOn: string | null;
+  onMenu: (folder: Item, event: TargetedMouseEvent<HTMLElement>) => void;
 }) {
   const [folders, setFolders] = useState<Item[] | null>(null);
   const [, setShown] = useState(0);
@@ -631,9 +720,12 @@ function FolderTree({
         return (
           <li key={folder.id}>
             <div
-              class={dropOn === folder.id ? "place-row drop-target" : "place-row"}
+              class={["place-row", dropOn === folder.id && "drop-target", menuOn === folder.id && "menu-open"]
+                .filter(Boolean)
+                .join(" ")}
               style={{ paddingLeft: `${depth * 16 + 16}px` }}
               {...dropProps(folder, setDropOn, drive.notify)}
+              onContextMenu={(event) => onMenu(folder, event)}
             >
               <button
                 type="button"
@@ -658,7 +750,16 @@ function FolderTree({
                 <span class="place-name">{folder.name}</span>
               </a>
             </div>
-            {open && <FolderTree parent={folder.id} trail={trail} current={current} depth={depth + 1} />}
+            {open && (
+              <FolderTree
+                parent={folder.id}
+                trail={trail}
+                current={current}
+                depth={depth + 1}
+                menuOn={menuOn}
+                onMenu={onMenu}
+              />
+            )}
           </li>
         );
       })}
@@ -672,36 +773,41 @@ export interface Usage {
   quota: number | null;
 }
 
-/** How much space the reader's files take, and of how much, if there's a
+/** Storage, the last place in the list, as in Google Drive, with how much
+ * space the reader's files take under it, and of how much, if there's a
  * limit. */
-function StorageMeter() {
+function StoragePlace({ current }: { current: boolean }) {
   const [usage, setUsage] = useState<Usage | null>(null);
   const load = () => {
     api<Usage>("GET", "/api/drive/usage").then(setUsage, () => undefined);
   };
   useEffect(load, []);
   useChanges(load);
-  if (!usage) return null;
-  const used = formatSize(usage.used);
-  // The whole meter leads to the storage page, as in Google Drive.
+  const used = usage && formatSize(usage.used);
   return (
-    <a class="storage" href="/drive/storage" onClick={followLink}>
-      <CloudIcon />
-      <div class="storage-text">
-        <span class="storage-title">{t("drive.storage")}</span>
-        {usage.quota !== null && (
-          <progress
-            max={usage.quota}
-            value={Math.min(usage.used, usage.quota)}
-            aria-label={t("drive.storageUsed", { used, quota: formatSize(usage.quota) })}
-          />
-        )}
-        <span class="storage-used">
-          {usage.quota === null
-            ? t("drive.storageUsedNoLimit", { used })
-            : t("drive.storageUsed", { used, quota: formatSize(usage.quota) })}
-        </span>
+    <li>
+      <div class="place-row">
+        <a class="place" href="/drive/storage" onClick={followLink} aria-current={current ? "page" : undefined}>
+          <CloudIcon />
+          {t("drive.storage")}
+        </a>
       </div>
-    </a>
+      {usage && used && (
+        <div class="storage-meter">
+          {usage.quota !== null && (
+            <progress
+              max={usage.quota}
+              value={Math.min(usage.used, usage.quota)}
+              aria-label={t("drive.storageUsed", { used, quota: formatSize(usage.quota) })}
+            />
+          )}
+          <span class="storage-used">
+            {usage.quota === null
+              ? t("drive.storageUsedNoLimit", { used })
+              : t("drive.storageUsed", { used, quota: formatSize(usage.quota) })}
+          </span>
+        </div>
+      )}
+    </li>
   );
 }
