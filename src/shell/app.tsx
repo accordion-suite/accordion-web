@@ -22,6 +22,7 @@ import { t } from "../i18n.ts";
 import { startLive } from "./live.ts";
 import { PageTitle } from "./page.tsx";
 import { followLink, navigate, usePath } from "./router.ts";
+import { OAuthDone, OAuthPage } from "./oauth-page.tsx";
 import { SignIn } from "./sign-in.tsx";
 import { TopBar } from "./top-bar.tsx";
 import { checkForUpdate, useUpdateReady } from "./update.ts";
@@ -140,6 +141,10 @@ function SignedIn({
         </DriveLayout>
       ) : path === "/" || path === "/drive" || path === "/drive/start" ? (
         <StartPage />
+      ) : path === "/oauth/authorize" ? (
+        <OAuthPage session={session} />
+      ) : path === "/oauth/done" ? (
+        <OAuthDone />
       ) : path === "/settings" || path === "/settings/" ? (
         <Redirect to="/settings/account" />
       ) : path.startsWith("/settings/") ? (

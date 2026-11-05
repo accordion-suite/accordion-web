@@ -29,7 +29,23 @@ export const en = {
   "update.close": "Not now",
 
   "settings.title": "Settings",
+  // The password check, which pages outside Settings use too, such as
+  // signing in an app.
+  "settings.passwordTitle": "Enter your password",
+  "settings.yourPassword": "Your password",
+  "settings.confirm": "Confirm",
   "settings.loadFailed": "Accordion couldn't load Settings. Reload the page, then try again.",
+
+  "oauth.title": "Sign in to the Accordion app",
+  "oauth.body": "The Accordion app on {device} wants to sync your files as {name}.",
+  "oauth.onlyIf": "Allow it only if you started signing in to the app yourself, a moment ago.",
+  "oauth.someDevice": "this computer",
+  "oauth.allow": "Allow",
+  "oauth.cancel": "Cancel",
+  "oauth.allowed": "Signing in the app…",
+  "oauth.done": "The app is signed in. You can close this tab and go back to it.",
+  "oauth.failed": "The app couldn't finish signing in. Go back to it to see why.",
+  "oauth.canceled": "The app wasn't signed in. You can close this page.",
 
   "notFound.title": "Page not found",
   "notFound.body": "There's nothing at this address.",

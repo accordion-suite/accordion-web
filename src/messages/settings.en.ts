@@ -22,9 +22,6 @@ export const settingsEn = {
   "settings.notHere":
     "Server settings only open on the same network as the server. Connect to your home network, then try again.",
   "settings.adminsOnly": "Only admins can change the server's settings.",
-  "settings.passwordTitle": "Enter your password",
-  "settings.yourPassword": "Your password",
-  "settings.confirm": "Confirm",
   "settings.copy": "Copy",
   "settings.copied": "Copied",
   "settings.copySelected": "Accordion couldn't copy it, so it's selected for you to copy.",
