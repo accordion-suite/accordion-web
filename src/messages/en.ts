@@ -40,6 +40,7 @@ export const en = {
   "oauth.body": "The Accordion app on {device} wants to sync your files as {name}.",
   "oauth.onlyIf": "Allow it only if you started signing in to the app yourself, a moment ago.",
   "oauth.someDevice": "this computer",
+  "oauth.otherAccount": "Not {name}? Use a different account",
   "oauth.allow": "Allow",
   "oauth.cancel": "Cancel",
   "oauth.allowed": "Signing in the app…",

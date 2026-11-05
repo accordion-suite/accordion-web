@@ -379,6 +379,13 @@ main.sign-in {
   margin-top: 16px;
 }
 
+/* Such as Use a different account, which reads as part of the text. */
+.sign-in-card button.link {
+  margin-top: 0;
+  justify-content: start;
+  text-align: start;
+}
+
 /* A page outside a module, such as Page not found. */
 main.narrow {
   max-width: 480px;

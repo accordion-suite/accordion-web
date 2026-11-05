@@ -142,7 +142,7 @@ function SignedIn({
       ) : path === "/" || path === "/drive" || path === "/drive/start" ? (
         <StartPage />
       ) : path === "/oauth/authorize" ? (
-        <OAuthPage session={session} />
+        <OAuthPage session={session} onSignOut={signOut} />
       ) : path === "/oauth/done" ? (
         <OAuthDone />
       ) : path === "/settings" || path === "/settings/" ? (

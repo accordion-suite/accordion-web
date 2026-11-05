@@ -13,7 +13,7 @@ import { PageTitle } from "./page.tsx";
 
 type Stage = "checking" | "asking" | "busy" | "allowed" | "canceled" | "problem";
 
-export function OAuthPage({ session }: { session: Session }) {
+export function OAuthPage({ session, onSignOut }: { session: Session; onSignOut: () => Promise<void> }) {
   const query = new URLSearchParams(location.search);
   const device = query.get("device_name")?.trim() || t("oauth.someDevice");
   const [stage, setStage] = useState<Stage>("checking");
@@ -71,48 +71,60 @@ export function OAuthPage({ session }: { session: Session }) {
   }
 
   return (
-    <main class="page narrow">
-      <PageTitle>{t("oauth.title")}</PageTitle>
-      {stage === "checking" && <p class="loading">{t("shell.loading")}</p>}
-      {stage === "problem" && (
-        <p class="error" role="alert">
-          {problem}
-        </p>
-      )}
-      {(stage === "asking" || stage === "busy") && (
-        <>
-          <p>{t("oauth.body", { device, name: session.user.display_name })}</p>
-          <p class="hint">{t("oauth.onlyIf")}</p>
+    <main class="sign-in">
+      <div class="sign-in-card">
+        <PageTitle>{t("oauth.title")}</PageTitle>
+        {stage === "checking" && <p class="loading">{t("shell.loading")}</p>}
+        {stage === "problem" && (
           <p class="error" role="alert">
             {problem}
           </p>
-          <div class="form-buttons">
-            <button type="button" disabled={stage === "busy"} onClick={() => void allow()}>
-              {t("oauth.allow")}
-            </button>
-            <button type="button" class="secondary" disabled={stage === "busy"} onClick={cancel}>
-              {t("oauth.cancel")}
-            </button>
-          </div>
-        </>
-      )}
-      {stage === "allowed" && <p role="status">{t("oauth.allowed")}</p>}
-      {stage === "canceled" && <p role="status">{t("oauth.canceled")}</p>}
-      {passwordDialog}
+        )}
+        {(stage === "asking" || stage === "busy") && (
+          <>
+            <p>{t("oauth.body", { device, name: session.user.display_name })}</p>
+            <p class="hint">{t("oauth.onlyIf")}</p>
+            <p>
+              {/* Signing out shows the sign-in page at this same address, so
+                  the app's request goes on as whoever signs in next. */}
+              <button type="button" class="link" disabled={stage === "busy"} onClick={() => void onSignOut()}>
+                {t("oauth.otherAccount", { name: session.user.display_name })}
+              </button>
+            </p>
+            <p class="error" role="alert">
+              {problem}
+            </p>
+            <div class="form-buttons">
+              <button type="button" disabled={stage === "busy"} onClick={() => void allow()}>
+                {t("oauth.allow")}
+              </button>
+              <button type="button" class="secondary" disabled={stage === "busy"} onClick={cancel}>
+                {t("oauth.cancel")}
+              </button>
+            </div>
+          </>
+        )}
+        {stage === "allowed" && <p role="status">{t("oauth.allowed")}</p>}
+        {stage === "canceled" && <p role="status">{t("oauth.canceled")}</p>}
+        {passwordDialog}
+      </div>
     </main>
   );
 }
 
 /** Where the app sends the browser once it's signed in, or not, so the
- * last page looks like the rest of Accordion. */
+ * last page looks like the rest of Accordion. Both pages share the sign-in
+ * page's card, so moving between them doesn't jump. */
 export function OAuthDone() {
   const result = new URLSearchParams(location.search).get("result");
   const message =
     result === "canceled" ? t("oauth.canceled") : result === "failed" ? t("oauth.failed") : t("oauth.done");
   return (
-    <main class="page narrow">
-      <PageTitle>{t("oauth.title")}</PageTitle>
-      <p role="status">{message}</p>
+    <main class="sign-in">
+      <div class="sign-in-card">
+        <PageTitle>{t("oauth.title")}</PageTitle>
+        <p role="status">{message}</p>
+      </div>
     </main>
   );
 }
