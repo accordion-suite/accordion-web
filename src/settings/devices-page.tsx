@@ -213,6 +213,10 @@ function CreateDialog({
 interface AppCode {
   code: string;
   expires_at: string;
+  /** With remote access on: the code and a temporary tunnel key, for an
+   * app away from home. */
+  setup: string | null;
+  qr_code: string | null;
 }
 
 /** Adds one of Accordion's apps with a code, which works away from home
@@ -260,6 +264,21 @@ function AppsCard() {
             <dt>{t("devices.appsCode")}</dt>
           </dl>
           <Secret text={code.code} />
+          {code.setup && code.qr_code && (
+            <>
+              <h3>{t("devices.appsAwayTitle")}</h3>
+              <p>{t("devices.appsAwayBody")}</p>
+              {/* The server draws the SVG itself, with no scripts, as for
+                  remote access devices. */}
+              <div
+                class="qr-code"
+                role="img"
+                aria-label={t("devices.appsQrLabel")}
+                dangerouslySetInnerHTML={{ __html: code.qr_code.replace(/^<\?xml[^>]*>\s*/, "") }}
+              />
+              <Secret text={code.setup} label={t("devices.appsCopySetup")} long />
+            </>
+          )}
           <p class="hint">
             {t("devices.appsCodeOnce", {
               time: new Date(code.expires_at).toLocaleTimeString(undefined, { timeStyle: "short" }),

@@ -56,6 +56,11 @@ export const settingsEn = {
   "devices.appsCodeBody": "In the app, enter this server's address, then the code.",
   "devices.appsServer": "Server address",
   "devices.appsCode": "Code",
+  "devices.appsAwayTitle": "Away from home",
+  "devices.appsAwayBody":
+    "Scan this QR code with the app. On a computer without a camera, copy the setup instead, and paste it in the app where it asks for the code.",
+  "devices.appsQrLabel": "QR code for adding the Accordion app",
+  "devices.appsCopySetup": "Copy setup",
   "devices.appsCodeOnce":
     "The code works once, until {time}. If it runs out, select Add the Accordion app again for a new one.",
   "devices.sessionsTitle": "Where you're signed in",
