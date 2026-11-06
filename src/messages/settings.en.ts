@@ -19,6 +19,7 @@ export const settingsEn = {
   "settings.remote": "Remote access",
   "settings.activity": "Activity log",
   "settings.adminLog": "Admin log",
+  "settings.retention": "Trash and versions",
   "settings.notHere":
     "Server settings only open on the same network as the server. Connect to your home network, then try again.",
   "settings.adminsOnly": "Only admins can change the server's settings.",
@@ -484,6 +485,16 @@ export const settingsEn = {
   "log.updateInstalled": "Installed version {version}",
   "log.updateInstalledUnknown": "Installed an update",
   "log.retentionChanged": "Changed how long activity is kept",
+  "log.storageRetentionChanged": "Changed how long trash and older versions are kept",
+  "retention.intro":
+    "How long Drive keeps deleted items and older versions of files, for everyone on this server.",
+  "retention.trashTitle": "Keep items in the trash for",
+  "retention.trashHint":
+    "After this, Accordion deletes them for good. If you choose a shorter time, items already older go within the hour.",
+  "retention.versionsTitle": "Keep older versions for",
+  "retention.versionsHint":
+    "Counted from when a newer version replaced each one. The current version always stays. Backups keep a copy until they expire.",
+  "retention.saved": "Saved.",
   "log.other": "Changed something",
   "log.keepTitle": "Keep activity for",
   "log.keepHint":

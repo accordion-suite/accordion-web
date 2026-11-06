@@ -87,7 +87,9 @@ export const en = {
   "drive.manageVersions": "Manage versions",
   "drive.versionsOf": "Versions of {name}",
   "drive.versionsHint":
-    "Accordion saves a new version each time this file changes, and keeps older ones for 30 days. Restoring one makes it the current version, and keeps the others.",
+    "Accordion saves a new version each time this file changes, and keeps older ones for {time}. Restoring one makes it the current version, and keeps the others.",
+  "drive.versionsHintUnknown":
+    "Accordion saves a new version each time this file changes, and keeps older ones for as long as your admin chose. Restoring one makes it the current version, and keeps the others.",
   "drive.version": "Version {number}",
   "drive.versionCurrent": "Version {number}, current",
   "drive.versionAbout": "{date} · {size}",
@@ -400,7 +402,10 @@ export const en = {
   "filters.none": "Nothing here matches these filters.",
 
   "trash.title": "Trash",
-  "trash.explain": "Accordion deletes items for good after 30 days in the trash.",
+  "trash.explain": "Accordion deletes items for good after {time} in the trash.",
+  "trash.explainUnknown": "Accordion deletes items for good after they've been in the trash as long as your admin chose.",
+  "retention.days": { one: "{count} day", other: "{count} days" },
+  "retention.year": "1 year",
   "trash.empty": "The trash is empty.",
   "trash.deleted": "Deleted",
   "trash.restore": "Restore",

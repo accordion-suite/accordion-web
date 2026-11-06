@@ -12,6 +12,7 @@ import type { Child } from "./folder-upload.ts";
 import { FOLDER_COLORS, type FolderColor, type Item, type ShareEntry } from "./item.ts";
 import { ItemIcon } from "./icons.tsx";
 import { LinksSection } from "./links.tsx";
+import { keptFor, useRetention } from "./retention.ts";
 import { freeName, stemLength } from "./names.ts";
 
 /** Asks for a name, such as for a new folder. `onSubmit` throws to show a
@@ -345,6 +346,7 @@ export function VersionsDialog({
   onClose: () => void;
 }) {
   const [versions, setVersions] = useState<Version[] | null>(null);
+  const retention = useRetention();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -369,7 +371,13 @@ export function VersionsDialog({
   const current = versions?.[0];
   return (
     <Dialog title={t("drive.versionsOf", { name: item.name })} class="versions-dialog" onClose={onClose}>
-      <p class="hint">{t("drive.versionsHint")}</p>
+      {retention && (
+        <p class="hint">
+          {retention === "unknown"
+            ? t("drive.versionsHintUnknown")
+            : t("drive.versionsHint", { time: keptFor(retention.version_days) })}
+        </p>
+      )}
       {versions ? (
         <ul class="versions">
           {versions.map((version) => (

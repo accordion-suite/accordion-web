@@ -85,7 +85,8 @@ export function logText(event: LoggedEvent, me: string): string {
     case "update_installed":
       return values.version ? t("log.updateInstalled", values) : t("log.updateInstalledUnknown");
     case "retention_changed":
-      return t("log.retentionChanged");
+      // Storage's change names its days. The activity log's names keep_days.
+      return t(event.details?.trash_days !== undefined ? "log.storageRetentionChanged" : "log.retentionChanged");
     default:
       return t("log.other");
   }

@@ -10,6 +10,7 @@ import { PageTitle } from "../shell/page.tsx";
 import { ItemIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
 import { useDrive, useTarget } from "./layout.tsx";
+import { keptFor, useRetention } from "./retention.ts";
 import { announceChange } from "./store.ts";
 
 /** An item in the trash, which says when it was deleted. */
@@ -24,6 +25,7 @@ export function TrashPage() {
   const drive = useDrive();
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState<Confirming | null>(null);
+  const retention = useRetention();
   useTarget(null, false);
 
   function refresh() {
@@ -59,7 +61,13 @@ export function TrashPage() {
           </button>
         )}
       </div>
-      <p class="banner">{t("trash.explain")}</p>
+      {retention && (
+        <p class="banner">
+          {retention === "unknown"
+            ? t("trash.explainUnknown")
+            : t("trash.explain", { time: keptFor(retention.trash_days) })}
+        </p>
+      )}
       {error ? (
         <p class="error" role="alert">
           {error}

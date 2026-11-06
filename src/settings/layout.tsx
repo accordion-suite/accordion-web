@@ -8,7 +8,7 @@ import type { ComponentChildren, FunctionComponent } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
 import type { Session } from "../api.ts";
-import { DriveIcon } from "../drive/icons.tsx";
+import { DriveIcon, TrashIcon } from "../drive/icons.tsx";
 import { lastDrivePage } from "../drive/layout.tsx";
 import { t, type MessageKey } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
@@ -59,6 +59,7 @@ export const SECTIONS: readonly Section[] = [
   { id: "updates", label: "settings.updates", icon: UpdatesIcon, group: "server" },
   { id: "network", label: "settings.network", icon: NetworkIcon, group: "server" },
   { id: "remote", label: "settings.remote", icon: RemoteIcon, group: "server" },
+  { id: "retention", label: "settings.retention", icon: TrashIcon, group: "server" },
   { id: "log", label: "settings.adminLog", icon: LogIcon, group: "server" },
 ];
 
