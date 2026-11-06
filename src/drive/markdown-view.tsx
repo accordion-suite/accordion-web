@@ -4,6 +4,8 @@
 import { useMemo } from "preact/hooks";
 
 import { t } from "../i18n.ts";
+import { languageOfFence } from "./highlight.ts";
+import { Highlighted } from "./highlight-view.tsx";
 import { type Block, type Inline, parseMarkdown } from "./markdown.ts";
 
 export function MarkdownView({ source }: { source: string }) {
@@ -30,7 +32,9 @@ function BlockView({ block }: { block: Block }) {
     case "code":
       return (
         <pre>
-          <code>{block.text}</code>
+          <code>
+            <Highlighted text={block.text} language={languageOfFence(block.language)} />
+          </code>
         </pre>
       );
     case "quote":

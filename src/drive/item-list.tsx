@@ -19,6 +19,8 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
+import { languageOfName } from "./highlight.ts";
+import { Highlighted } from "./highlight-view.tsx";
 import {
   OPENED_HERE,
   download,
@@ -740,7 +742,7 @@ export function CardPreview({ item, thumbnail = true }: { item: Item; thumbnail?
           onError={() => setFailed(true)}
         />
       ) : kind === "text" ? (
-        <TextPreview src={src} onError={() => setFailed(true)} />
+        <TextPreview src={src} language={languageOfName(item.name)} onError={() => setFailed(true)} />
       ) : (
         <ItemIcon item={item} />
       )}
@@ -751,7 +753,7 @@ export function CardPreview({ item, thumbnail = true }: { item: Item; thumbnail?
 /** A text file's first lines, drawn as a small page. Like a lazy image, it
  * waits until the card is nearly on screen, so a folder of a thousand notes
  * doesn't fetch them all at once. */
-function TextPreview({ src, onError }: { src: string; onError: () => void }) {
+function TextPreview({ src, language, onError }: { src: string; language: string | null; onError: () => void }) {
   const page = useRef<HTMLPreElement>(null);
   const [text, setText] = useState("");
   useEffect(() => {
@@ -777,7 +779,7 @@ function TextPreview({ src, onError }: { src: string; onError: () => void }) {
   }, [src]);
   return (
     <pre ref={page} class="card-text">
-      {text}
+      <Highlighted text={text} language={language} />
     </pre>
   );
 }

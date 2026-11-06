@@ -9,6 +9,12 @@
   color-scheme: light dark;
   --text: #1c2430;
   --muted: #5b6573;
+  --code-keyword: #a3289e;
+  --code-string: #2a6f0e;
+  --code-comment: #5f6b7a;
+  --code-number: #9a4a00;
+  --code-tag: #b3261e;
+  --code-key: #1a5fb4;
   --page: #f1f4f9;
   /* The logo's folds. Its own white folds would vanish on a light page. */
   --logo-fold: #3f3f46;
@@ -67,6 +73,12 @@
   :root:not([data-theme="light"]) {
     --text: #e4e8ee;
     --muted: #a4adba;
+    --code-keyword: #dba4f5;
+    --code-string: #9fd68c;
+    --code-comment: #a4adba;
+    --code-number: #f0b37a;
+    --code-tag: #f4958c;
+    --code-key: #8ab4f8;
     --page: #111418;
     --logo-fold: #fafafa;
     --panel: #1a1e24;
@@ -114,6 +126,12 @@
 :root[data-theme="dark"] {
   --text: #e4e8ee;
   --muted: #a4adba;
+  --code-keyword: #dba4f5;
+  --code-string: #9fd68c;
+  --code-comment: #a4adba;
+  --code-number: #f0b37a;
+  --code-tag: #f4958c;
+  --code-key: #8ab4f8;
   --page: #111418;
   --logo-fold: #fafafa;
   --panel: #1a1e24;
@@ -2321,6 +2339,32 @@ pre.text-page {
 .markdown pre code {
   padding: 0;
   background: none;
+}
+
+/* Colors for code in the viewer and Markdown's code blocks. */
+.tok-keyword {
+  color: var(--code-keyword);
+}
+
+.tok-string {
+  color: var(--code-string);
+}
+
+.tok-comment {
+  font-style: italic;
+  color: var(--code-comment);
+}
+
+.tok-number {
+  color: var(--code-number);
+}
+
+.tok-tag {
+  color: var(--code-tag);
+}
+
+.tok-key {
+  color: var(--code-key);
 }
 
 .markdown blockquote {

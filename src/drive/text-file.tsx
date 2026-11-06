@@ -10,6 +10,8 @@ import { ApiError, api, send } from "../api.ts";
 import { formatSize, t } from "../i18n.ts";
 import { problemText } from "../shell/dialog.tsx";
 import { type Item, canEdit } from "./item.ts";
+import { languageOfName } from "./highlight.ts";
+import { Highlighted } from "./highlight-view.tsx";
 import { MarkdownView } from "./markdown-view.tsx";
 import { announceChange } from "./store.ts";
 
@@ -18,7 +20,7 @@ import { announceChange } from "./store.ts";
 const TEXT_LIMIT = 1_000_000;
 
 /** Names of text files that may not have a text thumbnail yet, such as a
- * new, empty one. */
+ * new, empty one. Code files count too, by `languageOfName`. */
 const TEXT_NAME = /\.(?:txt|text|md|markdown|mdown|mkd|log|csv|tsv|json|ya?ml|toml|ini|conf|cfg)$/i;
 const MARKDOWN_NAME = /\.(?:md|markdown|mdown|mkd)$/i;
 
@@ -29,7 +31,7 @@ const shownAsText = new Set<string>();
 /** Whether the viewer shows `file` as text. The server found it's text when
  * it made its thumbnail. */
 export function isText(file: Item): boolean {
-  const text = shownAsText.has(file.id) || (file.preview === null && (file.thumbnail === "text" || TEXT_NAME.test(file.name)));
+  const text = shownAsText.has(file.id) || (file.preview === null && (file.thumbnail === "text" || TEXT_NAME.test(file.name) || languageOfName(file.name) !== null));
   if (text) shownAsText.add(file.id);
   return text;
 }
@@ -148,7 +150,9 @@ export function TextFile({
             <MarkdownView source={loaded.text} />
           </div>
         ) : (
-          <pre class="text-page">{loaded.text}</pre>
+          <pre class="text-page">
+            <Highlighted text={loaded.text} language={languageOfName(file.name)} />
+          </pre>
         )}
       </div>
     </div>
