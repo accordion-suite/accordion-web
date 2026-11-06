@@ -172,6 +172,7 @@ export function DriveLayout({
     }
   }, [top, target.trail]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sharedCounts = useSharedCounts();
   const [selection, setSelection] = useState<readonly Item[]>([]);
   const [pageItem, setPageItem] = useState<Item | null>(null);
   const [detailsOffered, setDetailsOffered] = useState(false);
@@ -473,10 +474,20 @@ export function DriveLayout({
                 />
               )}
             </li>
-            <Place href="/drive/shared-by-me" current={path === "/drive/shared-by-me"} icon={<SharedOutIcon />}>
+            <Place
+              href="/drive/shared-by-me"
+              current={path === "/drive/shared-by-me"}
+              icon={<SharedOutIcon />}
+              count={sharedCounts.byMe}
+            >
               {t("sharedByMe.title")}
             </Place>
-            <Place href="/drive/shared" current={path === "/drive/shared"} icon={<PeopleIcon />}>
+            <Place
+              href="/drive/shared"
+              current={path === "/drive/shared"}
+              icon={<PeopleIcon />}
+              count={sharedCounts.withMe}
+            >
               {t("shared.title")}
             </Place>
             <Place href="/drive/starred" current={path === "/drive/starred"} icon={<StarIcon />}>
@@ -611,11 +622,15 @@ function Place({
   href,
   current,
   icon,
+  count,
   children,
 }: {
   href: string;
   current: boolean;
   icon: ComponentChildren;
+  /** How many items the page lists. None shows for zero, or before it
+   * loads. */
+  count?: number | null;
   children: ComponentChildren;
 }) {
   return (
@@ -624,6 +639,14 @@ function Place({
         <a class="place" href={href} onClick={followLink} aria-current={current ? "page" : undefined}>
           {icon}
           {children}
+          {count ? (
+            <>
+              <span class="place-count" aria-hidden="true">
+                {count}
+              </span>
+              <span class="visually-hidden">{t("drive.placeCount", { count })}</span>
+            </>
+          ) : null}
         </a>
       </div>
     </li>
@@ -765,6 +788,22 @@ function FolderTree({
       })}
     </ul>
   );
+}
+
+/** How many items Shared by me and Shared with me list, for their places
+ * in the sidebar. The sidebar loads both lists, which stay short in a
+ * household, and loads them again when sharing changes. */
+function useSharedCounts(): { byMe: number | null; withMe: number | null } {
+  const [byMe, setByMe] = useState<number | null>(null);
+  const [withMe, setWithMe] = useState<number | null>(null);
+  const load = () => {
+    // A count that doesn't load is left out. The page says what went wrong.
+    api<unknown[]>("GET", "/api/drive/shared-by-me").then((items) => setByMe(items.length), () => undefined);
+    api<unknown[]>("GET", "/api/drive/shared").then((items) => setWithMe(items.length), () => undefined);
+  };
+  useEffect(load, []);
+  useChanges(load);
+  return { byMe, withMe };
 }
 
 export interface Usage {

@@ -681,6 +681,19 @@ dialog.search-options .dialog-close {
   height: 20px;
 }
 
+/* How many items a place lists, at the end of its row, as Gmail shows
+   unread counts. */
+.place-count {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.place[aria-current="page"] .place-count {
+  color: inherit;
+}
+
 .place-name {
   min-width: 0;
   overflow: hidden;

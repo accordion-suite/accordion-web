@@ -70,6 +70,7 @@ export const en = {
   "drive.expand": "Show the folders in {name}",
   "drive.collapse": "Hide the folders in {name}",
   "drive.storage": "Storage",
+  "drive.placeCount": { one: "{count} item", other: "{count} items" },
   "drive.storageUsed": "{used} of {quota} used",
   "drive.storageUsedNoLimit": "{used} used",
   "drive.starred": "Starred",
