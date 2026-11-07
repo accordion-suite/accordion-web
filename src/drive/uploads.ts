@@ -57,7 +57,8 @@ export interface Upload {
   readonly key: number;
   readonly file: Blob;
   readonly name: string;
-  readonly folder: { readonly id: string; readonly name: string };
+  /** `top` is true for My Drive, which has its own address. */
+  readonly folder: { readonly id: string; readonly name: string; readonly top?: boolean };
   readonly state: UploadState;
 }
 

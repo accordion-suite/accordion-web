@@ -2630,6 +2630,14 @@ dialog.share-dialog {
   overflow-wrap: anywhere;
 }
 
+a.upload-name {
+  color: inherit;
+}
+
+a.upload-name:hover {
+  color: var(--accent);
+}
+
 .upload progress {
   grid-column: 1;
   width: 100%;
@@ -2646,7 +2654,8 @@ dialog.share-dialog {
   color: var(--error);
 }
 
-.upload button {
+.upload button,
+.upload .button {
   grid-column: 2;
   grid-row: 1 / span 3;
   padding: 4px 12px;

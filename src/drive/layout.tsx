@@ -286,7 +286,7 @@ export function DriveLayout({
    * the folders first. */
   async function upload(tree: Tree, folder: Item | null = here) {
     if (!folder) return;
-    const into = { id: folder.id, name: nameOf(folder) };
+    const into = { id: folder.id, name: nameOf(folder), top: folder.parent === null };
     let placed;
     try {
       const found = clashes(tree, await foldersWithQueue.children(into.id));
@@ -302,7 +302,12 @@ export function DriveLayout({
     for (const file of placed) {
       byFolder.set(file.folder.id, [...(byFolder.get(file.folder.id) ?? []), file]);
     }
-    for (const files of byFolder.values()) uploads.add(files, files[0]!.folder);
+    // The panel links to My Drive by its own address, which placeTree
+    // doesn't know about.
+    for (const files of byFolder.values()) {
+      const folder = files[0]!.folder;
+      uploads.add(files, folder.id === into.id ? into : folder);
+    }
   }
 
   function chosen(event: TargetedEvent<HTMLInputElement>, folders: boolean) {

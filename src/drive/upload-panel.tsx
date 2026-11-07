@@ -4,6 +4,7 @@
 import { useEffect, useState } from "preact/hooks";
 
 import { formatSize, t } from "../i18n.ts";
+import { followLink } from "../shell/router.ts";
 import { uploads } from "./http-transport.ts";
 import { finished, type Upload, type UploadQueue } from "./uploads.ts";
 
@@ -36,6 +37,18 @@ function status(upload: Upload): string {
     case "canceled":
       return t("uploads.canceled");
   }
+}
+
+/** The page of the folder the upload went to. */
+function locationPath(upload: Upload): string {
+  return upload.folder.top ? "/drive/my-drive" : `/drive/folder/${upload.folder.id}`;
+}
+
+/** The folder's page with the uploaded file open in the viewer. Without the
+ * viewer's history mark, closing the file stays in the folder rather than
+ * going back to where the upload started. */
+function openPath(upload: Upload, id: string): string {
+  return `${locationPath(upload)}?${new URLSearchParams({ file: id })}`;
 }
 
 function sentSoFar(upload: Upload): number {
@@ -100,7 +113,13 @@ export function UploadPanel() {
             <ul>
               {list.map((upload) => (
                 <li key={upload.key} class={`upload ${upload.state.kind}`}>
-                  <span class="upload-name">{upload.name}</span>
+                  {upload.state.kind === "done" ? (
+                    <a class="upload-name" href={openPath(upload, upload.state.item.id)} onClick={followLink}>
+                      {upload.name}
+                    </a>
+                  ) : (
+                    <span class="upload-name">{upload.name}</span>
+                  )}
                   {!finished(upload.state) && (
                     <progress
                       max={upload.file.size || 1}
@@ -111,6 +130,16 @@ export function UploadPanel() {
                   <span class={upload.state.kind === "failed" ? "upload-status error" : "upload-status"}>
                     {status(upload)}
                   </span>
+                  {upload.state.kind === "done" && (
+                    <a
+                      class="button secondary"
+                      href={locationPath(upload)}
+                      aria-label={t("uploads.openLocationNamed", { name: upload.name })}
+                      onClick={followLink}
+                    >
+                      {t("uploads.openLocation")}
+                    </a>
+                  )}
                   {!finished(upload.state) && (
                     <button
                       type="button"

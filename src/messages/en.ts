@@ -483,6 +483,8 @@ export const en = {
   "uploads.canceled": "Canceled",
   "uploads.cancel": "Cancel",
   "uploads.cancelNamed": "Cancel uploading {name}",
+  "uploads.openLocation": "Open file location",
+  "uploads.openLocationNamed": "Open the folder {name} is in",
   "uploads.progressOf": "Uploading {name}",
   "uploads.clear": "Clear finished",
   "uploads.hide": "Hide",
