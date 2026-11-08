@@ -2605,6 +2605,13 @@ dialog.share-dialog {
   gap: 8px;
 }
 
+.upload-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .upload-panel h2 {
   margin: 0;
   font-size: 1rem;

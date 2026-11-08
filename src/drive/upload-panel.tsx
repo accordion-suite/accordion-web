@@ -100,14 +100,21 @@ export function UploadPanel() {
                   ? t("uploads.uploaded", { count: done })
                   : t("uploads.title")}
             </h2>
-            <button
-              type="button"
-              class="secondary"
-              aria-controls="upload-list"
-              onClick={() => setOpen(!open)}
-            >
-              {open ? t("uploads.hide") : t("uploads.show")}
-            </button>
+            <div class="upload-panel-actions">
+              {active < list.length && (
+                <button type="button" class="secondary" onClick={() => uploads.clearFinished()}>
+                  {t("uploads.clear")}
+                </button>
+              )}
+              <button
+                type="button"
+                class="secondary"
+                aria-controls="upload-list"
+                onClick={() => setOpen(!open)}
+              >
+                {open ? t("uploads.hide") : t("uploads.show")}
+              </button>
+            </div>
           </div>
           <div id="upload-list" hidden={!open}>
             <ul>
@@ -153,11 +160,6 @@ export function UploadPanel() {
                 </li>
               ))}
             </ul>
-            {active < list.length && (
-              <button type="button" class="secondary" onClick={() => uploads.clearFinished()}>
-                {t("uploads.clear")}
-              </button>
-            )}
           </div>
         </section>
       )}
