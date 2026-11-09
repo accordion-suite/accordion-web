@@ -22,6 +22,10 @@ export const TYPES: readonly [string, string][] = [
   ["videos", "search.videos"],
   ["audio", "search.audio"],
   ["archives", "search.archives"],
+  ["code", "search.code"],
+  ["fonts", "search.fonts"],
+  ["ebooks", "search.ebooks"],
+  ["designs", "search.designs"],
 ];
 
 

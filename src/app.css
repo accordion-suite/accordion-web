@@ -58,6 +58,10 @@
   --kind-video: #b5179e;
   --kind-audio: #7048c8;
   --kind-archive: #6b5a45;
+  --kind-code: #0e7c86;
+  --kind-font: #a8326e;
+  --kind-ebook: #8a6d00;
+  --kind-design: #4f46e5;
   --kind-file: #6b7685;
 
   --radius: 12px;
@@ -119,6 +123,10 @@
     --kind-video: #e57ad2;
     --kind-audio: #a98bf0;
     --kind-archive: #c4ad8e;
+    --kind-code: #5ccad3;
+    --kind-font: #f28cbc;
+    --kind-ebook: #e0c25a;
+    --kind-design: #a5a1f7;
     --kind-file: #a4adba;
   }
 }
@@ -172,6 +180,10 @@
   --kind-video: #e57ad2;
   --kind-audio: #a98bf0;
   --kind-archive: #c4ad8e;
+  --kind-code: #5ccad3;
+  --kind-font: #f28cbc;
+  --kind-ebook: #e0c25a;
+  --kind-design: #a5a1f7;
   --kind-file: #a4adba;
 
   color-scheme: dark;
@@ -1491,6 +1503,18 @@ table.items tbody tr.selected {
 }
 .kind-archive {
   color: var(--kind-archive);
+}
+.kind-code {
+  color: var(--kind-code);
+}
+.kind-font {
+  color: var(--kind-font);
+}
+.kind-ebook {
+  color: var(--kind-ebook);
+}
+.kind-design {
+  color: var(--kind-design);
 }
 .kind-file {
   color: var(--kind-file);

@@ -30,6 +30,9 @@ export interface Item {
   shared: boolean;
   /** For a folder: the color the reader picked for it, if any. */
   color: FolderColor | null;
+  /** For files: which type it is, such as "photos", by its name and, where
+   * a name is shared, its contents. Null for none. */
+  type?: string | null;
 }
 
 /** The colors a folder can have, as Drive's API names them. */

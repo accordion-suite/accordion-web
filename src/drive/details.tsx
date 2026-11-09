@@ -27,6 +27,10 @@ const TYPES: Record<string, MessageKey> = {
   video: "details.video",
   audio: "details.audio",
   archive: "details.archive",
+  code: "details.code",
+  font: "details.font",
+  ebook: "details.ebook",
+  design: "details.design",
   file: "details.file",
 };
 

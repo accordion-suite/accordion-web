@@ -7,6 +7,7 @@
 import type { Found, Item, SharedOut } from "./item.ts";
 import { kindOf } from "./icons.tsx";
 import { modifiedRange } from "./search.ts";
+import { TYPE_KINDS } from "./types.ts";
 
 export interface Filters {
   type: string;
@@ -17,19 +18,6 @@ export interface Filters {
 
 export const FILTER_NAMES = ["type", "people", "modified", "source"] as const;
 
-/** The type filter's choices, by the names Drive's API knows them by, and
- * the kind of item each means. */
-export const TYPE_KINDS: Readonly<Record<string, string>> = {
-  folders: "folder",
-  documents: "document",
-  spreadsheets: "spreadsheet",
-  presentations: "presentation",
-  pdfs: "pdf",
-  photos: "image",
-  videos: "video",
-  audio: "audio",
-  archives: "archive",
-};
 
 /** The people filter's value for someone else's items. */
 export function ownedBy(name: string): string {

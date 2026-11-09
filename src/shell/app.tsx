@@ -17,6 +17,7 @@ import { StarredPage } from "../drive/starred-page.tsx";
 import { StoragePage } from "../drive/storage-page.tsx";
 import { forgetFolders } from "../drive/store.ts";
 import { TrashPage } from "../drive/trash-page.tsx";
+import { loadTypes } from "../drive/types.ts";
 import { UploadPanel } from "../drive/upload-panel.tsx";
 import { t } from "../i18n.ts";
 import { startLive } from "./live.ts";
@@ -41,6 +42,13 @@ function Shell() {
   // Undefined while the app finds out whether someone is signed in.
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [error, setError] = useState("");
+  // The list of file types, which icons need before Drive shows anything.
+  // It loads once a session starts, and a failure leaves generic icons.
+  const [typesLoaded, setTypesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (session) void loadTypes().then(() => setTypesLoaded(true));
+  }, [session]);
 
   useEffect(() => {
     api<Session>("GET", "/api/session")
@@ -79,6 +87,9 @@ function Shell() {
         }}
       />
     );
+  }
+  if (!typesLoaded) {
+    return <p class="loading">{t("shell.loading")}</p>;
   }
   return (
     <SignedIn

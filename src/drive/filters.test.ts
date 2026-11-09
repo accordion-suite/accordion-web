@@ -3,8 +3,11 @@ import { test } from "node:test";
 
 import { type Filters, matches, ownedBy, owners, sharedWith, sharees } from "./filters.ts";
 import type { Item } from "./item.ts";
+import { setTypeList } from "./types.ts";
 
 const NOW = new Date("2026-11-02T12:00:00");
+setTypeList({ extensions: { docx: "documents", jpg: "photos", xlsx: "spreadsheets" }, names: {} });
+
 const NONE: Filters = { type: "", people: "", modified: "", source: "" };
 
 function item(name: string, modified: string, more: Partial<Item> = {}): Item {
