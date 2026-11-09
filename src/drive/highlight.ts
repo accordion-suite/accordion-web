@@ -107,6 +107,29 @@ const LANGUAGES: Record<string, Language> = {
     keywords:
       "add all alter and as asc begin between by case check column commit create default delete desc distinct drop else end exists foreign from group having if in index inner insert into is join key left like limit not null on or order outer primary references returning right rollback select set table then union unique update values view when where with",
   },
+  perl: {
+    lineComments: ["#"],
+    strings: ['"', "'"],
+    keywords:
+      "and cmp do else elsif eq eval for foreach ge gt if last le local lt my ne next no not or our package print printf qw redo require return sort sub unless until use while",
+  },
+  vb: {
+    lineComments: ["'"],
+    strings: ['"'],
+    caseless: true,
+    keywords:
+      "and as boolean byref byval call case catch class const dim do each else elseif end exit false finally for function get if imports in integer is loop me module new next not nothing of on or private property public rem return select set shared string sub then to true try while with",
+  },
+  // Windows batch files. "REM" comments aren't marked, since the letters
+  // also end words such as "lorem", so they show as a keyword instead.
+  batch: {
+    lineComments: ["::"],
+    strings: ['"'],
+    caseless: true,
+    keywords:
+      "@echo call cd copy defined del do echo else endlocal errorlevel exist exit for goto if in move not off pause rem set setlocal shift start",
+  },
+  apache: { lineComments: ["#"], strings: ['"'] },
   css: { blockComments: [["/*", "*/"]], strings: ['"', "'"], lineKeys: true },
   json: { strings: ['"'], keywords: "true false null", stringKeys: true },
   yaml: { lineComments: ["#"], strings: ['"', "'"], keywords: "true false null yes no", lineKeys: true },
@@ -129,12 +152,16 @@ const EXTENSIONS: Record<string, string> = {
   rb: "ruby",
   sh: "shell", bash: "shell", zsh: "shell",
   sql: "sql",
+  pl: "perl", pm: "perl",
+  vb: "vb", vbs: "vb", bas: "vb",
+  bat: "batch", cmd: "batch",
+  htaccess: "apache",
   css: "css", scss: "css", less: "css",
   json: "json", jsonc: "json",
   yml: "yaml", yaml: "yaml",
   toml: "toml",
   ini: "ini", conf: "ini", cfg: "ini", properties: "ini",
-  html: "markup", htm: "markup", xml: "markup", svg: "markup", vue: "markup",
+  html: "markup", htm: "markup", xml: "markup", svg: "markup", vue: "markup", kml: "markup", gpx: "markup",
 };
 
 /** Names Markdown's code fences use, beyond file extensions. */

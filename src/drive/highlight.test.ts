@@ -10,10 +10,26 @@ test("knows languages by file name and fence name", () => {
   assert.equal(languageOfName("App.TSX"), "ts");
   assert.equal(languageOfName("notes.txt"), null);
   assert.equal(languageOfName("Makefile"), null);
+  assert.equal(languageOfName("block_ip.htaccess"), "apache");
+  assert.equal(languageOfName(".htaccess"), "apache");
+  assert.equal(languageOfName("SETUP.BAT"), "batch");
+  assert.equal(languageOfName("tracks.kml"), "markup");
   assert.equal(languageOfFence("typescript"), "ts");
   assert.equal(languageOfFence("py"), "python");
   assert.equal(languageOfFence("rust"), "rust");
   assert.equal(languageOfFence("klingon"), null);
+});
+
+test("colors Visual Basic, Perl, and batch files", () => {
+  assert.deepEqual(colored(highlight('Dim x As String = "hi" \' note', "vb")), [
+    "keyword:Dim",
+    "keyword:As",
+    "keyword:String",
+    'string:"hi"',
+    "comment:' note",
+  ]);
+  assert.deepEqual(colored(highlight('my $name = "x"; # note', "perl")), ["keyword:my", 'string:"x"', "comment:# note"]);
+  assert.deepEqual(colored(highlight("@echo off\n:: note", "batch")), ["keyword:@echo", "keyword:off", "comment::: note"]);
 });
 
 test("keeps every character, in order", () => {

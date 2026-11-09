@@ -12,6 +12,7 @@ import { problemText } from "../shell/dialog.tsx";
 import { type Item, canEdit } from "./item.ts";
 import { languageOfName } from "./highlight.ts";
 import { Highlighted } from "./highlight-view.tsx";
+import { ItemIcon } from "./icons.tsx";
 import { MarkdownView } from "./markdown-view.tsx";
 import { announceChange } from "./store.ts";
 
@@ -29,9 +30,14 @@ const MARKDOWN_NAME = /\.(?:md|markdown|mdown|mkd)$/i;
 const shownAsText = new Set<string>();
 
 /** Whether the viewer shows `file` as text. The server found it's text when
- * it made its thumbnail. */
+ * it made its thumbnail. Going by the name alone, a file with a picture for
+ * a thumbnail isn't text: a ".ts" or ".mts" file can be TypeScript or a
+ * video. */
 export function isText(file: Item): boolean {
-  const text = shownAsText.has(file.id) || (file.preview === null && (file.thumbnail === "text" || TEXT_NAME.test(file.name) || languageOfName(file.name) !== null));
+  const named = TEXT_NAME.test(file.name) || languageOfName(file.name) !== null;
+  const text =
+    shownAsText.has(file.id) ||
+    (file.preview === null && (file.thumbnail === "text" || (named && file.thumbnail !== "picture")));
   if (text) shownAsText.add(file.id);
   return text;
 }
@@ -54,6 +60,9 @@ interface Loaded {
   utf8: boolean;
   /** Whether the file goes on past `TEXT_LIMIT`. */
   cut: boolean;
+  /** Whether it has a zero byte, which text never has, so it isn't text
+   * whatever its name says, such as a video that has no thumbnail yet. */
+  binary: boolean;
 }
 
 async function load(file: Item): Promise<Loaded> {
@@ -65,6 +74,7 @@ async function load(file: Item): Promise<Loaded> {
   const bytes = new Uint8Array(await response.arrayBuffer());
   const base = response.headers.get("ETag")?.replace(/"/g, "") ?? file.sha256 ?? "";
   const bom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
+  const binary = bytes.subarray(0, 8192).includes(0);
   let text: string;
   let utf8 = true;
   try {
@@ -77,7 +87,7 @@ async function load(file: Item): Promise<Loaded> {
   }
   // The editor's text box works in plain line ends, so the text does too.
   const crlf = text.includes("\r\n");
-  return { text: crlf ? text.replace(/\r\n/g, "\n") : text, base, bom, crlf, utf8, cut };
+  return { text: crlf ? text.replace(/\r\n/g, "\n") : text, base, bom, crlf, utf8, cut, binary };
 }
 
 export function TextFile({
@@ -125,6 +135,20 @@ export function TextFile({
     return (
       <div class="viewer-body">
         <p class="loading">{t("shell.loading")}</p>
+      </div>
+    );
+  }
+  if (loaded.binary) {
+    // Editing it as text would break it, so it can only be downloaded.
+    return (
+      <div class="viewer-body">
+        <div class="viewer-note">
+          <ItemIcon item={file} />
+          <p>{t("viewer.noPreview", { name: file.name })}</p>
+          <a class="button" href={`/api/drive/items/${file.id}/content`} download={file.name}>
+            {t("viewer.download")}
+          </a>
+        </div>
       </div>
     );
   }
