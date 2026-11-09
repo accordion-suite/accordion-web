@@ -45,7 +45,7 @@ import {
   StarIcon,
   TrashIcon,
 } from "./icons.tsx";
-import { type Found, type Hit, type Item, type SharedOut, canEdit } from "./item.ts";
+import { type Found, type Hit, type Item, type SharedOut, canEdit, thumbnailAddress } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { useDriveSettings } from "./preferences.ts";
 import { dropProps, endDrag, startDrag } from "./move.ts";
@@ -727,9 +727,10 @@ export function CardPreview({ item, thumbnail = true }: { item: Item; thumbnail?
   // With thumbnails turned off in Settings, the card keeps its size and
   // shows the file type's icon, so the grid looks the same either way.
   const kind = thumbnail && item.sha256 && !failed ? item.thumbnail : null;
-  // The hash changes with each version, so browsers keep each thumbnail
-  // and fetch a new one when the file changes.
-  const src = `/api/drive/items/${item.id}/thumbnail?v=${item.sha256}`;
+  // The address changes with each version of the file and of its
+  // thumbnail, so browsers keep each one and fetch a new one when either
+  // changes.
+  const src = thumbnailAddress(item);
   const page = item.preview === "pdf" || item.preview === "document" ? " is-page" : "";
   return (
     <div class={kind ? `card-preview has-thumbnail has-${kind}${page}` : "card-preview"} aria-hidden="true">

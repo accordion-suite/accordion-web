@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { t } from "../i18n.ts";
 import { ConfirmDialog, Dialog } from "../shell/dialog.tsx";
 import { ItemIcon } from "./icons.tsx";
-import type { Item } from "./item.ts";
+import { type Item, thumbnailAddress } from "./item.ts";
 import { TextFile, canEditText, isText } from "./text-file.tsx";
 
 /** Small screens open PDFs in their own tab, because phones show a PDF in a
@@ -151,7 +151,7 @@ function Shown({
           {file.thumbnail === "picture" && file.sha256 ? (
             <img
               class="viewer-thumbnail"
-              src={`/api/drive/items/${file.id}/thumbnail?v=${file.sha256}`}
+              src={thumbnailAddress(file)}
               alt=""
             />
           ) : (
@@ -203,7 +203,7 @@ function Shown({
             src={address}
             poster={
               file.thumbnail === "picture" && file.sha256
-                ? `/api/drive/items/${file.id}/thumbnail?v=${file.sha256}`
+                ? thumbnailAddress(file)
                 : undefined
             }
             controls

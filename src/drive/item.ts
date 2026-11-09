@@ -16,6 +16,9 @@ export interface Item {
   /** What thumbnail the server has of the file yet: a small picture, or a
    * text file's first lines. */
   thumbnail: "picture" | "text" | null;
+  /** Changes each time the server makes the thumbnail again, such as a
+   * better one after an update. */
+  thumbnail_version?: string | null;
   created_at: string;
   modified_at: string;
   /** Whether the reader starred it. */
@@ -33,6 +36,14 @@ export interface Item {
   /** For files: which type it is, such as "photos", by its name and, where
    * a name is shared, its contents. Null for none. */
   type?: string | null;
+}
+
+/** Where a file's thumbnail is. Browsers keep it for a year, so the
+ * address names the contents and the thumbnail's version, and changes when
+ * either does. */
+export function thumbnailAddress(item: Pick<Item, "id" | "sha256" | "thumbnail_version">): string {
+  const version = item.thumbnail_version ? `-${item.thumbnail_version}` : "";
+  return `/api/drive/items/${item.id}/thumbnail?v=${item.sha256}${version}`;
 }
 
 /** The colors a folder can have, as Drive's API names them. */
