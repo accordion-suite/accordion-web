@@ -87,6 +87,8 @@ export function logText(event: LoggedEvent, me: string): string {
     case "retention_changed":
       // Storage's change names its days. The activity log's names keep_days.
       return t(event.details?.trash_days !== undefined ? "log.storageRetentionChanged" : "log.retentionChanged");
+    case "previews_changed":
+      return t("log.previewsChanged");
     default:
       return t("log.other");
   }

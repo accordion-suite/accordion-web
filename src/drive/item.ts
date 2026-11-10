@@ -8,8 +8,9 @@ export interface Item {
   /** For files: the SHA-256 hash of the current version's contents. */
   sha256: string | null;
   /** For files the browser can show itself, or "document" for an Office
-   * document the server has made a PDF of. */
-  preview: "image" | "pdf" | "video" | "audio" | "document" | null;
+   * document the server has made a PDF of. "convert" is a video the server
+   * is making a version of that browsers play, which `/convert` asks for. */
+  preview: "image" | "pdf" | "video" | "audio" | "document" | "convert" | null;
   /** For a document: whether its preview stops at its first pages, so the
    * document may go on past them. */
   preview_partial: boolean;

@@ -1,12 +1,15 @@
 // Shows a file from a folder over the folder's page, with the folder's other
-// files a step away. The browser shows photos, PDFs, videos, and audio itself,
-// from Drive's preview address, Office documents as the PDF the server made
-// of them, and songs it can't play as the AAC the server converted them to. The viewer shows text files as a page of text, which people
-// who can change them can edit. Other files, and videos and songs the
-// browser can't play, show their thumbnail or icon and offer the download.
+// files a step away. The browser shows photos, PDFs, videos, and audio
+// itself, from Drive's preview address: Office documents as the PDF the
+// server made of them, and songs and videos it can't play as the version the
+// server converted. A video the server hasn't converted yet plays as it is if
+// the browser can, and otherwise asks the server to convert it now. The
+// viewer shows text files as a page of text, which people who can change them
+// can edit. Other files show their thumbnail or icon and offer the download.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
+import { api } from "../api.ts";
 import { t } from "../i18n.ts";
 import { ConfirmDialog, Dialog } from "../shell/dialog.tsx";
 import { ItemIcon } from "./icons.tsx";
@@ -191,6 +194,9 @@ function Shown({
       </div>
     );
   }
+  if (file.preview === "convert") {
+    return <Converting file={file} address={address} />;
+  }
   if (file.preview === "video") {
     return (
       <div class="viewer-body">
@@ -280,6 +286,59 @@ function Shown({
           />
         </>
       )}
+    </div>
+  );
+}
+
+/** A video the server is making a version of that browsers play. It plays
+ * as it is if this browser can. If not, the viewer asks the server to make
+ * it now, and the folder's list brings the new version once it's ready. */
+function Converting({ file, address }: { file: Item; address: string }) {
+  const [state, setState] = useState<"trying" | "waiting" | "off">("trying");
+
+  async function ask() {
+    try {
+      const reply = await api<{ converting: boolean }>("POST", `/api/drive/items/${file.id}/convert`);
+      setState(reply.converting ? "waiting" : "off");
+    } catch {
+      setState("off");
+    }
+  }
+
+  const download = (
+    <a class="button" href={`/api/drive/items/${file.id}/content`} download={file.name}>
+      {t("viewer.download")}
+    </a>
+  );
+  if (state === "trying") {
+    return (
+      <div class="viewer-body">
+        <video
+          src={address}
+          poster={file.thumbnail === "picture" && file.sha256 ? thumbnailAddress(file) : undefined}
+          controls
+          autoplay
+          playsinline
+          onError={() => void ask()}
+          // A browser that can't decode the picture may play only the sound.
+          onLoadedMetadata={(event) => {
+            if (event.currentTarget.videoWidth === 0) void ask();
+          }}
+        />
+      </div>
+    );
+  }
+  return (
+    <div class="viewer-body">
+      <div class="viewer-note" role={state === "off" ? "alert" : "status"}>
+        {file.thumbnail === "picture" && file.sha256 ? (
+          <img class="viewer-thumbnail" src={thumbnailAddress(file)} alt="" />
+        ) : (
+          <ItemIcon item={file} />
+        )}
+        <p>{t(state === "waiting" ? "viewer.converting" : "viewer.videoFailed", { name: file.name })}</p>
+        {download}
+      </div>
     </div>
   );
 }

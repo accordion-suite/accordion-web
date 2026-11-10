@@ -17,6 +17,7 @@ import { SECTIONS, SettingsLayout, SettingsPage } from "./layout.tsx";
 import { NetworkPage } from "./network-page.tsx";
 import { PeoplePage } from "./people-page.tsx";
 import { RemotePage } from "./remote-page.tsx";
+import { PreviewsPage } from "./previews-page.tsx";
 import { RetentionPage } from "./retention-page.tsx";
 import { UpdatesPage } from "./updates-page.tsx";
 
@@ -84,6 +85,8 @@ function sectionPage(path: string, session: Session, onSessionChanged: () => Pro
       return <RemotePage key={id} />;
     case "retention":
       return <RetentionPage key={id} />;
+    case "previews":
+      return <PreviewsPage key={id} />;
   }
   return null;
 }

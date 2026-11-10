@@ -20,6 +20,7 @@ export const settingsEn = {
   "settings.activity": "Activity log",
   "settings.adminLog": "Admin log",
   "settings.retention": "Trash and versions",
+  "settings.previews": "Previews",
   "settings.notHere":
     "Server settings only open on the same network as the server. Connect to your home network, then try again.",
   "settings.adminsOnly": "Only admins can change the server's settings.",
@@ -486,6 +487,35 @@ export const settingsEn = {
   "log.updateInstalledUnknown": "Installed an update",
   "log.retentionChanged": "Changed how long activity is kept",
   "log.storageRetentionChanged": "Changed how long trash and older versions are kept",
+  "log.previewsChanged": "Changed how previews are made",
+  "previews.intro":
+    "How Accordion prepares files the browser can't show on its own, for everyone on this server. Previews are copies, so the files themselves never change.",
+  "previews.videosTitle": "Convert videos for playback",
+  "previews.videosHint":
+    "Some videos, such as Windows Media, DivX, and HEVC from phones, play in a browser only once they're converted. Converting takes a while: on a small server, a few minutes for each minute of video. Videos that only need repackaging take seconds, so they're always ready after upload.",
+  "previews.upload": "After upload",
+  "previews.uploadHint": "Videos are ready when someone opens them. This uses the most processor time and disk space.",
+  "previews.opened": "When first opened",
+  "previews.openedHint":
+    "Only videos people watch take time and space. The first person to open one waits while it converts.",
+  "previews.never": "Never",
+  "previews.neverHint": "People download these videos to watch them.",
+  "previews.recommended": "Recommended for this server",
+  "previews.whyUpload": {
+    one: "This server has {count} processor core, so Accordion recommends converting after upload.",
+    other: "This server has {count} processor cores, so Accordion recommends converting after upload.",
+  },
+  "previews.whyOpened": {
+    one: "This server has {count} processor core, so Accordion recommends converting when a video is first opened. Servers with 6 or more cores convert after upload.",
+    other:
+      "This server has {count} processor cores, so Accordion recommends converting when a video is first opened. Servers with 6 or more cores convert after upload.",
+  },
+  "previews.spaceTitle": "Space for previews",
+  "previews.spaceHint":
+    "Previews of pictures, sounds, and videos share this much of the data disk. Past it, the videos nobody has watched for longest go first, and they're made again the next time someone opens them.",
+  "previews.percent": "{percent}% of the disk ({size})",
+  "previews.used": "Previews use {used} of {limit}.",
+  "previews.saved": "Saved.",
   "retention.intro":
     "How long Drive keeps deleted items and older versions of files, for everyone on this server.",
   "retention.trashTitle": "Keep items in the trash for",

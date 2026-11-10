@@ -189,6 +189,8 @@ export const en = {
   "viewer.openPreview": "Open the preview",
   "viewer.textCut": "This file is long, so Accordion shows its first {size}. Download it to see the rest.",
   "viewer.noPreview": "Accordion can't show {name} here. Download it to open it on your device.",
+  "viewer.converting":
+    "Accordion is getting {name} ready to play here. A long video can take a few minutes, and it starts on its own when it's ready.",
   "viewer.audioFailed": "This browser can't play {name}. Download it to listen to it in another app.",
   "viewer.videoFailed":
     "This browser can't play {name}. Download it to watch it in another app, or open Accordion in another browser.",

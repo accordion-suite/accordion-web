@@ -16,6 +16,13 @@ export const SettingsIcon = () => (
   </Icon>
 );
 
+export const PreviewsIcon = () => (
+  <Icon>
+    <rect x="3.5" y="5.5" width="17" height="13" rx="2" {...line} />
+    <path d="M10.5 9.5v5l4-2.5z" {...line} />
+  </Icon>
+);
+
 export const BackIcon = () => (
   <Icon>
     <path d="M19 12H5m6-6-6 6 6 6" {...line} />
