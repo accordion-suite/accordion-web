@@ -2557,6 +2557,71 @@ pre.text-page {
   }
 }
 
+/* A font's sample text, as a page that scrolls inside the viewer. */
+.viewer-font {
+  align-self: stretch;
+  justify-self: stretch;
+  overflow: auto;
+  background: var(--page);
+}
+
+.viewer-font-page {
+  max-width: 1000px;
+  min-height: calc(100% - 48px);
+  margin: 24px auto;
+  padding: 32px 40px;
+  background: var(--panel);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.viewer-font-try {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.viewer-font-letters {
+  margin: 0;
+  font-size: 128px;
+  line-height: 1.2;
+}
+
+.viewer-font-alphabet {
+  margin: 0 0 32px;
+  font-size: 32px;
+  line-height: 1.4;
+}
+
+.viewer-font-size {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.viewer-font-size p {
+  margin: 4px 0 0;
+  line-height: 1.3;
+}
+
+.viewer-font-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+@media (max-width: 600px) {
+  .viewer-font-page {
+    margin: 0;
+    padding: 16px;
+  }
+
+  .viewer-font-letters {
+    font-size: 96px;
+  }
+
+  .viewer-font-alphabet {
+    font-size: 24px;
+  }
+}
+
 /* The note sizes itself to what's in it, so the player gets its own width. */
 .viewer-audio audio {
   width: min(420px, calc(100vw - 64px));
