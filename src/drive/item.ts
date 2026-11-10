@@ -10,7 +10,7 @@ export interface Item {
   /** For files the browser can show itself, or "document" for an Office
    * document the server has made a PDF of. "convert" is a video the server
    * is making a version of that browsers play, which `/convert` asks for. */
-  preview: "image" | "pdf" | "video" | "audio" | "document" | "convert" | null;
+  preview: "image" | "pdf" | "video" | "audio" | "document" | "convert" | "book" | null;
   /** For a document: whether its preview stops at its first pages, so the
    * document may go on past them. */
   preview_partial: boolean;

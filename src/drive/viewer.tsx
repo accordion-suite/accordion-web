@@ -3,14 +3,15 @@
 // itself, from Drive's preview address: Office documents as the PDF the
 // server made of them, and songs and videos it can't play as the version the
 // server converted. A video the server hasn't converted yet plays as it is if
-// the browser can, and otherwise asks the server to convert it now. The
+// the browser can, and otherwise asks the server to convert it now. E-books
+// show their cover and the details the server read of them, as text. The
 // viewer shows text files as a page of text, which people who can change them
 // can edit. Other files show their thumbnail or icon and offer the download.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
-import { t } from "../i18n.ts";
+import { formatList, t } from "../i18n.ts";
 import { ConfirmDialog, Dialog } from "../shell/dialog.tsx";
 import { ItemIcon } from "./icons.tsx";
 import { type Item, thumbnailAddress } from "./item.ts";
@@ -197,6 +198,9 @@ function Shown({
   if (file.preview === "convert") {
     return <Converting file={file} address={address} />;
   }
+  if (file.preview === "book") {
+    return <Book file={file} address={address} />;
+  }
   if (file.preview === "video") {
     return (
       <div class="viewer-body">
@@ -338,6 +342,90 @@ function Converting({ file, address }: { file: Item; address: string }) {
         )}
         <p>{t(state === "waiting" ? "viewer.converting" : "viewer.videoFailed", { name: file.name })}</p>
         {download}
+      </div>
+    </div>
+  );
+}
+
+/** What the server read of an e-book, as text. */
+interface BookDetails {
+  title: string | null;
+  authors: string[];
+  /** Paragraphs, with a new line between each. */
+  description: string | null;
+  contents: { title: string; depth: number }[];
+}
+
+/** An e-book's cover beside its title, authors, description, and table of
+ * contents. */
+function Book({ file, address }: { file: Item; address: string }) {
+  const [details, setDetails] = useState<BookDetails | "loading" | "failed">("loading");
+  useEffect(() => {
+    let current = true;
+    api<BookDetails>("GET", address).then(
+      (found) => current && setDetails(found),
+      () => current && setDetails("failed"),
+    );
+    return () => {
+      current = false;
+    };
+  }, [address]);
+
+  if (details === "loading") {
+    return (
+      <div class="viewer-body">
+        <p class="loading">{t("shell.loading")}</p>
+      </div>
+    );
+  }
+  const download = (
+    <a class="button" href={`/api/drive/items/${file.id}/content`} download={file.name}>
+      {t("viewer.download")}
+    </a>
+  );
+  if (details === "failed") {
+    return (
+      <div class="viewer-body">
+        <div class="viewer-note" role="alert">
+          <p>{t("viewer.bookFailed", { name: file.name })}</p>
+          {download}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div class="viewer-body">
+      <div class="viewer-book">
+        <div class="viewer-book-page">
+          <div class="viewer-book-cover">
+            {file.thumbnail === "picture" && file.sha256 ? (
+              <img src={thumbnailAddress(file)} alt="" />
+            ) : (
+              <ItemIcon item={file} />
+            )}
+          </div>
+          <div class="viewer-book-details">
+            <h2>{details.title ?? file.name}</h2>
+            {details.authors.length > 0 && (
+              <p class="viewer-book-authors">{t("viewer.bookBy", { authors: formatList(details.authors) })}</p>
+            )}
+            {details.description?.split("\n").map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+            <p class="viewer-book-read">{t("viewer.bookRead")}</p>
+            {download}
+            {details.contents.length > 0 && (
+              <>
+                <h3>{t("viewer.bookContents")}</h3>
+                <ul class="viewer-book-contents">
+                  {details.contents.map((entry, index) => (
+                    <li key={index} style={{ paddingLeft: `${Math.min(entry.depth, 5) * 20}px` }}>
+                      {entry.title}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

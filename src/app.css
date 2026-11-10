@@ -2483,6 +2483,80 @@ pre.text-page {
   height: 72px;
 }
 
+/* An e-book's cover beside its details, as a page that scrolls inside the
+   viewer. */
+.viewer-book {
+  align-self: stretch;
+  justify-self: stretch;
+  overflow: auto;
+}
+
+.viewer-book-page {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  gap: 32px;
+  max-width: 880px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+
+.viewer-book-cover img {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+}
+
+.viewer-book-cover .item-icon {
+  width: 96px;
+  height: 96px;
+}
+
+.viewer-book-details {
+  overflow-wrap: anywhere;
+}
+
+.viewer-book-details h2 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+
+.viewer-book-details h3 {
+  margin: 24px 0 8px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.viewer-book-authors,
+.viewer-book-read {
+  color: var(--muted);
+}
+
+.viewer-book-contents {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.viewer-book-contents li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* On a phone, the cover goes above, smaller. */
+@media (max-width: 600px) {
+  .viewer-book-page {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .viewer-book-cover {
+    justify-self: center;
+    width: 160px;
+  }
+}
+
 /* The note sizes itself to what's in it, so the player gets its own width. */
 .viewer-audio audio {
   width: min(420px, calc(100vw - 64px));

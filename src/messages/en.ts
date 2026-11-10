@@ -197,6 +197,10 @@ export const en = {
   "viewer.failed":
     "Accordion couldn't show {name}. It may be damaged, or not the kind of file its name says. Download it to open it on your device.",
   "viewer.edit": "Edit",
+  "viewer.bookBy": "By {authors}",
+  "viewer.bookContents": "Contents",
+  "viewer.bookRead": "To read the book, download it and open it in an e-book app.",
+  "viewer.bookFailed": "Accordion couldn't show the details of {name}. Download it to read it in an e-book app.",
 
   "editor.label": "Text of {name}",
   "editor.show": "Show",
