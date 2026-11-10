@@ -1,7 +1,7 @@
 // Shows a file from a folder over the folder's page, with the folder's other
 // files a step away. The browser shows photos, PDFs, videos, and audio itself,
-// from Drive's preview address, and Office documents as the PDF the server
-// made of them. The viewer shows text files as a page of text, which people
+// from Drive's preview address, Office documents as the PDF the server made
+// of them, and songs it can't play as the AAC the server converted them to. The viewer shows text files as a page of text, which people
 // who can change them can edit. Other files, and videos and songs the
 // browser can't play, show their thumbnail or icon and offer the download.
 
@@ -169,7 +169,12 @@ function Shown({
     return (
       <div class="viewer-body">
         <div class="viewer-note viewer-audio">
-          <ItemIcon item={file} />
+          {/* A song's cover art, if it has some. */}
+          {file.thumbnail === "picture" && file.sha256 ? (
+            <img class="viewer-thumbnail" src={thumbnailAddress(file)} alt="" />
+          ) : (
+            <ItemIcon item={file} />
+          )}
           {state === "failed" ? (
             <>
               <p role="alert">{t("viewer.audioFailed", { name: file.name })}</p>
