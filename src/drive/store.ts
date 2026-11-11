@@ -135,6 +135,33 @@ export function useSort(scope: SortScope): [Sort | null, (sort: Sort) => void] {
   ];
 }
 
+const LIST_FOCUS = "accordion:list-focus";
+/** When a list was last asked to take the focus. */
+let listFocusAsked = 0;
+/** How long the ask lasts, for a page that's slow to load. */
+const LIST_FOCUS_MS = 5000;
+
+/** Asks the next list that shows to focus and select its first item, after
+ * a folder opens from the keyboard, so the arrow keys carry on there.
+ * `here` asks the list already shown, for the page that's open. */
+export function focusNextList(here = false): void {
+  listFocusAsked = Date.now();
+  if (here) window.dispatchEvent(new Event(LIST_FOCUS));
+}
+
+/** Whether a list was asked to take the focus, which only one list does. */
+export function takeListFocus(): boolean {
+  const asked = Date.now() - listFocusAsked < LIST_FOCUS_MS;
+  listFocusAsked = 0;
+  return asked;
+}
+
+/** Calls `listener` when the list shown is asked to take the focus. */
+export function onListFocus(listener: () => void): () => void {
+  window.addEventListener(LIST_FOCUS, listener);
+  return () => window.removeEventListener(LIST_FOCUS, listener);
+}
+
 /** Says that files or folders changed, such as after an upload. A folder
  * may have been renamed or moved, so the folders seen so far are
  * forgotten. */

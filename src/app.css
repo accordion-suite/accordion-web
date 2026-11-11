@@ -3473,7 +3473,7 @@ dialog.shortcuts dl {
 
 dialog.shortcuts dl > div {
   display: grid;
-  grid-template-columns: 9rem 1fr;
+  grid-template-columns: 12rem 1fr;
   gap: 12px;
   padding: 6px 0;
   border-bottom: 1px solid var(--border);
@@ -3482,6 +3482,11 @@ dialog.shortcuts dl > div {
 dialog.shortcuts dt,
 dialog.shortcuts dd {
   margin: 0;
+}
+
+/* A two-key shortcut stays on one line, and wraps before "or". */
+dialog.shortcuts .keys {
+  white-space: nowrap;
 }
 
 dialog.shortcuts kbd {

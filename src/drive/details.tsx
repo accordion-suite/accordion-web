@@ -114,21 +114,28 @@ function nameOf(item: Item): string {
   return item.parent === null ? t("drive.myDrive") : item.name;
 }
 
+export type DetailsTab = "details" | "activity";
+
 export function DetailsPanel({
   items,
   me,
+  tab,
+  onTab,
   onClose,
 }: {
   items: readonly Item[];
   /** The reader's user ID, so their own changes say "You". */
   me: string;
+  /** The tab that's shown. It stays as the reader selects other items, as
+   * in Google Drive, and the layout keeps it, so shortcuts can pick it. */
+  tab: DetailsTab;
+  onTab: (tab: DetailsTab) => void;
   onClose: () => void;
 }) {
   const only = items.length === 1 ? items[0]! : null;
-  // The tab stays as the reader selects other items, as in Google Drive.
-  const [tab, setTab] = useState<"details" | "activity">("details");
   return (
-    <aside class="details" aria-labelledby="details-title">
+    // Alt+G then D moves the focus here.
+    <aside class="details" aria-labelledby="details-title" tabIndex={-1}>
       <div class="details-head">
         {only ? <ItemIcon item={only} /> : <InfoIcon />}
         <h2 id="details-title">{only ? nameOf(only) : t("details.title")}</h2>
@@ -147,7 +154,7 @@ export function DetailsPanel({
                 id={`details-tab-${each}`}
                 aria-controls="details-tab-panel"
                 aria-selected={tab === each}
-                onClick={() => setTab(each)}
+                onClick={() => onTab(each)}
               >
                 {t(each === "details" ? "details.tabDetails" : "details.tabActivity")}
               </button>

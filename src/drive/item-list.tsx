@@ -51,12 +51,21 @@ import {
 import { type Found, type Hit, type Item, type SharedOut, canEdit, thumbnailAddress } from "./item.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { useDriveSettings } from "./preferences.ts";
-import { dropProps, endDrag, startDrag } from "./move.ts";
+import { dropProps, endDrag, naming, startDrag } from "./move.ts";
 import { nextSort, type SortKey, sortItems } from "./sort.ts";
 import { clearFilters, FilterBar, useFilters } from "./filter-bar.tsx";
 import { matches } from "./filters.ts";
 import { neighbor, range, useSelectionBand } from "./selection.ts";
-import { announceChange, type SortScope, useDetailsOpen, useSort, useViewMode } from "./store.ts";
+import {
+  announceChange,
+  focusNextList,
+  onListFocus,
+  type SortScope,
+  takeListFocus,
+  useDetailsOpen,
+  useSort,
+  useViewMode,
+} from "./store.ts";
 import { Viewer } from "./viewer.tsx";
 
 /** Who an item is shared with, as short as fits a column: the first
@@ -82,6 +91,13 @@ function sharedWithTitle(item: SharedOut): string {
 
 
 const ARROWS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+
+/** How long a pause in typing a name starts a new one. */
+const TYPE_AHEAD_MS = 1000;
+
+/** Compares the start of a name with what's typed, ignoring case and
+ * accents, so "e" finds "Église". */
+const nameStart = new Intl.Collator(undefined, { sensitivity: "base" });
 type Arrow = "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight";
 
 /** Whether a key, rather than the pointer, pressed a button. A click from
@@ -179,6 +195,21 @@ export function ItemList({
     return () => document.removeEventListener("keydown", keys);
   }, []);
 
+  // After a folder opens from the keyboard, its first item is selected and
+  // focused, so the arrow keys and Enter carry on in it.
+  const arrived = useRef(() => undefined as void);
+  arrived.current = () => {
+    // A list still loading, or an empty folder, leaves the ask for the
+    // next.
+    const first = order[0];
+    if (!first || !takeListFocus()) return;
+    focusItem(first);
+    anchor.current = first;
+    setSelected(new Set([first]));
+  };
+  useEffect(() => arrived.current(), [items]);
+  useEffect(() => onListFocus(() => arrived.current()), []);
+
   // Drops what's no longer here, such as a file moved elsewhere.
   useEffect(() => {
     const here = new Set(items.map((item) => item.id));
@@ -198,10 +229,15 @@ export function ItemList({
   const files = shown;
   const shownFile = shown.find((file) => file.id === showing);
 
-  function openItem(item: Item) {
+  /** Opens a file in the viewer, or goes to a folder. From the keyboard,
+   * the folder's first item takes the focus. */
+  function openItem(item: Item, byKeyboard = false) {
     // A folder in the trash has no page, as in Google Drive.
     if (item.kind === "folder" && trash) drive.notify({ message: t("trash.folderClosed", { name: item.name }) });
-    else if (item.kind === "folder") navigate(folderPath(item));
+    else if (item.kind === "folder") {
+      if (byKeyboard) focusNextList();
+      navigate(folderPath(item));
+    }
     else navigate(filePath(item), { state: OPENED_HERE });
   }
 
@@ -297,14 +333,21 @@ export function ItemList({
     setMenu(itemMenu(item, place, byKeyboard));
   }
 
+  // The keys follow Google Drive's, and file managers' where Drive has
+  // none, such as Home and End. Ctrl is Cmd on a Mac, and Alt is Option,
+  // which changes the letter a key types there, so those keys go by where
+  // they are on the keyboard.
   shortcuts.current = (event) => {
+    if (event.defaultPrevented || event.isComposing) return;
     if (open || menu || shownFile || typing(event.target)) return;
     if (event.target instanceof Element && event.target.closest("dialog")) return;
     const command = event.ctrlKey || event.metaKey;
     const focused = (document.activeElement as Element | null)?.closest<HTMLElement>("[data-id]");
     const focusedItem = focused && items.find((item) => item.id === focused.dataset["id"]);
     const chosen = chosenItems.length > 0 ? chosenItems : focusedItem ? [focusedItem] : [];
-    if (event.key === "Delete" || (event.key === "Backspace" && event.metaKey)) {
+    const only = chosen.length === 1 ? chosen[0]! : null;
+    const letter = event.code.startsWith("Key") ? event.code.slice(3).toLowerCase() : "";
+    if (event.key === "Delete" || event.key === "#" || (event.key === "Backspace" && event.metaKey)) {
       if (trash && chosen.length > 0) {
         trash.remove(chosen);
         event.preventDefault();
@@ -313,19 +356,68 @@ export function ItemList({
       if (chosen.length === 0 || !chosen.every(canEdit)) return;
       void actions.trash(chosen);
     } else if (event.key === "F2") {
-      if (chosen.length !== 1 || !canEdit(chosen[0]!)) return;
-      actions.rename(chosen[0]!);
+      if (!only || !canEdit(only)) return;
+      actions.rename(only);
+    } else if (event.key === "Enter" && !command && !event.altKey && !event.shiftKey) {
+      // Enter opens the item whose name has the focus, here rather than
+      // through the link's click, which browsers report differently. With
+      // nothing focused, or only the page's title, it opens what's selected.
+      // On a button, such as ⋮, it presses the button.
+      const active = document.activeElement;
+      const onName = focusedItem && active?.matches("[data-open]");
+      const loose = !active || active === document.body || active.matches("h1");
+      const opening = onName ? focusedItem : loose ? only : null;
+      if (!opening) return;
+      openItem(opening, true);
+    } else if (event.key === "Enter" && command && !event.altKey && chosen.length > 0) {
+      // In new tabs, as a link opens with Ctrl. Browsers may allow only
+      // the first.
+      if (trash) return;
+      for (const item of chosen) window.open(item.kind === "folder" ? folderPath(item) : filePath(item), "_blank");
+    } else if (command && event.altKey && !event.shiftKey && letter) {
+      if (trash || chosen.length === 0) return;
+      if (letter === "p" && only?.kind === "file") openItem(only);
+      else if (letter === "a" && only && only.access !== "viewer") actions.share(only);
+      else if (letter === "m" && chosen.every(canEdit)) actions.move(chosen);
+      else if (letter === "s") void actions.star(chosen, chosen.some((item) => !item.starred));
+      else return;
+    } else if (command && event.shiftKey && !event.altKey && letter === "c") {
+      if (chosen.length === 0) return;
+      const names = chosen.map((item) => item.name).join("\n");
+      // Browsers have no clipboard on a page that isn't secure, so that
+      // fails too.
+      Promise.resolve()
+        .then(() => navigator.clipboard.writeText(names))
+        .then(
+          () => drive.notify({ message: naming(chosen, "drive.copiedName", "drive.copiedNames") }),
+          () => drive.notify({ message: t("drive.copyFailed"), problem: true }),
+        );
+    } else if (event.altKey && !command && !event.shiftKey && letter === "a") {
+      // The ⋮ menu for what's chosen, under the item, as the context menu
+      // key opens it.
+      const item = focusedItem ?? only ?? chosen[0];
+      const holder = item && root.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(item.id)}"]`);
+      if (!item || !holder) return;
+      setMenu(itemMenu(item, { under: holder }, true));
     } else if (command && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
       setSelected(new Set(items.map((item) => item.id)));
     } else if (event.key === "Escape" && selected.size > 0) {
       setSelected(new Set());
+    } else if (!command && !event.altKey && typeAhead(event.key, focusedItem ?? null)) {
+      // Typing a name's first letters goes to it, as in Google Drive and
+      // file managers.
     } else if (focusedItem && event.key === " " && !event.altKey) {
       anchor.current = focusedItem.id;
       toggle(focusedItem.id);
-    } else if (focusedItem && ARROWS.includes(event.key) && !event.altKey) {
+    } else if (focusedItem && [...ARROWS, "Home", "End"].includes(event.key) && !event.altKey) {
       // In a list, left and right are for scrolling across.
       if (mode === "list" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) return;
-      const next = arrowTo(focusedItem.id, event.key as Arrow);
+      const next =
+        event.key === "Home"
+          ? (order[0] ?? null)
+          : event.key === "End"
+            ? (order[order.length - 1] ?? null)
+            : arrowTo(focusedItem.id, event.key as Arrow);
       if (!next) return;
       focusItem(next);
       if (event.shiftKey) {
@@ -339,6 +431,41 @@ export function ItemList({
     }
     event.preventDefault();
   };
+
+  /** Letters typed so far to go to an item by name, and when the last
+   * came. */
+  const typed = useRef({ text: "", at: 0 });
+
+  /** Goes to the next item whose name starts with what's been typed, and
+   * says whether `key` was typing. A space counts only after a letter, so
+   * Space still selects. "#", "/", and "?" are shortcuts of their own. It
+   * works from the list, or with nothing focused, not from the sidebar or
+   * a menu. */
+  function typeAhead(key: string, from: Item | null): boolean {
+    const focus = document.activeElement;
+    if (focus && focus !== document.body && !root.current?.contains(focus)) return false;
+    const now = Date.now();
+    const going = now - typed.current.at < TYPE_AHEAD_MS ? typed.current.text : "";
+    if (key.length !== 1 || "#/?".includes(key) || (key === " " && !going)) return false;
+    const text = (going + key).toLocaleLowerCase();
+    typed.current = { text, at: now };
+    // Typing one letter over and over steps through the names that start
+    // with it. Otherwise the item already there stays, if it still fits.
+    const repeated = [...text].every((letter) => letter === text[0]);
+    const prefix = repeated ? text[0]! : text;
+    const start = from ? order.indexOf(from.id) + (repeated ? 1 : 0) : 0;
+    const byId = new Map(items.map((item) => [item.id, item]));
+    for (let step = 0; step < order.length; step++) {
+      const id = order[(start + step) % order.length]!;
+      const name = byId.get(id)?.name ?? "";
+      if (nameStart.compare(name.slice(0, prefix.length), prefix) !== 0) continue;
+      focusItem(id);
+      anchor.current = id;
+      setSelected(new Set([id]));
+      break;
+    }
+    return true;
+  }
 
   /** The items' IDs in the order they're shown, folders first in a grid. */
   const order = (mode === "list" ? ordered : [...folders, ...files]).map((item) => item.id);
@@ -453,7 +580,7 @@ export function ItemList({
         onClick={(event) => {
           if (event.button !== 0) return;
           event.preventDefault();
-          if (keyed(event)) openItem(item);
+          if (keyed(event)) openItem(item, true);
         }}
       >
         {item.name}

@@ -14,7 +14,13 @@
 // folder that is with `useTarget`. Files dropped on a folder's page, or on
 // Home, upload there too.
 
-import type { ComponentChildren, TargetedDragEvent, TargetedEvent, TargetedMouseEvent } from "preact";
+import type {
+  ComponentChildren,
+  TargetedDragEvent,
+  TargetedEvent,
+  TargetedKeyboardEvent,
+  TargetedMouseEvent,
+} from "preact";
 import { createContext } from "preact";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 
@@ -23,7 +29,7 @@ import { formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
 import { followLink, navigate, usePath, useQueryString } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
-import { DetailsPanel } from "./details.tsx";
+import { type DetailsTab, DetailsPanel } from "./details.tsx";
 import { ClashDialog, NameDialog, ShortcutsDialog } from "./dialogs.tsx";
 import {
   type Child,
@@ -57,7 +63,8 @@ import { folderPath, useItemActions } from "./item-actions.tsx";
 import type { Item } from "./item.ts";
 import { dropProps } from "./move.ts";
 import { SearchBox } from "./search-box.tsx";
-import { announceChange, useChanges, useDetailsOpen } from "./store.ts";
+import { announceChange, focusNextList, useChanges, useDetailsOpen, useViewMode } from "./store.ts";
+import { goToUploads } from "./upload-panel.tsx";
 import { finished } from "./uploads.ts";
 
 /** Something to tell the reader, such as what just changed. */
@@ -138,6 +145,10 @@ type Open =
 /** How long a notice stays, unless it's a problem. */
 const NOTICE_MS = 8000;
 
+/** How long the second key of a two-key shortcut, such as Alt+C then F,
+ * can wait. */
+const CHORD_MS = 2000;
+
 export function DriveLayout({
   session,
   onSignOut,
@@ -183,6 +194,7 @@ export function DriveLayout({
   const [detailsOffered, setDetailsOffered] = useState(false);
   const [detailsOpen, setDetailsOpen] = useDetailsOpen();
   const showDetails = detailsOpen && detailsOffered;
+  const [detailsTab, setDetailsTab] = useState<DetailsTab>("details");
   const dragDepth = useRef(0);
   const chooser = useRef<HTMLInputElement>(null);
   const folderChooser = useRef<HTMLInputElement>(null);
@@ -231,22 +243,134 @@ export function DriveLayout({
     return () => document.removeEventListener("paste", paste);
   });
 
-  // "/" goes to the search box and "?" lists the keyboard shortcuts, as in
-  // Google Drive.
+  // Keys for anywhere in Drive, as in Google Drive: "/" goes to the search
+  // box, "?" or Ctrl+/ lists the shortcuts, and Alt+N opens New. Alt+C,
+  // Alt+G, and Alt+V start two-key shortcuts, for creating, going to a part
+  // of the page, and showing or hiding one. Alt is Option on a Mac, which
+  // changes the letter a key types, so they go by the key's place.
+  const chord = useRef<{ prefix: string; at: number } | null>(null);
+  const newButton = useRef<HTMLButtonElement>(null);
+  const [viewMode, setViewMode] = useViewMode();
+  const pageKeys = useRef<(event: KeyboardEvent) => void>(() => undefined);
+  pageKeys.current = (event) => {
+    if (typing(event.target) || document.querySelector("dialog[open]")) return;
+    if (["Alt", "Shift", "Control", "Meta"].includes(event.key)) return;
+    const letter = event.code.startsWith("Key") ? event.code.slice(3).toLowerCase() : "";
+    const started = chord.current;
+    chord.current = null;
+    const command = event.ctrlKey || event.metaKey;
+    if (started && Date.now() - started.at < CHORD_MS && letter && !command) {
+      if (!secondKey(started.prefix, letter)) return;
+    } else if (event.altKey && !command && !event.shiftKey && ["c", "g", "v"].includes(letter)) {
+      chord.current = { prefix: letter, at: Date.now() };
+    } else if (event.altKey && !command && !event.shiftKey && letter === "n") {
+      if (!here || !newButton.current) return;
+      setMenu({ place: { under: newButton.current }, byKeyboard: true });
+    } else if (command && !event.altKey && event.key === "/") {
+      setOpen({ kind: "shortcuts" });
+    } else if (command || event.altKey) {
+      return;
+    } else if (event.key === "/") {
+      document.querySelector<HTMLInputElement>(".search input")?.focus();
+    } else if (event.key === "?") {
+      setOpen({ kind: "shortcuts" });
+    } else {
+      return;
+    }
+    event.preventDefault();
+  };
+
+  /** Moves through the sidebar's places and folders with the arrow keys,
+   * as in a file manager's folder tree: up and down go from one to the
+   * next, right opens a folder or goes into it, and left closes it or goes
+   * to the folder it's in. Enter opens one, as links do. */
+  function sidebarKeys(event: TargetedKeyboardEvent<HTMLElement>) {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const link = (event.target as Element).closest<HTMLElement>(".place");
+    if (!link) return;
+    const links = [...event.currentTarget.querySelectorAll<HTMLElement>(".place")];
+    const index = links.indexOf(link);
+    const row = link.closest(".place-row");
+    const toggle = row?.querySelector<HTMLButtonElement>(".tree-toggle");
+    const isOpen = toggle?.getAttribute("aria-expanded") === "true";
+    let next: HTMLElement | null | undefined;
+    if (event.key === "Enter") {
+      // The link opens the page, and its first item takes the focus. The
+      // page that's open already only needs the focus.
+      const here = link.getAttribute("aria-current") === "page";
+      if (here) event.preventDefault();
+      focusNextList(here);
+      return;
+    }
+    if (event.key === "ArrowDown") next = links[index + 1];
+    else if (event.key === "ArrowUp") next = links[index - 1];
+    else if (event.key === "Home") next = links[0];
+    else if (event.key === "End") next = links[links.length - 1];
+    else if (event.key === "ArrowRight") {
+      // A folder's folders load after it opens, so a second press goes in.
+      if (toggle && !isOpen) toggle.click();
+      else if (isOpen) next = row?.parentElement?.querySelector<HTMLElement>(":scope > .tree .place");
+    } else if (event.key === "ArrowLeft") {
+      if (toggle && isOpen) toggle.click();
+      else next = link.closest(".tree")?.parentElement?.querySelector<HTMLElement>(":scope > .place-row > .place");
+    } else return;
+    event.preventDefault();
+    next?.focus();
+  }
+
+  /** Does the second key of a two-key shortcut, and says whether it was
+   * one. */
+  function secondKey(prefix: string, letter: string): boolean {
+    const shortcut = `${prefix} ${letter}`;
+    if (prefix === "c") {
+      if (!here) return false;
+      if (letter === "f") setOpen({ kind: "newFolder", into: here });
+      else if (letter === "t") setOpen({ kind: "newText", into: here });
+      else if (letter === "u" || letter === "i") {
+        chooseInto.current = here;
+        (letter === "u" ? chooser : folderChooser).current?.click();
+      } else return false;
+    } else if (shortcut === "g n" || shortcut === "g f") {
+      // Google Drive has both: N for the navigation panel, and F for the
+      // folders in it.
+      setSidebarOpen(true);
+      const places = document.querySelector("#sidebar");
+      const place =
+        places?.querySelector<HTMLElement>('.place[aria-current="page"]') ?? places?.querySelector<HTMLElement>(".place");
+      place?.focus();
+    } else if (shortcut === "g i") {
+      const list = document.querySelector(".item-list");
+      const item =
+        list?.querySelector<HTMLElement>(".selected [data-open]") ?? list?.querySelector<HTMLElement>("[data-open]");
+      item?.focus();
+    } else if (shortcut === "g d") {
+      if (!detailsOffered) return false;
+      setDetailsOpen(true);
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(".details")?.focus());
+    } else if (shortcut === "g u") {
+      return goToUploads();
+    } else if (shortcut === "v l") {
+      setViewMode(viewMode === "list" ? "grid" : "list");
+    } else if (shortcut === "v d" || shortcut === "v a") {
+      // As Google Drive's details and activity panes: each shows the panel
+      // on its tab, or hides it if it's showing that tab already.
+      if (!detailsOffered) return false;
+      const tab = shortcut === "v d" ? "details" : "activity";
+      const showing = detailsOpen && detailsTab === tab;
+      setDetailsTab(tab);
+      setDetailsOpen(!showing);
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  // These come before the list's keys, which skip what they've done, so the
+  // F in Alt+G then F doesn't also jump to a file starting with F.
   useEffect(() => {
-    const keys = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || typing(event.target)) return;
-      if (document.querySelector("dialog[open]")) return;
-      if (event.key === "/") {
-        event.preventDefault();
-        document.querySelector<HTMLInputElement>(".search input")?.focus();
-      } else if (event.key === "?") {
-        event.preventDefault();
-        setOpen({ kind: "shortcuts" });
-      }
-    };
-    document.addEventListener("keydown", keys);
-    return () => document.removeEventListener("keydown", keys);
+    const keys = (event: KeyboardEvent) => pageKeys.current(event);
+    document.addEventListener("keydown", keys, true);
+    return () => document.removeEventListener("keydown", keys, true);
   }, []);
 
   // Ctrl+Z undoes what the notice says, as its Undo button does.
@@ -425,8 +549,9 @@ export function DriveLayout({
         >
           <SearchBox />
         </TopBar>
-        <nav id="sidebar" class="sidebar" aria-label={t("drive.places")}>
+        <nav id="sidebar" class="sidebar" aria-label={t("drive.places")} onKeyDown={sidebarKeys}>
           <button
+            ref={newButton}
             type="button"
             class="new-button"
             aria-haspopup="menu"
@@ -533,6 +658,8 @@ export function DriveLayout({
           <DetailsPanel
             items={selection.length > 0 ? selection : pageItem ? [pageItem] : []}
             me={session.user.id}
+            tab={detailsTab}
+            onTab={setDetailsTab}
             onClose={() => setDetailsOpen(false)}
           />
         )}

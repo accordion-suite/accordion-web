@@ -66,9 +66,21 @@ export function Viewer({
 
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
-      if (editing || files.length < 2 || event.altKey || event.ctrlKey || event.metaKey) return;
-      // A video's controls skip back and ahead with the same keys.
+      if (editing || event.altKey || event.ctrlKey || event.metaKey) return;
+      // A video's controls skip back and ahead with the same keys, and
+      // play or pause with Space.
       if (event.target instanceof HTMLMediaElement) return;
+      // Space plays or pauses a video or song, as in Google Drive, unless
+      // it's pressing a button or link.
+      if (event.key === " " && !(event.target instanceof Element && event.target.closest("a, button, input, textarea"))) {
+        const media = document.querySelector<HTMLMediaElement>("dialog.viewer video, dialog.viewer audio");
+        if (!media) return;
+        event.preventDefault();
+        if (media.paused) void media.play().catch(() => undefined);
+        else media.pause();
+        return;
+      }
+      if (files.length < 2) return;
       if (event.key === "ArrowLeft") step(-1);
       if (event.key === "ArrowRight") step(1);
     };
@@ -190,7 +202,7 @@ function Shown({
           ) : (
             // Opening the viewer is a click, so browsers let it play right
             // away.
-            <audio src={address} controls autoplay onError={() => setState("failed")} />
+            <audio src={address} controls autoplay autofocus onError={() => setState("failed")} />
           )}
         </div>
       </div>
@@ -227,6 +239,8 @@ function Shown({
             }
             controls
             autoplay
+            // Focused, so Space plays and pauses it, and the arrows skip.
+            autofocus
             playsinline
             onError={() => setState("failed")}
             // A browser that can't decode the picture may play just the
@@ -326,6 +340,7 @@ function Converting({ file, address }: { file: Item; address: string }) {
           poster={file.thumbnail === "picture" && file.sha256 ? thumbnailAddress(file) : undefined}
           controls
           autoplay
+          autofocus
           playsinline
           onError={() => void ask()}
           // A browser that can't decode the picture may play only the sound.

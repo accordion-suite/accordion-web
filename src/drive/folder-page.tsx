@@ -12,13 +12,13 @@ import { api } from "../api.ts";
 import { t } from "../i18n.ts";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
 import { PageTitle } from "../shell/page.tsx";
-import { followLink } from "../shell/router.ts";
+import { followLink, navigate } from "../shell/router.ts";
 import { folderPath } from "./item-actions.tsx";
 import { ItemList, PageTools } from "./item-list.tsx";
 import { type Item, canEdit } from "./item.ts";
 import { typing, useDrive, useTarget } from "./layout.tsx";
 import { dropProps } from "./move.ts";
-import { pathTo, remember, useChanges } from "./store.ts";
+import { focusNextList, pathTo, remember, useChanges } from "./store.ts";
 
 interface Loaded {
   path: Item[];
@@ -74,6 +74,22 @@ export function FolderPage({ folder }: { folder: string | null }) {
   const editable = here !== null && canEdit(here);
   // New in a folder the reader can only view goes to My Drive.
   useTarget(editable ? here : null, editable, loaded?.path.map((item) => item.id) ?? []);
+
+  // Alt+Up goes to the folder this one is in, as in a file manager.
+  useEffect(() => {
+    const keys = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.key !== "ArrowUp") return;
+      if (!loaded || typing(event.target) || document.querySelector("dialog[open]")) return;
+      const parent = loaded.path[loaded.path.length - 2];
+      const up = parent ? folderPath(parent) : loaded.path[0]!.parent !== null ? "/drive/shared" : null;
+      if (!up) return;
+      event.preventDefault();
+      focusNextList();
+      navigate(up);
+    };
+    document.addEventListener("keydown", keys);
+    return () => document.removeEventListener("keydown", keys);
+  }, [loaded]);
 
   /** Right-clicking empty space, or the context menu key there. */
   function contextMenu(event: TargetedMouseEvent<HTMLElement>) {

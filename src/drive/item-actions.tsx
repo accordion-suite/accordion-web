@@ -78,6 +78,8 @@ export interface ItemActions {
   star(chosen: Item[], on: boolean): Promise<void>;
   rename(item: Item): void;
   move(items: Item[]): void;
+  /** Opens the share dialog, for anyone but a viewer. */
+  share(item: Item): void;
   /** Whether one of the actions' dialogs is open. */
   busy: boolean;
   /** The open dialog, if any, for the owner to show. */
@@ -328,6 +330,7 @@ export function useItemActions({
     star,
     rename: (item) => setOpen({ kind: "rename", item }),
     move: (items) => setOpen({ kind: "move", items }),
+    share: (item) => setOpen({ kind: "share", item }),
     busy: open !== null,
     dialog,
   };

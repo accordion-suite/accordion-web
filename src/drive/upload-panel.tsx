@@ -1,7 +1,7 @@
 // The list of uploads, at the bottom of every page while there are any, so
 // uploads stay in view while the reader moves between folders.
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import { formatSize, t } from "../i18n.ts";
 import { followLink } from "../shell/router.ts";
@@ -58,9 +58,30 @@ function sentSoFar(upload: Upload): number {
   return 0;
 }
 
+const SHOW = "accordion:show-uploads";
+
+/** Opens the upload panel's list and moves the focus to the panel, for
+ * Alt+G then U, as Google Drive's upload status. Says whether there was a
+ * panel, which shows only while there are uploads. */
+export function goToUploads(): boolean {
+  if (!document.querySelector(".upload-panel")) return false;
+  window.dispatchEvent(new Event(SHOW));
+  return true;
+}
+
 export function UploadPanel() {
   const list = useUploads();
   const [open, setOpen] = useState(true);
+  const panel = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const show = () => {
+      setOpen(true);
+      panel.current?.focus();
+    };
+    window.addEventListener(SHOW, show);
+    return () => window.removeEventListener(SHOW, show);
+  }, []);
   // What screen readers announce: a file finishing or failing, not every
   // step of its progress.
   const [announcement, setAnnouncement] = useState("");
@@ -91,7 +112,7 @@ export function UploadPanel() {
         {announcement}
       </p>
       {list.length > 0 && (
-        <section class="upload-panel" aria-labelledby="upload-panel-title">
+        <section class="upload-panel" aria-labelledby="upload-panel-title" tabIndex={-1} ref={panel}>
           <div class="upload-panel-head">
             <h2 id="upload-panel-title">
               {active > 0

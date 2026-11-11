@@ -613,21 +613,64 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
   );
 }
 
-/** Drive's keyboard shortcuts, by what they're for. Ctrl is Cmd on a Mac. */
-const SHORTCUTS: readonly [MessageKey, readonly [string, MessageKey][]][] = [
+/** Keys pressed together, such as "Ctrl+A"; one after the other, such as
+ * Alt+C then F; or either of two. */
+type Keys = string | { then: readonly [string, string] } | { or: readonly [Keys, Keys] };
+
+/** Drive's keyboard shortcuts, by what they're for. They follow Google
+ * Drive's, and file managers' where Drive has none. Ctrl is Cmd on a Mac,
+ * and Alt is Option. */
+const SHORTCUTS: readonly [MessageKey, readonly [Keys, MessageKey][]][] = [
   [
     "shortcuts.anywhere",
     [
       ["/", "shortcuts.search"],
-      ["?", "shortcuts.help"],
+      [{ or: ["?", "Ctrl+/"] }, "shortcuts.help"],
       ["Ctrl+Z", "shortcuts.undo"],
+      ["Alt+↑", "shortcuts.up"],
+    ],
+  ],
+  [
+    "shortcuts.creating",
+    [
+      ["Alt+N", "shortcuts.newMenu"],
+      [{ then: ["Alt+C", "F"] }, "shortcuts.newFolder"],
+      [{ then: ["Alt+C", "T"] }, "shortcuts.newText"],
+      [{ then: ["Alt+C", "U"] }, "shortcuts.upload"],
+      [{ then: ["Alt+C", "I"] }, "shortcuts.uploadFolder"],
+      ["Ctrl+V", "shortcuts.paste"],
+    ],
+  ],
+  [
+    "shortcuts.going",
+    [
+      [{ or: [{ then: ["Alt+G", "N"] }, { then: ["Alt+G", "F"] }] }, "shortcuts.toSidebar"],
+      [{ then: ["Alt+G", "I"] }, "shortcuts.toItems"],
+      [{ then: ["Alt+G", "D"] }, "shortcuts.toDetails"],
+      [{ then: ["Alt+V", "D"] }, "shortcuts.details"],
+      [{ then: ["Alt+V", "A"] }, "shortcuts.activity"],
+      [{ then: ["Alt+G", "U"] }, "shortcuts.toUploads"],
+      [{ then: ["Alt+V", "L"] }, "shortcuts.layout"],
+    ],
+  ],
+  [
+    "shortcuts.inSidebar",
+    [
+      ["↑ ↓", "shortcuts.sidebarStep"],
+      [{ or: ["→", "←"] }, "shortcuts.sidebarOpen"],
+      [{ or: ["Home", "End"] }, "shortcuts.sidebarEnds"],
+      ["Enter", "shortcuts.sidebarGo"],
     ],
   ],
   [
     "shortcuts.choosing",
     [
+      ["A–Z", "shortcuts.typeAhead"],
       ["↑ ↓ ← →", "shortcuts.move"],
       ["Shift+↑ ↓ ← →", "shortcuts.extend"],
+      ["Ctrl+↑ ↓ ← →", "shortcuts.focus"],
+      [{ or: ["Home", "End"] }, "shortcuts.ends"],
+      [{ or: ["Shift+Home", "Shift+End"] }, "shortcuts.extendEnds"],
       ["Space", "shortcuts.toggle"],
       ["Ctrl+A", "shortcuts.all"],
       ["Esc", "shortcuts.clear"],
@@ -637,19 +680,42 @@ const SHORTCUTS: readonly [MessageKey, readonly [string, MessageKey][]][] = [
     "shortcuts.acting",
     [
       ["Enter", "shortcuts.open"],
+      ["Ctrl+Enter", "shortcuts.newTab"],
+      ["Ctrl+Alt+P", "shortcuts.preview"],
+      [{ or: ["Alt+A", "Shift+F10"] }, "shortcuts.menu"],
       ["F2", "shortcuts.rename"],
-      ["Delete", "shortcuts.trash"],
-      ["Ctrl+V", "shortcuts.paste"],
+      ["Ctrl+Alt+A", "shortcuts.share"],
+      ["Ctrl+Alt+M", "shortcuts.moveTo"],
+      ["Ctrl+Alt+S", "shortcuts.star"],
+      ["Ctrl+Shift+C", "shortcuts.copyNames"],
+      [{ or: ["Delete", "#"] }, "shortcuts.trash"],
     ],
   ],
   [
     "shortcuts.viewing",
     [
       ["← →", "shortcuts.step"],
+      ["Space", "shortcuts.play"],
       ["Esc", "shortcuts.close"],
     ],
   ],
 ];
+
+function KeysShown({ keys }: { keys: Keys }) {
+  if (typeof keys === "string") return <kbd>{keys}</kbd>;
+  if ("then" in keys) {
+    return (
+      <span class="keys">
+        <kbd>{keys.then[0]}</kbd> {t("shortcuts.then")} <kbd>{keys.then[1]}</kbd>
+      </span>
+    );
+  }
+  return (
+    <>
+      <KeysShown keys={keys.or[0]} /> {t("shortcuts.or")} <KeysShown keys={keys.or[1]} />
+    </>
+  );
+}
 
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   return (
@@ -660,9 +726,9 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
           <h3>{t(group)}</h3>
           <dl>
             {keys.map(([key, does]) => (
-              <div key={key + does}>
+              <div key={does}>
                 <dt>
-                  <kbd>{key}</kbd>
+                  <KeysShown keys={key} />
                 </dt>
                 <dd>{t(does)}</dd>
               </div>
