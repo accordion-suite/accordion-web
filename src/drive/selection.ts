@@ -65,6 +65,17 @@ const SPEED = 16;
 const NOT_EMPTY =
   "[data-id], a, button, input, select, textarea, label, summary, dialog, [role=menu], .selection-bar, thead";
 
+/** What stays pinned at the top of the panel as it scrolls. */
+const PINNED = ".page-head, .list-toolbar";
+
+/** Where the list starts showing in the window: below whatever is pinned at
+ * the top of the panel, wherever it is now. */
+function listTop(panel: HTMLElement): number {
+  let top = panel.getBoundingClientRect().top;
+  for (const pinned of panel.querySelectorAll(PINNED)) top = Math.max(top, pinned.getBoundingClientRect().bottom);
+  return top;
+}
+
 export interface BandHandlers {
   /** Whether a box may start now, such as when no dialog is open. */
   allowed(): boolean;
@@ -102,7 +113,10 @@ export function useSelectionBand(root: RefObject<HTMLElement | null>, handlers: 
       // No text selection, and focus stays where it is.
       event.preventDefault();
       const adding = event.ctrlKey || event.metaKey || event.shiftKey;
-      const start = { x: event.clientX + panel.scrollLeft, y: event.clientY + panel.scrollTop };
+      // A drag from the pinned head or toolbar draws no box, since the items
+      // under them are hidden. A click there still clears the selection.
+      const fromPinned = target.closest(PINNED) !== null;
+      const start ={ x: event.clientX + panel.scrollLeft, y: event.clientY + panel.scrollTop };
       let pointer = { x: event.clientX, y: event.clientY };
       let moved = false;
       let frame = 0;
@@ -127,21 +141,22 @@ export function useSelectionBand(root: RefObject<HTMLElement | null>, handlers: 
           if (overlaps(box, placed)) ids.push(item.dataset["id"]!);
         }
         latest.current.touch(ids, adding);
-        // Drawn in the window, and kept inside the panel.
+        // Drawn in the window, and kept inside the panel, below what's pinned.
         const view = panel.getBoundingClientRect();
         setBand({
           left: Math.max(box.left - panel.scrollLeft, view.left),
-          top: Math.max(box.top - panel.scrollTop, view.top),
+          top: Math.max(box.top - panel.scrollTop, listTop(panel)),
           right: Math.min(box.right - panel.scrollLeft, view.left + panel.clientWidth),
           bottom: Math.min(box.bottom - panel.scrollTop, view.top + panel.clientHeight),
         });
       };
 
-      // Scrolls while the pointer is near the top or bottom of the panel.
+      // Scrolls while the pointer is near the top of the list (or over what's
+      // pinned above it), or near the bottom of the panel.
       const scroll = () => {
         const view = panel.getBoundingClientRect();
         const step =
-          pointer.y < view.top + EDGE ? -SPEED : pointer.y > view.top + panel.clientHeight - EDGE ? SPEED : 0;
+          pointer.y < listTop(panel) + EDGE ? -SPEED : pointer.y > view.top + panel.clientHeight - EDGE ? SPEED : 0;
         if (step !== 0) {
           const before = panel.scrollTop;
           panel.scrollTop += step;
@@ -157,6 +172,10 @@ export function useSelectionBand(root: RefObject<HTMLElement | null>, handlers: 
             return;
           }
           moved = true;
+          if (fromPinned) {
+            stop?.();
+            return;
+          }
           document.documentElement.classList.add("selecting");
           frame = requestAnimationFrame(scroll);
         }
