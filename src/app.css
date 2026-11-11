@@ -693,6 +693,18 @@ dialog.search-options .dialog-close {
   border-radius: 50%;
 }
 
+.tree .place-row {
+  position: relative;
+}
+
+/* The arrow's left edge and the name's indent come from the folder's
+   depth, set on each row. */
+.tree .tree-toggle {
+  position: absolute;
+  top: 4px;
+  z-index: 1;
+}
+
 .tree .place {
   gap: 10px;
   padding: 0 12px 0 4px;

@@ -749,6 +749,9 @@ function FolderTree({
   for (const id of trail) expanded.add(id);
 
   if (!folders || folders.length === 0) return null;
+  // The arrow sits over the start of the row, so the row's highlight
+  // reaches the sidebar's edge, as the places above it do.
+  const indent = depth * 16 + 16;
   return (
     <ul class="tree" role="list">
       {folders.map((folder) => {
@@ -760,13 +763,13 @@ function FolderTree({
               class={["place-row", dropOn === folder.id && "drop-target", menuOn === folder.id && "menu-open"]
                 .filter(Boolean)
                 .join(" ")}
-              style={{ paddingLeft: `${depth * 16 + 16}px` }}
               {...dropProps(folder, setDropOn, drive.notify)}
               onContextMenu={(event) => onMenu(folder, event)}
             >
               <button
                 type="button"
                 class="tree-toggle"
+                style={{ left: `${indent}px` }}
                 aria-expanded={open}
                 aria-label={t(open ? "drive.collapse" : "drive.expand", { name: folder.name })}
                 onClick={() => {
@@ -779,6 +782,7 @@ function FolderTree({
               </button>
               <a
                 class="place"
+                style={{ paddingLeft: `${indent + 32}px` }}
                 href={href}
                 onClick={followLink}
                 aria-current={current === href ? "page" : undefined}
