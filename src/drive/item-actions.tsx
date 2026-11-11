@@ -15,6 +15,7 @@ import { t } from "../i18n.ts";
 import { type MenuEntry, SEPARATOR } from "../shell/menu.tsx";
 import { navigate } from "../shell/router.ts";
 import { ConfirmDialog } from "../shell/dialog.tsx";
+import { clipFromMenu } from "./clipboard.ts";
 import { ColorDialog, MoveDialog, NameDialog, ShareDialog, VersionsDialog } from "./dialogs.tsx";
 import { type Found, type Item, canEdit } from "./item.ts";
 import type { Notice } from "./layout.tsx";
@@ -183,6 +184,18 @@ export function useItemActions({
       onSelect: () => star(chosen, starring),
     };
     const editable = chosen.every(canEdit);
+    // Cut and copy, as in a file manager. Folders can't be copied.
+    const clipEntries: MenuEntry[] = [];
+    if (editable) {
+      clipEntries.push({ label: t("drive.cut"), shortcut: "Ctrl+X", onSelect: () => void clipFromMenu("cut", chosen, notify) });
+    }
+    if (chosen.some((item) => item.kind === "file")) {
+      clipEntries.push({
+        label: t("drive.copy"),
+        shortcut: "Ctrl+C",
+        onSelect: () => void clipFromMenu("copy", chosen, notify),
+      });
+    }
     if (chosen.length > 1) {
       const entries: MenuEntry[] = [];
       if (editable) {
@@ -191,6 +204,7 @@ export function useItemActions({
           onSelect: () => setOpen({ kind: "move", items: chosen }),
         });
       }
+      entries.push(...clipEntries);
       entries.push({ label: t("viewer.download"), onSelect: () => download(chosen) }, starEntry);
       if (editable) {
         entries.push(SEPARATOR, {
@@ -231,6 +245,7 @@ export function useItemActions({
     }
     if (item.kind === "file") entries.push({ label: t("drive.makeCopy"), onSelect: () => copy(item) });
     if (editable) entries.push({ label: t("drive.move"), onSelect: () => setOpen({ kind: "move", items: chosen }) });
+    entries.push(...clipEntries);
     entries.push(starEntry);
     if (located(item)) {
       entries.push({ label: t("drive.showLocation"), onSelect: () => navigate(locationPath(item)) });

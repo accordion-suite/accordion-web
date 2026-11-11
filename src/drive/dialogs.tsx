@@ -638,7 +638,6 @@ const SHORTCUTS: readonly [MessageKey, readonly [Keys, MessageKey][]][] = [
       [{ then: ["Alt+C", "T"] }, "shortcuts.newText"],
       [{ then: ["Alt+C", "U"] }, "shortcuts.upload"],
       [{ then: ["Alt+C", "I"] }, "shortcuts.uploadFolder"],
-      ["Ctrl+V", "shortcuts.paste"],
     ],
   ],
   [
@@ -687,6 +686,9 @@ const SHORTCUTS: readonly [MessageKey, readonly [Keys, MessageKey][]][] = [
       ["Ctrl+Alt+A", "shortcuts.share"],
       ["Ctrl+Alt+M", "shortcuts.moveTo"],
       ["Ctrl+Alt+S", "shortcuts.star"],
+      ["Ctrl+X", "shortcuts.cut"],
+      ["Ctrl+C", "shortcuts.copy"],
+      ["Ctrl+V", "shortcuts.paste"],
       ["Ctrl+Shift+C", "shortcuts.copyNames"],
       [{ or: ["Delete", "#"] }, "shortcuts.trash"],
     ],

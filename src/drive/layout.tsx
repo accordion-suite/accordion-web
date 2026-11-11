@@ -29,6 +29,7 @@ import { formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
 import { followLink, navigate, usePath, useQueryString } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
+import { hasClipped, pasteInto, pastingClipped } from "./clipboard.ts";
 import { type DetailsTab, DetailsPanel } from "./details.tsx";
 import { ClashDialog, NameDialog, ShortcutsDialog } from "./dialogs.tsx";
 import {
@@ -229,12 +230,19 @@ export function DriveLayout({
   useEffect(() => setSidebarOpen(false), [path]);
 
   // A file pasted on a page, such as a screenshot, uploads there, as one
-  // dropped does.
+  // dropped does. Items cut or copied in Drive move or copy there.
   useEffect(() => {
     const paste = (event: ClipboardEvent) => {
-      const files = [...(event.clipboardData?.files ?? [])];
-      if (!target.drops || files.length === 0 || typing(event.target)) return;
+      if (typing(event.target)) return;
       if (event.target instanceof Element && event.target.closest("dialog")) return;
+      if (pastingClipped(event)) {
+        event.preventDefault();
+        if (!target.drops || !target.folder) notify({ message: t("drive.pasteWhere"), problem: true });
+        else void pasteInto(target.folder, nameOf(target.folder), notify);
+        return;
+      }
+      const files = [...(event.clipboardData?.files ?? [])];
+      if (!target.drops || files.length === 0) return;
       event.preventDefault();
       notify(null);
       void upload({ files: files.map((file) => ({ file, path: [] })), folders: [] });
@@ -452,19 +460,28 @@ export function DriveLayout({
     event.currentTarget.value = "";
   }
 
-  /** New's menu, for `into` or the target folder. */
-  function newEntries(into: Item | null = here): MenuEntry[] {
+  /** New's menu, for `into` or the target folder. A right-click menu also
+   * has Paste, when something's cut or copied. */
+  function newEntries(into: Item | null = here, paste = false): MenuEntry[] {
     if (!into) return [];
     const choose = (input: HTMLInputElement | null) => {
       chooseInto.current = into;
       input?.click();
     };
+    const pasting: MenuEntry[] =
+      paste && hasClipped()
+        ? [
+            "separator",
+            { label: t("drive.paste"), shortcut: "Ctrl+V", onSelect: () => void pasteInto(into, nameOf(into), notify) },
+          ]
+        : [];
     return [
       { label: t("drive.newFolder"), icon: <NewFolderIcon />, onSelect: () => setOpen({ kind: "newFolder", into }) },
       { label: t("drive.newText"), icon: <NewTextIcon />, onSelect: () => setOpen({ kind: "newText", into }) },
       "separator",
       { label: t("drive.upload"), icon: <UploadFileIcon />, onSelect: () => choose(chooser.current) },
       { label: t("drive.uploadFolder"), icon: <UploadFolderIcon />, onSelect: () => choose(folderChooser.current) },
+      ...pasting,
     ];
   }
 
@@ -527,7 +544,7 @@ export function DriveLayout({
 
   const frame: DriveFrame = {
     setTarget: (folder, drops, trail) => setTargetState({ folder, drops, trail }),
-    newEntries: () => newEntries(),
+    newEntries: () => newEntries(here, true),
     notify,
     select: setSelection,
     setPageItem,
@@ -684,7 +701,7 @@ export function DriveLayout({
       {menu && (
         <Menu
           label={t("drive.newIn", { folder: menu.into ? nameOf(menu.into) : hereName })}
-          entries={newEntries(menu.into ?? here)}
+          entries={newEntries(menu.into ?? here, !!menu.into)}
           place={menu.place}
           byKeyboard={menu.byKeyboard}
           onClose={() => setMenu(null)}

@@ -1421,6 +1421,13 @@ table.items thead th {
   border-radius: 8px;
 }
 
+/* Cut items, until they're pasted somewhere, as in a file manager. */
+table.items tr.cut > *,
+.tile.cut,
+.card.cut {
+  opacity: 0.55;
+}
+
 /* A folder that a dragged item would move into. */
 table.items tr.drop-target > * {
   background: var(--accent-soft);

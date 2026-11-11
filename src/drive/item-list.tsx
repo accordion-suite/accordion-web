@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
+import { clip, clippable, clipText, useClipped } from "./clipboard.ts";
 import { languageOfName } from "./highlight.ts";
 import { Highlighted } from "./highlight-view.tsx";
 import { HoverCard } from "./hover-card.tsx";
@@ -194,6 +195,41 @@ export function ItemList({
     document.addEventListener("keydown", keys);
     return () => document.removeEventListener("keydown", keys);
   }, []);
+
+  // Ctrl+X and Ctrl+C cut or copy what's chosen, through the browser's own
+  // clipboard events, so the names go on the system clipboard too. Copying
+  // text selected on the page still copies the text.
+  const clipboardKeys = useRef<(event: ClipboardEvent) => void>(() => undefined);
+  clipboardKeys.current = (event) => {
+    if (event.defaultPrevented || open || menu || shownFile || trash || typing(event.target)) return;
+    if (event.target instanceof Element && event.target.closest("dialog")) return;
+    if (!(window.getSelection()?.isCollapsed ?? true)) return;
+    const focused = (document.activeElement as Element | null)?.closest<HTMLElement>("[data-id]");
+    const focusedItem = focused && items.find((item) => item.id === focused.dataset["id"]);
+    const chosen = chosenItems.length > 0 ? chosenItems : focusedItem ? [focusedItem] : [];
+    if (chosen.length === 0) return;
+    event.preventDefault();
+    const mode = event.type === "cut" ? "cut" : "copy";
+    const clipping = clippable(mode, chosen);
+    if (typeof clipping === "string") {
+      drive.notify({ message: clipping, problem: true });
+      return;
+    }
+    const text = clipText(clipping);
+    event.clipboardData?.setData("text/plain", text);
+    clip(mode, clipping, event.clipboardData ? text : null, chosen, drive.notify);
+  };
+  useEffect(() => {
+    const keys = (event: ClipboardEvent) => clipboardKeys.current(event);
+    document.addEventListener("copy", keys);
+    document.addEventListener("cut", keys);
+    return () => {
+      document.removeEventListener("copy", keys);
+      document.removeEventListener("cut", keys);
+    };
+  }, []);
+  const clipped = useClipped();
+  const cut = new Set(clipped?.mode === "cut" ? clipped.items.map((item) => item.id) : []);
 
   // After a folder opens from the keyboard, its first item is selected and
   // focused, so the arrow keys and Enter carry on in it.
@@ -667,7 +703,11 @@ export function ItemList({
   /** An item's classes: whether it's selected, and whether a drag is over
    * it. */
   function classes(item: Item, base = "") {
-    return [base, selected.has(item.id) && "selected", dropOn === item.id && "drop-target"].filter(Boolean).join(" ") || undefined;
+    return (
+      [base, selected.has(item.id) && "selected", dropOn === item.id && "drop-target", cut.has(item.id) && "cut"]
+        .filter(Boolean)
+        .join(" ") || undefined
+    );
   }
 
   /** The date an item shows: when it was shared, deleted, or changed. */
