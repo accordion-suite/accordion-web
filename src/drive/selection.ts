@@ -94,9 +94,11 @@ export function useSelectionBand(root: RefObject<HTMLElement | null>, handlers: 
       if (event.button !== 0 || event.pointerType === "touch" || !latest.current.allowed()) return;
       const target = event.target as Element;
       if (!panel.contains(target) || target.closest(NOT_EMPTY)) return;
-      // A press on the panel's own scroll bar.
-      const edge = panel.getBoundingClientRect();
-      if (event.clientX >= edge.left + panel.clientWidth || event.clientY >= edge.top + panel.clientHeight) return;
+      // A press on the panel's own scroll bar. Browsers send it to the panel
+      // itself, and the page fills the panel (min-height: 100%), so nothing
+      // else does. Overlay scroll bars take no width, so measuring can't
+      // find them.
+      if (target === panel) return;
       // No text selection, and focus stays where it is.
       event.preventDefault();
       const adding = event.ctrlKey || event.metaKey || event.shiftKey;
