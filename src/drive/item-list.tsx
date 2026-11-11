@@ -880,8 +880,24 @@ export function PageTools() {
     drive.offerDetails(true);
     return () => drive.offerDetails(false);
   }, []);
+  // The head these tools sit in is pinned, and the list's toolbar pins under
+  // it, so the panel needs its height. It changes when the path wraps.
+  const tools = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const head = tools.current?.closest<HTMLElement>(".page-head");
+    const panel = head?.closest<HTMLElement>(".frame-main");
+    if (!head || !panel) return;
+    const observer = new ResizeObserver(() => {
+      panel.style.setProperty("--page-head-height", `${head.offsetHeight}px`);
+    });
+    observer.observe(head);
+    return () => {
+      observer.disconnect();
+      panel.style.removeProperty("--page-head-height");
+    };
+  }, []);
   return (
-    <div class="page-tools">
+    <div class="page-tools" ref={tools}>
       <button
         type="button"
         class="icon-button"

@@ -1136,6 +1136,29 @@ main.page {
   margin-bottom: 8px;
 }
 
+/* Drive's page heads (the ones with page tools) stay at the top of the
+   panel as the page scrolls, and the list's toolbar pins under them. The
+   page's top padding and the gap below move into the head, so it doesn't
+   shift when it pins and nothing shows through above or below it. */
+main.page:has(> .page-head > .page-tools) {
+  padding-top: 0;
+}
+
+.page-head:has(> .page-tools) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 0;
+  padding: 16px 0 8px;
+  background: var(--panel);
+}
+
+/* Keyboard moves and scrolling to an item stop below what's pinned. The
+   toolbar is 48 pixels and a gap of 8. */
+.frame-main:has(.page-head > .page-tools) {
+  scroll-padding-top: calc(var(--page-head-height, 0px) + 56px);
+}
+
 .crumbs ol {
   display: flex;
   flex-wrap: wrap;
@@ -1300,7 +1323,8 @@ main.page {
    them. */
 .list-toolbar {
   position: sticky;
-  top: 0;
+  /* Under the page head, which is pinned too. */
+  top: var(--page-head-height, 0px);
   z-index: 2;
   display: flex;
   align-items: center;
@@ -1938,6 +1962,10 @@ table.items .snippet {
 
   main.page {
     padding: 12px 16px 24px;
+  }
+
+  .page-head:has(> .page-tools) {
+    padding-top: 12px;
   }
 
   .crumbs a,
