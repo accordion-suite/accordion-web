@@ -1,18 +1,19 @@
 // What takes the reader's space: how much they use, and their largest
 // files, largest first, as Google Drive's storage page shows, so they can
 // find what to delete. Older versions and the trash count too, so the page
-// says so and links to the trash.
+// says so and links to the trash, beside a button that sorts My Drive's
+// list by size, for clearing space folder by folder.
 
 import { useEffect, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { formatSize, t } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
-import { followLink } from "../shell/router.ts";
+import { followLink, navigate } from "../shell/router.ts";
 import { FoundList, useFound } from "./home-page.tsx";
 import { PageTools } from "./item-list.tsx";
 import { useTarget, type Usage } from "./layout.tsx";
-import { useChanges } from "./store.ts";
+import { useChanges, useSort, useViewMode } from "./store.ts";
 
 export function StoragePage() {
   const { items, error } = useFound("/api/drive/largest");
@@ -23,6 +24,14 @@ export function StoragePage() {
   useEffect(load, []);
   useChanges(load);
   useTarget(null, false);
+  const [, setView] = useViewMode();
+  const [, setFolderSort] = useSort("folder");
+
+  function sortMyDrive() {
+    setView("list");
+    setFolderSort({ key: "size", descending: true });
+    navigate("/drive/my-drive");
+  }
 
   const used = usage ? formatSize(usage.used) : "";
   return (
@@ -39,14 +48,19 @@ export function StoragePage() {
               : t("drive.storageUsed", { used, quota: formatSize(usage.quota) })}
           </p>
           {usage.quota !== null && <progress max={usage.quota} value={Math.min(usage.used, usage.quota)} />}
-          <p class="hint">
-            {t("storage.counts")}{" "}
-            <a href="/drive/trash" onClick={followLink}>
-              {t("storage.trash")}
-            </a>
-          </p>
         </div>
       )}
+      <div class="banner action-banner">
+        <p>
+          {t("storage.counts")}{" "}
+          <a href="/drive/trash" onClick={followLink}>
+            {t("storage.trash")}
+          </a>
+        </p>
+        <button type="button" class="secondary" onClick={sortMyDrive}>
+          {t("storage.sortMyDrive")}
+        </button>
+      </div>
       <h2 class="list-title">{t("storage.largest")}</h2>
       <FoundList
         items={items}

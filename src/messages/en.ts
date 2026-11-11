@@ -485,6 +485,7 @@ export const en = {
   "storage.largest": "Largest files",
   "storage.counts": "Older versions of your files, and files in the trash, take space too.",
   "storage.trash": "Go to the trash",
+  "storage.sortMyDrive": "Sort My Drive by size",
   "storage.empty": "You don't have any files yet.",
   "shortcuts.title": "Keyboard shortcuts",
   "shortcuts.mac": "On a Mac, use Cmd instead of Ctrl.",

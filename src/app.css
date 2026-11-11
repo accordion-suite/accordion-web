@@ -1240,8 +1240,9 @@ main.page:has(> .page-head > .page-tools) {
   border-radius: 8px;
 }
 
-/* The trash's note, with Empty trash at its end, or under it on a phone. */
-.trash-banner {
+/* A note with a button at its end, or under it on a phone, such as the
+   trash's with Empty trash. */
+.action-banner {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1250,18 +1251,18 @@ main.page:has(> .page-head > .page-tools) {
   padding-block: 8px;
 }
 
-.trash-banner p {
+.action-banner p {
   flex: 1 1 280px;
   margin: 0;
 }
 
-.trash-banner button {
+.action-banner button {
   margin-left: auto;
   background: var(--panel);
 }
 
 /* The note is the color other buttons turn on hover, so this one darkens. */
-.trash-banner button:hover {
+.action-banner button:hover {
   background: var(--surface-strong);
 }
 

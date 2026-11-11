@@ -72,7 +72,7 @@ export function TrashPage() {
       {/* How long the trash keeps things, beside the button that deletes
           them all now. */}
       {(retention || (items && items.length > 0)) && (
-        <div class="banner trash-banner">
+        <div class="banner action-banner">
           {retention && (
             <p>
               {retention === "unknown"
