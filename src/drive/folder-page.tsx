@@ -5,8 +5,8 @@
 // the sidebar: right-clicking one opens its menu, and items dragged onto
 // one move into it.
 
-import type { TargetedMouseEvent } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import type { TargetedKeyboardEvent, TargetedMouseEvent } from "preact";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { t } from "../i18n.ts";
@@ -75,11 +75,24 @@ export function FolderPage({ folder }: { folder: string | null }) {
   // New in a folder the reader can only view goes to My Drive.
   useTarget(editable ? here : null, editable, loaded?.path.map((item) => item.id) ?? []);
 
+  /** The open folder's name at the end of the path, which has its menu. */
+  const crumb = useRef<HTMLDivElement>(null);
+
   // Alt+Up goes to the folder this one is in, as in a file manager.
+  // Alt+Shift+A goes to the folder's name at the end of the path, where
+  // Enter opens its menu, for Google Drive's current folder actions. Alt is
+  // Option on a Mac, which changes the letter a key types, so A goes by the
+  // key's place.
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
-      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.key !== "ArrowUp") return;
+      if (!event.altKey || event.ctrlKey || event.metaKey) return;
       if (!loaded || typing(event.target) || document.querySelector("dialog[open]")) return;
+      if (event.shiftKey && event.code === "KeyA") {
+        event.preventDefault();
+        crumb.current?.focus();
+        return;
+      }
+      if (event.shiftKey || event.key !== "ArrowUp") return;
       const parent = loaded.path[loaded.path.length - 2];
       const up = parent ? folderPath(parent) : loaded.path[0]!.parent !== null ? "/drive/shared" : null;
       if (!up) return;
@@ -90,6 +103,38 @@ export function FolderPage({ folder }: { folder: string | null }) {
     document.addEventListener("keydown", keys);
     return () => document.removeEventListener("keydown", keys);
   }, [loaded]);
+
+  /** Keys in the path: left and right go from folder to folder, Enter opens
+   * one, or the open folder's menu on its name, and down goes to the
+   * list. */
+  function pathKeys(event: TargetedKeyboardEvent<HTMLElement>) {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const at = (event.target as Element).closest<HTMLElement>("li > a, li > div.crumb");
+    if (!at) return;
+    const all = [...event.currentTarget.querySelectorAll<HTMLElement>("li > a, li > div.crumb")];
+    const index = all.indexOf(at);
+    let next: HTMLElement | null | undefined;
+    if (event.key === "ArrowLeft") next = all[index - 1];
+    else if (event.key === "ArrowRight") next = all[index + 1];
+    else if (event.key === "Home") next = all[0];
+    else if (event.key === "End") next = all[all.length - 1];
+    else if (event.key === "ArrowDown") {
+      const list = document.querySelector(".item-list");
+      next = list?.querySelector<HTMLElement>(".selected [data-open]") ?? list?.querySelector<HTMLElement>("[data-open]");
+    } else if (event.key === "Enter" && at === crumb.current) {
+      // With no position, the menu opens under the name, as it does for the
+      // context menu key.
+      event.preventDefault();
+      at.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+      return;
+    } else if (event.key === "Enter") {
+      // The link opens the folder, and its first item takes the focus.
+      focusNextList();
+      return;
+    } else return;
+    event.preventDefault();
+    next?.focus();
+  }
 
   /** Right-clicking empty space, or the context menu key there. */
   function contextMenu(event: TargetedMouseEvent<HTMLElement>) {
@@ -128,7 +173,7 @@ export function FolderPage({ folder }: { folder: string | null }) {
   return (
     <main class="page" onContextMenu={contextMenu}>
       <div class="page-head">
-        <nav class="crumbs" aria-label={t("drive.path")}>
+        <nav class="crumbs" aria-label={t("drive.path")} onKeyDown={pathKeys}>
           <ol>
             {shared && (
               <li>
@@ -153,7 +198,14 @@ export function FolderPage({ folder }: { folder: string | null }) {
             <li>
               {/* Nothing on this page can be dragged into the folder that's
                   open, so it only has the menu. */}
-              <div class={crumbClass(here)} onContextMenu={(event) => drive.folderMenu(here, event)}>
+              <div
+                class={crumbClass(here)}
+                ref={crumb}
+                // Alt+Shift+A moves the focus here, and Enter opens the menu.
+                tabIndex={-1}
+                aria-haspopup="menu"
+                onContextMenu={(event) => drive.folderMenu(here, event)}
+              >
                 <PageTitle>{folderName(here)}</PageTitle>
               </div>
             </li>

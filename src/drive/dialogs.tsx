@@ -645,6 +645,7 @@ const SHORTCUTS: readonly [MessageKey, readonly [Keys, MessageKey][]][] = [
     [
       [{ or: [{ then: ["Alt+G", "N"] }, { then: ["Alt+G", "F"] }] }, "shortcuts.toSidebar"],
       [{ then: ["Alt+G", "I"] }, "shortcuts.toItems"],
+      ["Alt+Shift+A", "shortcuts.toFolder"],
       [{ then: ["Alt+G", "D"] }, "shortcuts.toDetails"],
       [{ then: ["Alt+V", "D"] }, "shortcuts.details"],
       [{ then: ["Alt+V", "A"] }, "shortcuts.activity"],
@@ -659,6 +660,14 @@ const SHORTCUTS: readonly [MessageKey, readonly [Keys, MessageKey][]][] = [
       [{ or: ["→", "←"] }, "shortcuts.sidebarOpen"],
       [{ or: ["Home", "End"] }, "shortcuts.sidebarEnds"],
       ["Enter", "shortcuts.sidebarGo"],
+    ],
+  ],
+  [
+    "shortcuts.inPath",
+    [
+      ["← →", "shortcuts.pathStep"],
+      ["Enter", "shortcuts.pathGo"],
+      ["↓", "shortcuts.pathDown"],
     ],
   ],
   [

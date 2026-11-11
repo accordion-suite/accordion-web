@@ -1205,6 +1205,8 @@ main.page:has(> .page-head > .page-tools) {
 }
 
 .crumbs a:hover,
+.crumbs a:focus-visible,
+.crumbs div.crumb:focus-visible,
 .crumbs .crumb.menu-open {
   color: var(--text);
   background: var(--surface);
