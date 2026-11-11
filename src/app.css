@@ -1510,6 +1510,75 @@ table.items tbody tr.selected {
   color: var(--kind-folder);
 }
 
+/* The icon a hover card opens from. On a tile or card it sits above the
+   name link, which covers the rest. */
+.hover-anchor {
+  display: inline-flex;
+  flex: none;
+}
+
+.tile .hover-anchor,
+.card-top .hover-anchor {
+  position: relative;
+  z-index: 1;
+}
+
+/* An item's name, star, description, owner, and last edit, while the
+   pointer rests on its icon. */
+.hover-card {
+  position: fixed;
+  z-index: 6;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 12px 16px;
+  font-weight: normal;
+  text-align: left;
+  white-space: normal;
+  color: var(--text);
+  background: var(--panel);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+.hover-card p {
+  margin: 0;
+}
+
+.hover-card .hint {
+  font-size: 0.875rem;
+}
+
+.hover-card .hover-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.hover-card-name {
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hover-card .star-mark {
+  margin-left: auto;
+  padding-left: 6px;
+}
+
+/* A long description stops after four lines. */
+.hover-card .hover-card-description {
+  display: -webkit-box;
+  margin-bottom: 6px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+
 /* A folder's own color, which the reader picked. */
 .kind-folder.folder-red {
   color: var(--folder-red);

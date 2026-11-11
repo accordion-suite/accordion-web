@@ -22,6 +22,7 @@ import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.t
 import { followLink, navigate, useQuery } from "../shell/router.ts";
 import { languageOfName } from "./highlight.ts";
 import { Highlighted } from "./highlight-view.tsx";
+import { HoverCard } from "./hover-card.tsx";
 import {
   OPENED_HERE,
   download,
@@ -676,7 +677,9 @@ export function ItemList({
               <tr key={item.id} data-id={item.id} class={classes(item)} {...dragging(item)} {...choosing(item)}>
                 <th scope="row">
                   <span class="name-cell">
-                    <ItemIcon item={item} />
+                    <HoverCard item={item}>
+                      <ItemIcon item={item} />
+                    </HoverCard>
                     {nameLink(item, "item-name")}
                     {starMark(item)}
                   </span>
@@ -709,7 +712,9 @@ export function ItemList({
                     {...dragging(item)}
                     {...choosing(item)}
                   >
-                    <ItemIcon item={item} />
+                    <HoverCard item={item}>
+                      <ItemIcon item={item} />
+                    </HoverCard>
                     {nameLink(item, "tile-name")}
                     {starMark(item)}
                     {moreButton(item)}
@@ -731,7 +736,9 @@ export function ItemList({
                     {...choosing(item)}
                   >
                     <div class="card-top">
-                      <ItemIcon item={item} />
+                      <HoverCard item={item}>
+                        <ItemIcon item={item} />
+                      </HoverCard>
                       {nameLink(item, "tile-name")}
                       {starMark(item)}
                       {moreButton(item)}
