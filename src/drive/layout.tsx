@@ -84,6 +84,11 @@ interface DriveFrame {
   /** Says whether the page has the details panel. Pages that offer it show
    * the button that opens it. */
   offerDetails(offered: boolean): void;
+  /** Opens a folder's right-click menu, as the sidebar does: New's menu
+   * for My Drive, and the folder's actions for any other folder. */
+  folderMenu(folder: Item, event: TargetedMouseEvent<HTMLElement>): void;
+  /** The folder whose right-click menu is open, for its place to show it. */
+  menuOn: string | null;
 }
 
 const Frame = createContext<DriveFrame | null>(null);
@@ -354,6 +359,14 @@ export function DriveLayout({
     setFolderMenu({ folder, ...menuPlace(event, event.currentTarget) });
   }
 
+  /** Right-clicking My Drive opens New's menu for it, as right-clicking
+   * empty space on its page does. */
+  function openNewMenu(top: Item, event: TargetedMouseEvent<HTMLElement>) {
+    event.preventDefault();
+    setFolderMenu(null);
+    setMenu({ ...menuPlace(event, event.currentTarget), into: top });
+  }
+
   function dragEnter(event: TargetedDragEvent<HTMLElement>) {
     if (!target.drops || !holdsFiles(event)) return;
     event.preventDefault();
@@ -395,6 +408,9 @@ export function DriveLayout({
     select: setSelection,
     setPageItem,
     offerDetails: setDetailsOffered,
+    folderMenu: (folder, event) =>
+      folder.parent === null ? openNewMenu(folder, event) : openFolderMenu(folder, event),
+    menuOn: folderMenu?.folder.id ?? menu?.into?.id ?? null,
   };
 
   return (
@@ -434,14 +450,7 @@ export function DriveLayout({
                     .join(" ")
                 }
                 {...(top ? dropProps({ id: top.id, name: t("drive.myDrive") }, setDropOn, notify) : {})}
-                // Right-clicking My Drive opens New's menu for it, as
-                // right-clicking empty space on its page does.
-                onContextMenu={(event) => {
-                  if (!top) return;
-                  event.preventDefault();
-                  setFolderMenu(null);
-                  setMenu({ ...menuPlace(event, event.currentTarget), into: top });
-                }}
+                onContextMenu={(event) => top && openNewMenu(top, event)}
               >
                 {top && (
                   <button

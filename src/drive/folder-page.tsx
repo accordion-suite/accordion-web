@@ -1,7 +1,9 @@
 // A folder in Drive, with the path down to it from My Drive, or from Shared
 // with me for someone else's folder. Right-clicking empty space opens New's
 // menu for the folder, and files dropped on the page upload into it, unless
-// the reader can only view it.
+// the reader can only view it. The folders in the path work as they do in
+// the sidebar: right-clicking one opens its menu, and items dragged onto
+// one move into it.
 
 import type { TargetedMouseEvent } from "preact";
 import { useEffect, useState } from "preact/hooks";
@@ -15,6 +17,7 @@ import { folderPath } from "./item-actions.tsx";
 import { ItemList, PageTools } from "./item-list.tsx";
 import { type Item, canEdit } from "./item.ts";
 import { typing, useDrive, useTarget } from "./layout.tsx";
+import { dropProps } from "./move.ts";
 import { pathTo, remember, useChanges } from "./store.ts";
 
 interface Loaded {
@@ -52,6 +55,7 @@ export function FolderPage({ folder }: { folder: string | null }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState("");
   const [menu, setMenu] = useState<{ place: MenuPlace; byKeyboard: boolean } | null>(null);
+  const [dropOn, setDropOn] = useState<string | null>(null);
   const here = loaded?.path[loaded.path.length - 1] ?? null;
 
   function refresh() {
@@ -74,7 +78,10 @@ export function FolderPage({ folder }: { folder: string | null }) {
   /** Right-clicking empty space, or the context menu key there. */
   function contextMenu(event: TargetedMouseEvent<HTMLElement>) {
     const target = event.target as Element;
-    if (!here || !editable || typing(target) || target.closest("dialog, a, button")) return;
+    // A folder in the path opens its own menu.
+    if (event.defaultPrevented || !here || !editable || typing(target) || target.closest("dialog, a, button")) {
+      return;
+    }
     event.preventDefault();
     const byKeyboard = !event.clientX && !event.clientY;
     setMenu({ place: byKeyboard ? { under: target } : { x: event.clientX, y: event.clientY }, byKeyboard });
@@ -99,6 +106,8 @@ export function FolderPage({ folder }: { folder: string | null }) {
   }
 
   const above = loaded.path.slice(0, -1);
+  const crumbClass = (item: Item) =>
+    ["crumb", dropOn === item.id && "drop-target", drive.menuOn === item.id && "menu-open"].filter(Boolean).join(" ");
   const shared = loaded.path[0]!.parent !== null;
   return (
     <main class="page" onContextMenu={contextMenu}>
@@ -114,13 +123,23 @@ export function FolderPage({ folder }: { folder: string | null }) {
             )}
             {above.map((item) => (
               <li key={item.id}>
-                <a href={folderPath(item)} onClick={followLink}>
+                <a
+                  class={crumbClass(item)}
+                  href={folderPath(item)}
+                  onClick={followLink}
+                  onContextMenu={(event) => drive.folderMenu(item, event)}
+                  {...(canEdit(item) ? dropProps({ id: item.id, name: folderName(item) }, setDropOn, drive.notify) : {})}
+                >
                   {folderName(item)}
                 </a>
               </li>
             ))}
             <li>
-              <PageTitle>{folderName(here)}</PageTitle>
+              {/* Nothing on this page can be dragged into the folder that's
+                  open, so it only has the menu. */}
+              <div class={crumbClass(here)} onContextMenu={(event) => drive.folderMenu(here, event)}>
+                <PageTitle>{folderName(here)}</PageTitle>
+              </div>
             </li>
           </ol>
         </nav>
