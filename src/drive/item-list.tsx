@@ -445,6 +445,8 @@ export function ItemList({
       <a
         class={className}
         href={item.kind === "folder" ? folderPath(item) : filePath(item)}
+        // A tile cuts off a long name, so hovering shows all of it.
+        title={item.name}
         data-open
         draggable={false}
         onClick={(event) => {
