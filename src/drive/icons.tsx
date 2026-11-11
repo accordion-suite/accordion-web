@@ -72,6 +72,16 @@ export const TrashIcon = () => (
   </Icon>
 );
 
+/** An arrow curving back, for putting something back where it was. */
+export const RestoreIcon = () => (
+  <Icon>
+    <path
+      d="M12.5 8c-2.65 0-5.05 1-6.9 2.6L2 7v9h9l-3.6-3.6c1.4-1.2 3.2-1.9 5.1-1.9 3.5 0 6.6 2.3 7.6 5.5l2.4-.8C21.1 11 17.2 8 12.5 8"
+      fill="currentColor"
+    />
+  </Icon>
+);
+
 export const SearchIcon = () => (
   <Icon>
     <path

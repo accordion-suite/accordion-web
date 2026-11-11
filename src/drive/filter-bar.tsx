@@ -65,6 +65,7 @@ export function FilterBar({
   source,
   mine,
   shares = false,
+  deleted = false,
 }: {
   /** Every item on the page, before filtering, for the people to offer. */
   items: readonly Item[];
@@ -77,6 +78,9 @@ export function FilterBar({
   /** Whether the items are all the reader's own and shared, as in Shared by
    * me, so People offers who they're shared with. */
   shares?: boolean;
+  /** Whether the items are in the trash, so the date is when each was
+   * deleted. */
+  deleted?: boolean;
 }) {
   const people: [string, string][] = shares
     ? sharees(items).map(([username, name]): [string, string] => [sharedWith(username), t("filters.sharedWith", { name })])
@@ -109,7 +113,7 @@ export function FilterBar({
         />
       )}
       <Filter
-        label={t("search.modified")}
+        label={deleted ? t("trash.deleted") : t("search.modified")}
         choices={named(MODIFIED)}
         chosen={filters.modified}
         any={t("search.anyTime")}

@@ -30,8 +30,14 @@ export function sharedWith(username: string): string {
   return `with:${username}`;
 }
 
-/** Whether `item` passes every filter that's set. */
-export function matches(item: Item | Found, filters: Filters, now = new Date()): boolean {
+/** Whether `item` passes every filter that's set. In the trash, the date
+ * filter is for when an item was deleted. */
+export function matches(
+  item: Item | Found,
+  filters: Filters,
+  now = new Date(),
+  date: "modified" | "deleted" = "modified",
+): boolean {
   if (filters.type && kindOf(item) !== TYPE_KINDS[filters.type]) return false;
   if (filters.people === "me" && item.owner !== null) return false;
   if (filters.people === "shared" && !item.shared) return false;
@@ -46,7 +52,7 @@ export function matches(item: Item | Found, filters: Filters, now = new Date()):
   if (filters.source === "shared" && item.owner === null) return false;
   if (filters.modified) {
     const { after, before } = modifiedRange(filters.modified, now);
-    const modified = Date.parse(item.modified_at);
+    const modified = Date.parse((date === "deleted" ? item.trashed_at : item.modified_at) ?? "");
     if (after && modified < Date.parse(after)) return false;
     if (before && modified >= Date.parse(before)) return false;
   }

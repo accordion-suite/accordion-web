@@ -14,7 +14,7 @@ import { ShareDialog } from "./dialogs.tsx";
 import { CloseIcon, InfoIcon, ItemIcon, kindOf } from "./icons.tsx";
 import { folderPath } from "./item-actions.tsx";
 import { CardPreview } from "./item-list.tsx";
-import type { Item, ShareEntry } from "./item.ts";
+import { type Item, type ShareEntry, canEdit } from "./item.ts";
 import { announceChange, pathTo } from "./store.ts";
 
 const TYPES: Record<string, MessageKey> = {
@@ -124,7 +124,8 @@ export function DetailsPanel({
  * as in Google Drive. It saves when the field loses focus, and when the
  * panel closes or moves to another item, so nothing typed is lost. */
 function Description({ item }: { item: Item }) {
-  const editable = item.access !== "viewer";
+  // Nothing in the trash changes until it's restored.
+  const editable = canEdit(item);
   const address = `/api/drive/items/${item.id}/description`;
   const [saved, setSaved] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -255,12 +256,12 @@ function About({ item }: { item: Item }) {
             <span class="hint">{t(item.access === "editor" ? "details.canEdit" : "details.canView")}</span>
           </p>
         )}
-        {owner && item.parent !== null && (
+        {owner && item.parent !== null && !item.trashed_at && (
           <button type="button" class="secondary" onClick={() => setSharing(true)}>
             {t("details.manageAccess")}
           </button>
         )}
-        {item.access === "editor" && (
+        {item.access === "editor" && !item.trashed_at && (
           <button type="button" class="secondary" onClick={() => setSharing(true)}>
             {t("share.open")}
           </button>
@@ -305,6 +306,12 @@ function About({ item }: { item: Item }) {
           <dd>{formatMoment(item.modified_at)}</dd>
           <dt>{t("details.created")}</dt>
           <dd>{formatMoment(item.created_at)}</dd>
+          {item.trashed_at && (
+            <>
+              <dt>{t("trash.deleted")}</dt>
+              <dd>{formatMoment(item.trashed_at)}</dd>
+            </>
+          )}
         </dl>
       </section>
 

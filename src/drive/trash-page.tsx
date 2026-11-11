@@ -1,27 +1,25 @@
 // Drive's trash: what the reader deleted, newest first, to restore or to
 // delete for good. Accordion deletes what's been in the trash for 30 days.
+// It's the same list as every other page, with the same filters, details,
+// and list or grid, but its items can only be opened, restored, or deleted.
 
 import { useEffect, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
-import { formatDate, formatSize, t } from "../i18n.ts";
+import { t } from "../i18n.ts";
 import { ConfirmDialog } from "../shell/dialog.tsx";
 import { PageTitle } from "../shell/page.tsx";
-import { ItemIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
+import { ItemList, PageTools } from "./item-list.tsx";
 import { useDrive, useTarget } from "./layout.tsx";
+import { naming } from "./move.ts";
 import { keptFor, useRetention } from "./retention.ts";
-import { announceChange } from "./store.ts";
+import { announceChange, useChanges } from "./store.ts";
 
-/** An item in the trash, which says when it was deleted. */
-interface Trashed extends Item {
-  trashed_at: string;
-}
-
-type Confirming = { kind: "one"; item: Trashed } | { kind: "all" };
+type Confirming = { kind: "items"; items: Item[] } | { kind: "all" };
 
 export function TrashPage() {
-  const [items, setItems] = useState<Trashed[] | null>(null);
+  const [items, setItems] = useState<Item[] | null>(null);
   const drive = useDrive();
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState<Confirming | null>(null);
@@ -29,44 +27,65 @@ export function TrashPage() {
   useTarget(null, false);
 
   function refresh() {
-    api<Trashed[]>("GET", "/api/drive/trash").then(setItems, (failure: Error) => setError(failure.message));
+    api<Item[]>("GET", "/api/drive/trash").then(
+      (found) => {
+        setItems(found);
+        setError("");
+      },
+      (failure: Error) =>
+        items ? drive.notify({ message: failure.message, problem: true }) : setError(failure.message),
+    );
   }
 
   useEffect(refresh, []);
+  // Items deleted on other pages, or in another tab, show up here.
+  useChanges(refresh);
 
   function done(message: string) {
     drive.notify({ message });
-    refresh();
     // Restoring and deleting change the space used, and the sidebar's
-    // folders.
+    // folders, and this list reloads with them.
     announceChange();
   }
 
-  async function restore(item: Trashed) {
+  function failed(failure: unknown) {
+    drive.notify({ message: failure instanceof Error ? failure.message : t("error.problem"), problem: true });
+    announceChange();
+  }
+
+  async function restore(chosen: Item[]) {
     try {
-      await api("POST", `/api/drive/items/${item.id}/restore`);
-      done(t("trash.restored", { name: item.name }));
+      for (const item of chosen) await api("POST", `/api/drive/items/${item.id}/restore`);
+      done(naming(chosen, "trash.restored", "trash.restoredMany"));
     } catch (failure) {
-      drive.notify({ message: (failure as Error).message, problem: true });
+      failed(failure);
     }
   }
 
+  const only = confirming?.kind === "items" && confirming.items.length === 1 ? confirming.items[0]! : null;
   return (
     <main class="page">
       <div class="page-head">
         <PageTitle>{t("trash.title")}</PageTitle>
-        {items && items.length > 0 && (
-          <button type="button" class="quiet" onClick={() => setConfirming({ kind: "all" })}>
-            {t("trash.emptyTrash")}
-          </button>
-        )}
+        <PageTools />
       </div>
-      {retention && (
-        <p class="banner">
-          {retention === "unknown"
-            ? t("trash.explainUnknown")
-            : t("trash.explain", { time: keptFor(retention.trash_days) })}
-        </p>
+      {/* How long the trash keeps things, beside the button that deletes
+          them all now. */}
+      {(retention || (items && items.length > 0)) && (
+        <div class="banner trash-banner">
+          {retention && (
+            <p>
+              {retention === "unknown"
+                ? t("trash.explainUnknown")
+                : t("trash.explain", { time: keptFor(retention.trash_days) })}
+            </p>
+          )}
+          {items && items.length > 0 && (
+            <button type="button" class="secondary" onClick={() => setConfirming({ kind: "all" })}>
+              {t("trash.emptyTrash")}
+            </button>
+          )}
+        </div>
       )}
       {error ? (
         <p class="error" role="alert">
@@ -75,77 +94,39 @@ export function TrashPage() {
       ) : !items ? (
         <p class="loading">{t("shell.loading")}</p>
       ) : (
-        <>
-          {items.length === 0 ? (
-            <div class="empty">
-              <p class="hint">{t("trash.empty")}</p>
-            </div>
-          ) : (
-            <>
-              <table class="items trash" aria-label={t("trash.title")}>
-                <thead>
-                  <tr>
-                    <th scope="col">{t("drive.name")}</th>
-                    <th scope="col" class="modified">
-                      {t("trash.deleted")}
-                    </th>
-                    <th scope="col" class="size">
-                      {t("drive.size")}
-                    </th>
-                    <td />
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id}>
-                      <th scope="row">
-                        <span class="name-cell">
-                          <ItemIcon item={item} />
-                          <span class="item-name">{item.name}</span>
-                        </span>
-                      </th>
-                      <td class="modified">{formatDate(item.trashed_at)}</td>
-                      <td class="size">
-                        {item.kind === "folder" ? "—" : formatSize(item.size ?? 0)}
-                      </td>
-                      <td class="actions">
-                        <button
-                          type="button"
-                          class="quiet"
-                          aria-label={t("trash.restoreNamed", { name: item.name })}
-                          onClick={() => restore(item)}
-                        >
-                          {t("trash.restore")}
-                        </button>
-                        <button
-                          type="button"
-                          class="quiet"
-                          aria-label={t("trash.deleteNamed", { name: item.name })}
-                          onClick={() => setConfirming({ kind: "one", item })}
-                        >
-                          {t("trash.delete")}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </>
+        <ItemList
+          items={items}
+          label={t("trash.title")}
+          empty={t("trash.empty")}
+          trash={{ restore, remove: (chosen) => setConfirming({ kind: "items", items: chosen }) }}
+        />
       )}
 
-      {confirming?.kind === "one" && (
+      {confirming?.kind === "items" && (
         <ConfirmDialog
-          title={t("trash.deleteTitle", { name: confirming.item.name })}
+          title={
+            only
+              ? t("trash.deleteTitle", { name: only.name })
+              : t("trash.deleteManyTitle", { count: confirming.items.length })
+          }
           body={
-            confirming.item.kind === "folder" ? t("trash.deleteFolderBody") : t("trash.deleteFileBody")
+            !only
+              ? t("trash.deleteManyBody")
+              : only.kind === "folder"
+                ? t("trash.deleteFolderBody")
+                : t("trash.deleteFileBody")
           }
           confirm={t("trash.delete")}
           onConfirm={async () => {
-            await api("DELETE", `/api/drive/trash/${confirming.item.id}`);
-            setConfirming(null);
-            done(t("trash.deletedOne", { name: confirming.item.name }));
+            const chosen = confirming.items;
+            try {
+              for (const item of chosen) await api("DELETE", `/api/drive/trash/${item.id}`);
+              setConfirming(null);
+              done(naming(chosen, "trash.deletedOne", "trash.deletedMany"));
+            } catch (failure) {
+              setConfirming(null);
+              failed(failure);
+            }
           }}
           onClose={() => setConfirming(null)}
         />

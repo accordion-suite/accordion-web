@@ -134,3 +134,17 @@ test("Shared by me sorts by who has each item and when it was shared", () => {
   assert.deepEqual(by("with"), ["c.txt", "b.txt", "a.txt"]);
   assert.deepEqual(by("shared"), ["b.txt", "c.txt", "a.txt"]);
 });
+
+test("the trash sorts by when each item was deleted, newest first", () => {
+  const deleted = (name: string, at: string): Found => ({
+    ...item(name, "file", "2026-01-01T09:00:00Z", 1),
+    trashed_at: at,
+  });
+  const sort = nextSort(null, "deleted");
+  assert.deepEqual(sort, { key: "deleted", descending: true });
+  const sorted = sortItems([deleted("a.txt", "2026-11-01T09:00:00Z"), deleted("b.txt", "2026-11-03T09:00:00Z")], sort);
+  assert.deepEqual(
+    sorted.map((one) => one.name),
+    ["b.txt", "a.txt"],
+  );
+});

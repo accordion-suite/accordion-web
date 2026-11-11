@@ -307,14 +307,6 @@ a.button.secondary {
   border-color: var(--border);
 }
 
-/* A button that sits back in a bar, such as Restore in the trash. */
-button.quiet {
-  color: var(--text);
-  background: transparent;
-  border-color: transparent;
-}
-
-button.quiet:hover,
 button.secondary:hover {
   background: var(--surface);
 }
@@ -1213,6 +1205,31 @@ main.page {
   border-radius: 8px;
 }
 
+/* The trash's note, with Empty trash at its end, or under it on a phone. */
+.trash-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-block: 8px;
+}
+
+.trash-banner p {
+  flex: 1 1 280px;
+  margin: 0;
+}
+
+.trash-banner button {
+  margin-left: auto;
+  background: var(--panel);
+}
+
+/* The note is the color other buttons turn on hover, so this one darkens. */
+.trash-banner button:hover {
+  background: var(--surface-strong);
+}
+
 .empty {
   display: grid;
   place-items: center;
@@ -1584,11 +1601,6 @@ table.items .more-cell {
   padding: 2px 4px;
 }
 
-table.items .actions {
-  text-align: right;
-  white-space: nowrap;
-}
-
 /* On phones, only the name and its button keep their space. */
 @media (max-width: 700px) {
   table.items .modified,
@@ -1596,11 +1608,6 @@ table.items .actions {
   table.items .with,
   table.items .size {
     display: none;
-  }
-
-  table.items .actions button {
-    display: flex;
-    margin: 4px 0 0 auto;
   }
 }
 

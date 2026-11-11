@@ -12,12 +12,13 @@
 //
 // Every page with items uses this, so they all work the same. A list that
 // reaches across folders, such as search results, says where each item is.
+// In the trash, an item can only be opened, restored, or deleted for good.
 
 import type { ComponentChildren, TargetedMouseEvent } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { formatDate, formatSize, t } from "../i18n.ts";
-import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
+import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
 import { languageOfName } from "./highlight.ts";
 import { Highlighted } from "./highlight-view.tsx";
@@ -41,6 +42,7 @@ import {
   MoveIcon,
   PeopleIcon,
   RenameIcon,
+  RestoreIcon,
   SortIcon,
   StarIcon,
   TrashIcon,
@@ -87,6 +89,13 @@ function keyed(event: MouseEvent): boolean {
   return event.detail === 0;
 }
 
+/** What the trash page does with items in the trash, which asks first
+ * before deleting for good. */
+export interface TrashActions {
+  restore(items: Item[]): void;
+  remove(items: Item[]): void;
+}
+
 /** An open menu. `owner` names the button that opened it, if one did. */
 interface OpenMenu {
   label: string;
@@ -105,6 +114,7 @@ export function ItemList({
   empty,
   sortScope,
   toolbar,
+  trash,
 }: {
   items: readonly (Item | Found)[];
   /** Names the list for screen readers, such as the folder's name. */
@@ -124,6 +134,9 @@ export function ItemList({
   /** Filters in place of the list's own, for the search page, whose server
    * applies them all, so the list shows every item it's given. */
   toolbar?: ComponentChildren;
+  /** For the trash: what restoring and deleting for good do. The list shows
+   * when each item was deleted, in place of when it changed. */
+  trash?: TrashActions;
 }) {
   const settings = useDriveSettings();
   const thumbnails = settings?.thumbnails ?? true;
@@ -133,11 +146,11 @@ export function ItemList({
   // The same list until the items or the filters change, since effects
   // below run when it does.
   const items = useMemo(
-    () => (toolbar ? all : all.filter((item) => matches(item, filters))),
+    () => (toolbar ? all : all.filter((item) => matches(item, filters, new Date(), trash ? "deleted" : "modified"))),
     [all, filters.type, filters.people, filters.modified, filters.source],
   );
   const [mode] = useViewMode();
-  const [sort, setSort] = useSort(sortScope ?? (showLocation ? "found" : "folder"));
+  const [sort, setSort] = useSort(sortScope ?? (trash ? "trash" : showLocation ? "found" : "folder"));
   const [dropOn, setDropOn] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** Where a Shift range starts: the item last chosen on its own. */
@@ -185,7 +198,9 @@ export function ItemList({
   const shownFile = shown.find((file) => file.id === showing);
 
   function openItem(item: Item) {
-    if (item.kind === "folder") navigate(folderPath(item));
+    // A folder in the trash has no page, as in Google Drive.
+    if (item.kind === "folder" && trash) drive.notify({ message: t("trash.folderClosed", { name: item.name }) });
+    else if (item.kind === "folder") navigate(folderPath(item));
     else navigate(filePath(item), { state: OPENED_HERE });
   }
 
@@ -218,7 +233,38 @@ export function ItemList({
     const chosen = targets(item);
     const label =
       chosen.length > 1 ? t("drive.actionsForMany", { count: chosen.length }) : t("drive.actionsFor", { name: item.name });
-    return { label, entries: actions.entries(chosen), place, byKeyboard, owner };
+    return { label, entries: trash ? trashEntries(chosen, trash) : actions.entries(chosen), place, byKeyboard, owner };
+  }
+
+  /** An item's menu in the trash. */
+  function trashEntries(chosen: Item[], trash: TrashActions): MenuEntry[] {
+    const many = chosen.length > 1;
+    const entries: MenuEntry[] = [];
+    if (!many && chosen[0]!.kind === "file") {
+      entries.push({ label: t("drive.open"), onSelect: () => openItem(chosen[0]!) });
+    }
+    if (!many) {
+      entries.push({
+        label: t("details.title"),
+        onSelect: () => {
+          setSelected(new Set([chosen[0]!.id]));
+          setDetailsOpen(true);
+        },
+      });
+      entries.push(SEPARATOR);
+    }
+    entries.push(
+      {
+        label: many ? t("trash.restoreMany", { count: chosen.length }) : t("trash.restore"),
+        onSelect: () => trash.restore(chosen),
+      },
+      {
+        label: many ? t("trash.deleteMany", { count: chosen.length }) : t("trash.delete"),
+        shortcut: "Delete",
+        onSelect: () => trash.remove(chosen),
+      },
+    );
+    return entries;
   }
 
   /** Right-clicking an item, or the context menu key on one. Empty space is
@@ -258,6 +304,11 @@ export function ItemList({
     const focusedItem = focused && items.find((item) => item.id === focused.dataset["id"]);
     const chosen = chosenItems.length > 0 ? chosenItems : focusedItem ? [focusedItem] : [];
     if (event.key === "Delete" || (event.key === "Backspace" && event.metaKey)) {
+      if (trash && chosen.length > 0) {
+        trash.remove(chosen);
+        event.preventDefault();
+        return;
+      }
       if (chosen.length === 0 || !chosen.every(canEdit)) return;
       void actions.trash(chosen);
     } else if (event.key === "F2") {
@@ -489,6 +540,12 @@ export function ItemList({
     return [base, selected.has(item.id) && "selected", dropOn === item.id && "drop-target"].filter(Boolean).join(" ") || undefined;
   }
 
+  /** The date an item shows: when it was shared, deleted, or changed. */
+  function when(item: Item): string {
+    if (shares) return (item as SharedOut).shared_at;
+    return (trash && item.trashed_at) || item.modified_at;
+  }
+
   /** A column's header, which sorts the list by that column. */
   function header(key: SortKey, name: string, className?: string) {
     const active = sort?.key === key ? sort : null;
@@ -525,6 +582,7 @@ export function ItemList({
             source={showLocation && !owners && !shares && sortScope !== "storage"}
             mine={!owners}
             shares={shares}
+            deleted={!!trash}
           />)
         ) : (
           <div class="selection-bar" role="group" aria-label={t("drive.selection")}>
@@ -537,9 +595,19 @@ export function ItemList({
               <CloseIcon />
             </button>
             <span class="selection-count">{t("drive.selected", { count: chosenItems.length })}</span>
+            {trash && (
+              <>
+                <BarButton label={t("trash.restore")} onClick={() => trash.restore(chosenItems)}>
+                  <RestoreIcon />
+                </BarButton>
+                <BarButton label={t("trash.delete")} onClick={() => trash.remove(chosenItems)}>
+                  <TrashIcon />
+                </BarButton>
+              </>
+            )}
             {/* Icons with names in tooltips, as in Google Drive, so the bar
                 fits on one line and never pushes the list down. */}
-            {chosenItems.length === 1 && chosenEditable && (
+            {!trash && chosenItems.length === 1 && chosenEditable && (
               <BarButton label={t("drive.rename")} onClick={() => actions.rename(chosenItems[0]!)}>
                 <RenameIcon />
               </BarButton>
@@ -549,10 +617,12 @@ export function ItemList({
                 <MoveIcon />
               </BarButton>
             )}
-            <BarButton label={t("viewer.download")} onClick={() => download(chosenItems)}>
-              <DownloadIcon />
-            </BarButton>
-            {chosenItems.some((item) => !item.starred) ? (
+            {!trash && (
+              <BarButton label={t("viewer.download")} onClick={() => download(chosenItems)}>
+                <DownloadIcon />
+              </BarButton>
+            )}
+            {trash ? null : chosenItems.some((item) => !item.starred) ? (
               <BarButton label={t("drive.addStar")} onClick={() => actions.star(chosenItems, true)}>
                 <StarIcon />
               </BarButton>
@@ -592,7 +662,9 @@ export function ItemList({
               {shares && header("with", t("sharedByMe.with"), "with")}
               {shares
                 ? header("shared", t("sharedByMe.sharedOn"), "modified")
-                : header("modified", t("drive.modified"), "modified")}
+                : trash
+                  ? header("deleted", t("trash.deleted"), "modified")
+                  : header("modified", t("drive.modified"), "modified")}
               {header("size", t("drive.size"), "size")}
               <td class="more-cell" />
             </tr>
@@ -614,7 +686,7 @@ export function ItemList({
                     {sharedWithText(item as SharedOut)}
                   </td>
                 )}
-                <td class="modified">{formatDate(shares ? (item as SharedOut).shared_at : item.modified_at)}</td>
+                <td class="modified">{formatDate(when(item))}</td>
                 <td class="size">{item.size === null ? "—" : formatSize(item.size)}</td>
                 <td class="more-cell">{moreButton(item)}</td>
               </tr>
@@ -665,7 +737,7 @@ export function ItemList({
                     <CardPreview item={item} thumbnail={thumbnails} />
                     <Snippet item={item} />
                     <p class="card-meta">
-                      {located(item) ? where(item) : formatDate(item.modified_at)}
+                      {located(item) ? where(item) : formatDate(when(item))}
                     </p>
                   </li>
                 ))}

@@ -83,3 +83,10 @@ test("Shared by me filters by who an item is shared with", () => {
   assert.deepEqual(items.filter((one) => matches(one, filters)).map((one) => one.name), ["b.txt"]);
   assert.deepEqual(sharees(items), [["kim", "Kim Lee"], ["sam", "Sam Rivera"]]);
 });
+
+test("in the trash, the date is when an item was deleted", () => {
+  const old = item("Old.docx", "2024-01-01T09:00:00", { trashed_at: "2026-11-02T08:00:00" });
+  const filters = { ...NONE, modified: "today" };
+  assert.equal(matches(old, filters, NOW), false);
+  assert.equal(matches(old, filters, NOW, "deleted"), true);
+});

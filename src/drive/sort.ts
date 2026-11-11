@@ -5,8 +5,8 @@
 import type { Found, Item, SharedOut } from "./item.ts";
 
 /** `with` and `shared` are Shared by me's columns: who an item is shared
- * with, and when. */
-export type SortKey = "name" | "location" | "modified" | "size" | "with" | "shared";
+ * with, and when. `deleted` is the trash's: when an item went there. */
+export type SortKey = "name" | "location" | "modified" | "size" | "with" | "shared" | "deleted";
 
 export interface Sort {
   key: SortKey;
@@ -22,6 +22,7 @@ const FIRST_DESCENDING: Record<SortKey, boolean> = {
   size: true,
   with: false,
   shared: true,
+  deleted: true,
 };
 
 const names = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -63,6 +64,8 @@ export function sortItems<T extends Item | Found>(items: readonly T[], sort: Sor
         return names.compare(sharedWith(a), sharedWith(b));
       case "shared":
         return Date.parse(sharedAt(a)) - Date.parse(sharedAt(b));
+      case "deleted":
+        return Date.parse(a.trashed_at ?? "") - Date.parse(b.trashed_at ?? "");
     }
   };
   return [...items].sort(

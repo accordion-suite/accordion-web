@@ -37,6 +37,8 @@ export interface Item {
   /** For files: which type it is, such as "photos", by its name and, where
    * a name is shared, its contents. Null for none. */
   type?: string | null;
+  /** When it was deleted, if it's in the trash itself. */
+  trashed_at?: string | null;
 }
 
 /** Where a file's thumbnail is. Browsers keep it for a year, so the
@@ -52,9 +54,9 @@ export const FOLDER_COLORS = ["red", "orange", "yellow", "green", "teal", "blue"
 export type FolderColor = (typeof FOLDER_COLORS)[number];
 
 /** Whether the reader can change an item: rename it, move it, delete it, or
- * add to it. */
-export function canEdit(item: Pick<Item, "access">): boolean {
-  return item.access !== "viewer";
+ * add to it. Nothing in the trash can change until it's restored. */
+export function canEdit(item: Pick<Item, "access" | "trashed_at">): boolean {
+  return item.access !== "viewer" && !item.trashed_at;
 }
 
 /** An item in a list that reaches across folders, such as search results,

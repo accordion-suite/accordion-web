@@ -442,6 +442,17 @@ export const en = {
     other: "{count} items are deleted for good, with everything in them. You can't undo this.",
   },
   "trash.emptied": "Emptied the trash.",
+  "trash.restoreMany": { one: "Restore {count} item", other: "Restore {count} items" },
+  "trash.restoredMany": {
+    one: "Restored {count} item to the folder it was in.",
+    other: "Restored {count} items to the folders they were in.",
+  },
+  "trash.deleteMany": { one: "Delete {count} item for good", other: "Delete {count} items for good" },
+  "trash.deleteManyTitle": { one: "Delete {count} item for good?", other: "Delete {count} items for good?" },
+  "trash.deleteManyBody":
+    "You can't undo this. Everything in the folders among them, and earlier versions of the files, are deleted too.",
+  "trash.deletedMany": { one: "Deleted {count} item for good.", other: "Deleted {count} items for good." },
+  "trash.folderClosed": "{name} is in the trash. To open it, restore it first.",
 
   "color.open": "Change color",
   "color.title": "Color for {name}",
