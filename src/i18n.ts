@@ -66,6 +66,16 @@ export function formatSize(bytes: number): string {
   }).format(value);
 }
 
+/** How long a video or a sound lasts, as a player's clock shows it:
+ * "2:05", or "1:02:05". Anything shorter shows as a second. */
+export function formatLength(seconds: number): string {
+  const whole = Math.max(1, Math.round(seconds));
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  const rest = String(whole % 60).padStart(2, "0");
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
+}
+
 /** A date and time, such as "Oct 28, 2026, 3:04 PM", in the reader's time
  * zone. */
 export function formatDate(iso: string): string {

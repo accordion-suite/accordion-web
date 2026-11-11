@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { formatCalendarDay, formatHour, formatList, formatSize, t } from "./i18n.ts";
+import { formatCalendarDay, formatHour, formatLength, formatList, formatSize, t } from "./i18n.ts";
 
 test("fills in values", () => {
   assert.equal(t("drive.up", { name: "Photos" }), "Back to Photos");
@@ -42,4 +42,12 @@ test("joins items with a serial comma", () => {
   assert.equal(formatList(["a"]), "a");
   assert.equal(formatList(["a", "b"]), "a and b");
   assert.equal(formatList(["a", "b", "c"]), "a, b, and c");
+});
+
+test("lengths read as a player's clock does", () => {
+  assert.equal(formatLength(0.2), "0:01");
+  assert.equal(formatLength(3), "0:03");
+  assert.equal(formatLength(125.4), "2:05");
+  assert.equal(formatLength(3725), "1:02:05");
+  assert.equal(formatLength(36000), "10:00:00");
 });

@@ -3,11 +3,15 @@
 // Activity tab, what happened to it. It shows what's selected, or the folder
 // that's open when nothing is, and stays open as the reader moves between
 // pages.
+//
+// A file's details include its format's full name, and what the server read
+// from it: a picture's or a video's size, how long a video or a sound lasts,
+// and how many pages a document has.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
-import { formatMoment, formatSize, type MessageKey, t } from "../i18n.ts";
+import { formatLength, formatMoment, formatNumber, formatSize, type MessageKey, t } from "../i18n.ts";
 import { followLink } from "../shell/router.ts";
 import { ActivityTab } from "./activity.tsx";
 import { ShareDialog } from "./dialogs.tsx";
@@ -33,6 +37,48 @@ const TYPES: Record<string, MessageKey> = {
   design: "details.design",
   file: "details.file",
 };
+
+/** What `GET /api/drive/items/{id}/facts` says about a file. Each is null
+ * when the file doesn't have it, or the server hasn't read it yet. */
+interface Facts {
+  width: number | null;
+  height: number | null;
+  seconds: number | null;
+  pages: number | null;
+  /** Whether a document goes on past `pages`. */
+  more_pages: boolean;
+}
+
+/** The full name of each format, which loads the first time the panel
+ * shows a file. */
+let formats: Readonly<Record<string, string>> | null = null;
+
+function useFormats(): Readonly<Record<string, string>> | null {
+  const [loaded, setLoaded] = useState(formats);
+  useEffect(() => {
+    if (loaded) return;
+    import("../messages/formats.en.ts").then(
+      (module) => {
+        formats = module.formatsEn;
+        setLoaded(formats);
+      },
+      // Without the names, the panel shows the extension alone.
+      () => undefined,
+    );
+  }, []);
+  return loaded;
+}
+
+/** A file's extension in lowercase, without the dot, or null. A name that
+ * only starts with a dot has none. */
+function extensionOf(name: string): string | null {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1).toLowerCase() : null;
+}
+
+/** The kinds of file whose pages the panel counts. A spreadsheet's printed
+ * pages don't say much about it. */
+const PAGED = new Set(["document", "presentation", "pdf", "ebook"]);
 
 /** Someone who can open an item, and the folder that gives them access if
  * it's one above the item. */
@@ -199,6 +245,8 @@ function About({ item }: { item: Item }) {
   const [people, setPeople] = useState<Access[] | null>(null);
   const [error, setError] = useState("");
   const [sharing, setSharing] = useState(false);
+  const [facts, setFacts] = useState<Facts | null>(null);
+  const names = useFormats();
   const owner = item.access === "owner";
 
   // The item changes with each reload of the page, such as after a rename
@@ -219,6 +267,28 @@ function About({ item }: { item: Item }) {
     };
   }, [item]);
 
+  // The facts change with a new version, and the server reads a new file's
+  // a little after its thumbnail, so they're read again with the item.
+  useEffect(() => {
+    if (item.kind !== "file") {
+      setFacts(null);
+      return;
+    }
+    let current = true;
+    api<Facts>("GET", `/api/drive/items/${item.id}/facts`).then(
+      (read) => current && setFacts(read),
+      // The panel does without them.
+      () => current && setFacts(null),
+    );
+    return () => {
+      current = false;
+    };
+  }, [item]);
+
+  const kind = kindOf(item);
+  const extension = item.kind === "file" ? extensionOf(item.name) : null;
+  const formatName = extension ? names?.[extension] : undefined;
+  const pages = facts?.pages != null && PAGED.has(kind) ? facts.pages : null;
   const parent = path && path.length > 1 ? path[path.length - 2]! : null;
   const trail = path?.slice(0, -1).map(nameOf) ?? [];
   if (path && item.owner !== null) trail.unshift(t("shared.title"));
@@ -277,11 +347,39 @@ function About({ item }: { item: Item }) {
         )}
         <dl class="details-facts">
           <dt>{t("details.type")}</dt>
-          <dd>{t(TYPES[kindOf(item)] ?? "details.file")}</dd>
+          <dd>{t(TYPES[kind] ?? "details.file")}</dd>
+          {extension && (
+            <>
+              <dt>{t("details.format")}</dt>
+              <dd>
+                {formatName
+                  ? t("details.formatNamed", { name: formatName, extension })
+                  : t("details.formatExtension", { extension })}
+              </dd>
+            </>
+          )}
           {item.size !== null && (
             <>
               <dt>{t("drive.size")}</dt>
               <dd>{formatSize(item.size)}</dd>
+            </>
+          )}
+          {facts?.width != null && facts.height != null && (
+            <>
+              <dt>{t("details.dimensions")}</dt>
+              <dd>{t("details.pixels", { width: facts.width, height: facts.height })}</dd>
+            </>
+          )}
+          {facts?.seconds != null && (
+            <>
+              <dt>{t("details.length")}</dt>
+              <dd>{formatLength(facts.seconds)}</dd>
+            </>
+          )}
+          {pages !== null && (
+            <>
+              <dt>{t(kind === "presentation" ? "details.slides" : "details.pages")}</dt>
+              <dd>{facts?.more_pages ? t("details.pagesOrMore", { count: pages }) : formatNumber(pages)}</dd>
             </>
           )}
           {path && item.parent !== null && (
