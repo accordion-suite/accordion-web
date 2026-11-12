@@ -141,11 +141,15 @@ async function move(
     notify({ message: naming(items, "drive.alreadyThereOne", "drive.alreadyThereMany", folderName) });
     return;
   }
-  const moved: Item[] = [];
+  /** What moved, and the name each has there. */
+  const moved: { item: Item; name: string }[] = [];
   const undo = async () => {
-    for (const item of moved) {
+    for (const { item } of moved) {
       await api("PATCH", `/api/drive/items/${item.id}`, { parent: item.parent, name: item.name });
     }
+  };
+  const redo = async () => {
+    for (const { item, name } of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: folder.id, name });
   };
   try {
     for (const item of moving) {
@@ -153,7 +157,7 @@ async function move(
       taken.add(name);
       const change = name === item.name ? { parent: folder.id } : { parent: folder.id, name };
       await api("PATCH", `/api/drive/items/${item.id}`, change);
-      moved.push(item);
+      moved.push({ item, name });
     }
   } catch (problem) {
     // What moved before the problem can still go back.
@@ -163,7 +167,16 @@ async function move(
   }
   // Cut items move once, as in a file manager.
   set(null);
-  notify({ message: naming(moved, "drive.movedOne", "drive.movedMany", folderName), undo });
+  notify({
+    message: naming(
+      moved.map(({ item }) => item),
+      "drive.movedOne",
+      "drive.movedMany",
+      folderName,
+    ),
+    undo,
+    redo,
+  });
 }
 
 async function copy(
@@ -174,9 +187,13 @@ async function copy(
   notify: (notice: Notice) => void,
 ): Promise<void> {
   const made: Item[] = [];
-  // Undoing a paste puts the copies in the trash.
+  // Undoing a paste puts the copies in the trash, and redoing it takes
+  // them out.
   const undo = async () => {
     for (const item of made) await api("DELETE", `/api/drive/items/${item.id}`);
+  };
+  const redo = async () => {
+    for (const item of made) await api("POST", `/api/drive/items/${item.id}/restore`);
   };
   try {
     for (const file of files) {
@@ -189,5 +206,5 @@ async function copy(
     notify({ message, problem: true, undo: made.length > 0 ? undo : undefined });
     return;
   }
-  notify({ message: naming(made, "drive.pastedOne", "drive.pastedMany", folderName), undo });
+  notify({ message: naming(made, "drive.pastedOne", "drive.pastedMany", folderName), undo, redo });
 }

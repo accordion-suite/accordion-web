@@ -1,8 +1,10 @@
 // Drive's frame around each of its pages: the top bar with search, and the
 // sidebar with New, the places to go, the folders in My Drive, and how much
 // space is used. Notices, such as "Moved to the trash", appear along the
-// bottom, with Undo where something can be undone. The details panel, when
-// it's open, is a column on the right.
+// bottom, with Undo where something can be undone. Ctrl+Z and Ctrl+Y go
+// back and forth through the changes made in the tab, after their notices
+// are gone too. The details panel, when it's open, is a column on the
+// right.
 //
 // Right-clicking My Drive in the sidebar opens New's menu for it, and
 // right-clicking a folder under it opens the menu that folder has in a
@@ -73,8 +75,18 @@ export interface Notice {
   message: string;
   /** A problem stays until it's closed. Other notices go after a while. */
   problem?: boolean;
-  /** Undoes the change, from the notice's Undo button or Ctrl+Z. */
+  /** Undoes the change, from the notice's Undo button or Ctrl+Z. A notice
+   * with it goes in the tab's history of changes. */
   undo?: () => Promise<void>;
+  /** Does the change again once it's undone, from the Redo button or
+   * Ctrl+Y. A change that can't be done again leaves it out. */
+  redo?: () => Promise<void>;
+  /** What the notice says once the change is undone, if not "Undone:"
+   * and the notice's message. */
+  undone?: string;
+  /** For the notice that says a change was undone: the change, which
+   * Redo does again. */
+  again?: Notice;
 }
 
 interface DriveFrame {
@@ -145,6 +157,20 @@ type Open =
 
 /** How long a notice stays, unless it's a problem. */
 const NOTICE_MS = 8000;
+
+/** How many changes Ctrl+Z can go back through. */
+const HISTORY_SIZE = 50;
+
+/** The changes made in this tab that can be undone, newest last, and the
+ * ones undone that can be done again, the last one undone last. They stay
+ * until the tab reloads, so they're still there after a visit to another
+ * app. Making a new change clears what can be done again, as in a text
+ * editor. */
+const history = { done: [] as Notice[], undone: [] as Notice[] };
+
+/** Whether an undo or redo is still going, so pressing Ctrl+Z quickly
+ * doesn't undo two changes at once, which could clash. */
+let undoing = false;
 
 /** How long the second key of a two-key shortcut, such as Alt+C then F,
  * can wait. */
@@ -381,32 +407,81 @@ export function DriveLayout({
     return () => document.removeEventListener("keydown", keys, true);
   }, []);
 
-  // Ctrl+Z undoes what the notice says, as its Undo button does.
+  // Ctrl+Z undoes the last change, as the notice's Undo button does, even
+  // once the notice is gone, and pressing it again goes further back.
+  // Ctrl+Y or Ctrl+Shift+Z does the last change undone again, as Redo does.
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return;
-      if (event.key.toLowerCase() !== "z" || typing(event.target) || !notice?.undo) return;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || typing(event.target)) return;
       if (event.target instanceof Element && event.target.closest("dialog")) return;
-      event.preventDefault();
-      void undo(notice);
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey && history.done.length > 0) {
+        event.preventDefault();
+        void undo();
+      } else if ((key === "y" || (key === "z" && event.shiftKey)) && history.undone.length > 0) {
+        event.preventDefault();
+        void redo();
+      }
     };
     document.addEventListener("keydown", keys);
     return () => document.removeEventListener("keydown", keys);
-  }, [notice]);
+  }, []);
 
+  /** Shows a notice, and keeps a change that can be undone in the history. */
   function notify(next: Notice | null) {
+    if (next?.undo) {
+      history.done = [...history.done, next].slice(-HISTORY_SIZE);
+      history.undone = [];
+    }
+    show(next);
+  }
+
+  function show(next: Notice | null) {
     clearTimeout(noticeTimer.current);
     setNotice(next);
     if (next && !next.problem) noticeTimer.current = window.setTimeout(() => setNotice(null), NOTICE_MS);
   }
 
-  async function undo(done: Notice) {
-    notify(null);
+  /** Undoes the last change, then says what it undid, with Redo if it can be
+   * done again. Since it might be a change from a while ago, the notice
+   * names it. */
+  async function undo() {
+    const change = history.done.at(-1);
+    if (!change || undoing) return;
+    undoing = true;
+    history.done = history.done.slice(0, -1);
+    show(null);
     try {
-      await done.undo!();
+      await change.undo!();
+      // A change that can't be done again stops Redo going past it.
+      history.undone = change.redo ? [...history.undone, change] : [];
+      show({
+        message: change.undone ?? t("drive.undoneChange", { change: change.message }),
+        again: change.redo ? change : undefined,
+      });
     } catch (failure) {
-      notify({ message: (failure as Error).message, problem: true });
+      show({ message: (failure as Error).message, problem: true });
     }
+    undoing = false;
+    announceChange();
+  }
+
+  /** Does the last change undone again, and shows its notice again, with
+   * Undo. */
+  async function redo() {
+    const change = history.undone.at(-1);
+    if (!change || undoing) return;
+    undoing = true;
+    history.undone = history.undone.slice(0, -1);
+    show(null);
+    try {
+      await change.redo!();
+      history.done = [...history.done, change].slice(-HISTORY_SIZE);
+      show(change);
+    } catch (failure) {
+      show({ message: (failure as Error).message, problem: true });
+    }
+    undoing = false;
     announceChange();
   }
 
@@ -691,7 +766,14 @@ export function DriveLayout({
           onChange={(event) => chosen(event, true)}
         />
         <div class="notice-area" role="status">
-          {notice && !notice.problem && <NoticeBar notice={notice} onUndo={() => undo(notice)} onClose={() => notify(null)} />}
+          {notice && !notice.problem && (
+            <NoticeBar
+              notice={notice}
+              onUndo={undo}
+              onRedo={redo}
+              onClose={() => notify(null)}
+            />
+          )}
         </div>
         <div class="notice-area" role="alert">
           {notice?.problem && <NoticeBar notice={notice} onClose={() => notify(null)} />}
@@ -811,13 +893,28 @@ function Place({
   );
 }
 
-function NoticeBar({ notice, onUndo, onClose }: { notice: Notice; onUndo?: () => void; onClose: () => void }) {
+function NoticeBar({
+  notice,
+  onUndo,
+  onRedo,
+  onClose,
+}: {
+  notice: Notice;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  onClose: () => void;
+}) {
   return (
     <div class={notice.problem ? "notice problem" : "notice"}>
       <span>{notice.message}</span>
       {notice.undo && onUndo && (
         <button type="button" class="link notice-undo" onClick={onUndo}>
           {t("drive.undo")}
+        </button>
+      )}
+      {notice.again?.redo && onRedo && (
+        <button type="button" class="link notice-undo" onClick={onRedo}>
+          {t("drive.redo")}
         </button>
       )}
       <button type="button" class="icon-button" aria-label={t("drive.closeNotice")} onClick={onClose}>

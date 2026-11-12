@@ -100,8 +100,9 @@ export function useItemActions({
 }): ItemActions {
   const [open, setOpen] = useState<Open | null>(null);
 
-  function done(message: string, undo?: () => Promise<void>) {
-    notify({ message, undo });
+  /** Says what changed, with how to undo it and do it again. */
+  function done(message: string, change?: Pick<Notice, "undo" | "redo" | "undone">) {
+    notify({ message, ...change });
     announceChange();
   }
 
@@ -120,9 +121,15 @@ export function useItemActions({
         done(naming(chosen, "drive.trashedSharedOne", "drive.trashedSharedMany"));
         return;
       }
-      done(naming(chosen, "drive.trashedOne", "drive.trashedMany"), async () => {
-        for (const item of chosen) await api("POST", `/api/drive/items/${item.id}/restore`);
-        notify({ message: naming(chosen, "drive.restoredOne", "drive.restoredMany") });
+      done(naming(chosen, "drive.trashedOne", "drive.trashedMany"), {
+        async undo() {
+          for (const item of chosen) await api("POST", `/api/drive/items/${item.id}/restore`);
+        },
+        async redo() {
+          for (const item of chosen) await api("DELETE", `/api/drive/items/${item.id}`);
+          trashed?.(chosen);
+        },
+        undone: naming(chosen, "drive.restoredOne", "drive.restoredMany"),
       });
     } catch (failure) {
       failed(failure);
@@ -269,8 +276,9 @@ export function useItemActions({
           const { id, name: before } = open.item;
           await api("PATCH", `/api/drive/items/${id}`, { name });
           setOpen(null);
-          done(t("drive.renamed", { name }), async () => {
-            await api("PATCH", `/api/drive/items/${id}`, { name: before });
+          done(t("drive.renamed", { name }), {
+            undo: () => api("PATCH", `/api/drive/items/${id}`, { name: before }),
+            redo: () => api("PATCH", `/api/drive/items/${id}`, { name }),
           });
         }}
         onClose={close}
@@ -284,8 +292,13 @@ export function useItemActions({
           setOpen(null);
           // Each goes back to the folder it came from.
           const moved = open.items.filter((item) => item.parent !== id);
-          done(naming(open.items, "drive.movedOne", "drive.movedMany", to), async () => {
-            for (const item of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: item.parent });
+          done(naming(open.items, "drive.movedOne", "drive.movedMany", to), {
+            async undo() {
+              for (const item of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: item.parent });
+            },
+            async redo() {
+              for (const item of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: id });
+            },
           });
         }}
         onClose={close}

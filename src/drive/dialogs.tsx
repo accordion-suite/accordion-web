@@ -627,6 +627,7 @@ const SHORTCUTS: readonly [MessageKey, readonly [Keys, MessageKey][]][] = [
       ["/", "shortcuts.search"],
       [{ or: ["?", "Ctrl+/"] }, "shortcuts.help"],
       ["Ctrl+Z", "shortcuts.undo"],
+      [{ or: ["Ctrl+Y", "Ctrl+Shift+Z"] }, "shortcuts.redo"],
       ["Alt+↑", "shortcuts.up"],
     ],
   ],

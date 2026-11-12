@@ -124,6 +124,9 @@ async function moveInto(
       async undo() {
         for (const item of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: item.parent });
       },
+      async redo() {
+        for (const item of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: folder.id });
+      },
     });
   } catch (failure) {
     // Such as a folder dropped into one of its own folders.

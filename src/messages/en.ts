@@ -207,6 +207,8 @@ export const en = {
   "drive.restoredOne": "Put {name} back.",
   "drive.restoredMany": { one: "Put {count} item back.", other: "Put {count} items back." },
   "drive.undo": "Undo",
+  "drive.redo": "Redo",
+  "drive.undoneChange": "Undone: {change}",
 
   "viewer.position": "{position} of {count}",
   "viewer.previous": "Previous",
@@ -530,6 +532,7 @@ export const en = {
   "shortcuts.search": "Search Drive",
   "shortcuts.help": "Show these shortcuts",
   "shortcuts.undo": "Undo the last change",
+  "shortcuts.redo": "Redo the change you undid",
   "shortcuts.up": "Go to the folder this one is in",
   "shortcuts.creating": "Adding files and folders",
   "shortcuts.newMenu": "Open the New menu",
