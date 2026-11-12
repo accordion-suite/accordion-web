@@ -1,13 +1,14 @@
 // The row of filter chips above a list, as in Google Drive. Each chip opens
 // a menu of choices and shows the one that's chosen.
 
+import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 
 import { type MessageKey, t } from "../i18n.ts";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
 import { navigate, useQuery } from "../shell/router.ts";
 import { FILTER_NAMES, type Filters, ownedBy, owners, sharedWith, sharees } from "./filters.ts";
-import { CheckIcon, DropdownIcon } from "./icons.tsx";
+import { CheckIcon, DropdownIcon, ItemIcon } from "./icons.tsx";
 import { MODIFIED } from "./search.ts";
 import type { Item } from "./item.ts";
 
@@ -28,6 +29,10 @@ export const TYPES: readonly [string, string][] = [
   ["designs", "search.designs"],
 ];
 
+/** A type filter choice's icon, the one its items have in a list. */
+export function typeIcon(type: string): ComponentChildren {
+  return <ItemIcon item={{ kind: type === "folders" ? "folder" : "file", name: "", type }} />;
+}
 
 /** The filters in the page's address. */
 export function useFilters(): Filters {
@@ -101,6 +106,7 @@ export function FilterBar({
         choices={named(TYPES)}
         chosen={filters.type}
         any={t("search.anyType")}
+        icon={typeIcon}
         onChoose={(value) => navigate(withFilter("type", value))}
       />
       {people.length > 0 && (
@@ -151,12 +157,15 @@ export function Filter({
   choices,
   chosen,
   any,
+  icon,
   onChoose,
 }: {
   label: string;
   choices: readonly [string, string][];
   chosen: string;
   any: string;
+  /** Each choice's icon in the menu, if the choices have them. */
+  icon?: (value: string) => ComponentChildren;
   onChoose: (value: string) => void;
 }) {
   const [menu, setMenu] = useState<{ place: MenuPlace; byKeyboard: boolean } | null>(null);
@@ -178,10 +187,12 @@ export function Filter({
         <Menu
           label={label}
           entries={[
-            { label: any, checked: !current, onSelect: () => onChoose("") },
+            // An empty space keeps "any" in line with the choices' names.
+            { label: any, checked: !current, icon: icon && <span class="icon" />, onSelect: () => onChoose("") },
             ...choices.map(([value, name]) => ({
               label: name,
               checked: value === chosen,
+              icon: icon?.(value),
               onSelect: () => onChoose(value),
             })),
           ]}

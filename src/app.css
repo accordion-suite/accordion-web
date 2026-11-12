@@ -2210,12 +2210,24 @@ dialog label {
   color: var(--muted);
 }
 
+/* Item icons, such as the type filter's, are the size of other menu icons,
+   as in the sidebar. */
+.menu-icon .item-icon {
+  width: 20px;
+  height: 20px;
+}
+
 /* A chosen option shows a check before its name. */
 .menu [role="menuitemradio"]::before {
   content: "";
   flex: none;
   width: 20px;
   height: 20px;
+}
+
+/* A choice with an icon shows the check in its place. */
+.menu [role="menuitemradio"].with-icon:not([aria-checked="true"])::before {
+  display: none;
 }
 
 .menu [role="menuitemradio"][aria-checked="true"]::before {

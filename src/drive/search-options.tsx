@@ -12,7 +12,7 @@ import { formatCalendarDay, t } from "../i18n.ts";
 import { Dialog } from "../shell/dialog.tsx";
 import { navigate } from "../shell/router.ts";
 import { ChooseFolderDialog, type Person } from "./dialogs.tsx";
-import { Filter, named, TYPES } from "./filter-bar.tsx";
+import { Filter, named, TYPES, typeIcon } from "./filter-bar.tsx";
 import { CheckIcon, CloseIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
 import { anyFilter, MODIFIED, NO_FILTERS, type SearchFilters, searchPath } from "./search.ts";
@@ -299,6 +299,7 @@ export function SearchChips({ filters }: { filters: SearchFilters }) {
         choices={named(TYPES)}
         chosen={filters.type}
         any={t("search.anyType")}
+        icon={typeIcon}
         onChoose={(type) => change({ type })}
       />
       <Filter

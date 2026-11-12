@@ -15,7 +15,8 @@ export interface MenuAction {
   /** For a choice among options, such as a search filter: whether it's the
    * one chosen. */
   checked?: boolean;
-  /** A symbol before the label, such as an icon. */
+  /** A symbol before the label, such as an icon. A choice's icon takes the
+   * check's place, and the check replaces it on the one chosen. */
   icon?: ComponentChildren;
 }
 
@@ -154,6 +155,7 @@ export function Menu({
             type="button"
             role={entry.checked === undefined ? "menuitem" : "menuitemradio"}
             aria-checked={entry.checked}
+            class={entry.checked !== undefined && entry.icon !== undefined ? "with-icon" : undefined}
             tabIndex={-1}
             aria-keyshortcuts={entry.shortcut}
             onPointerMove={(event) => {
@@ -165,7 +167,7 @@ export function Menu({
               entry.onSelect();
             }}
           >
-            {entry.icon !== undefined && (
+            {entry.icon !== undefined && !entry.checked && (
               <span class="menu-icon" aria-hidden="true">
                 {entry.icon}
               </span>
