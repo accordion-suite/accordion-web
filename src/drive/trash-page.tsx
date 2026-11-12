@@ -63,42 +63,50 @@ export function TrashPage() {
   }
 
   const only = confirming?.kind === "items" && confirming.items.length === 1 ? confirming.items[0]! : null;
+  // How long the trash keeps things, beside the button that deletes them
+  // all now. It goes under the filters, as the storage page's summary does,
+  // and shows while the list loads too.
+  const summary = (retention || (items && items.length > 0)) && (
+    <div class="banner action-banner">
+      {retention && (
+        <p>
+          {retention === "unknown"
+            ? t("trash.explainUnknown")
+            : t("trash.explain", { time: keptFor(retention.trash_days) })}
+        </p>
+      )}
+      {items && items.length > 0 && (
+        <button type="button" class="secondary" onClick={() => setConfirming({ kind: "all" })}>
+          {t("trash.emptyTrash")}
+        </button>
+      )}
+    </div>
+  );
   return (
     <main class="page">
       <div class="page-head">
         <PageTitle>{t("trash.title")}</PageTitle>
         <PageTools />
       </div>
-      {/* How long the trash keeps things, beside the button that deletes
-          them all now. */}
-      {(retention || (items && items.length > 0)) && (
-        <div class="banner action-banner">
-          {retention && (
-            <p>
-              {retention === "unknown"
-                ? t("trash.explainUnknown")
-                : t("trash.explain", { time: keptFor(retention.trash_days) })}
-            </p>
-          )}
-          {items && items.length > 0 && (
-            <button type="button" class="secondary" onClick={() => setConfirming({ kind: "all" })}>
-              {t("trash.emptyTrash")}
-            </button>
-          )}
-        </div>
-      )}
       {error ? (
-        <p class="error" role="alert">
-          {error}
-        </p>
+        <>
+          {summary}
+          <p class="error" role="alert">
+            {error}
+          </p>
+        </>
       ) : !items ? (
-        <p class="loading">{t("shell.loading")}</p>
+        <>
+          {summary}
+          <p class="loading">{t("shell.loading")}</p>
+        </>
       ) : (
         <ItemList
           items={items}
           label={t("trash.title")}
           empty={t("trash.empty")}
           trash={{ restore, remove: (chosen) => setConfirming({ kind: "items", items: chosen }) }}
+          summary={summary}
         />
       )}
 
