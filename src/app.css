@@ -480,6 +480,9 @@ main.narrow {
   font-size: 1rem;
   background: transparent;
   border: none;
+  /* With no padding, rounded corners would clip the caret at the start of
+     an empty box, making it look shorter than once there's text. */
+  border-radius: 0;
 }
 
 .search input:focus-visible {
