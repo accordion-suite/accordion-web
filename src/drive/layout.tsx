@@ -27,7 +27,7 @@ import { createContext } from "preact";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 
 import { api, send, type Session } from "../api.ts";
-import { formatSize, t } from "../i18n.ts";
+import { t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
 import { followLink, navigate, usePath, useQueryString } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
@@ -67,6 +67,7 @@ import type { Item } from "./item.ts";
 import { dropProps } from "./move.ts";
 import { SearchBox } from "./search-box.tsx";
 import { announceChange, focusNextList, useChanges, useDetailsOpen, useViewMode } from "./store.ts";
+import { StorageBar, usedText } from "./storage-meter.tsx";
 import { goToUploads } from "./upload-panel.tsx";
 import { finished } from "./uploads.ts";
 
@@ -1072,8 +1073,7 @@ export interface Usage {
 }
 
 /** Storage, the last place in the list, as in Google Drive, with how much
- * space the reader's files take under it, and of how much, if there's a
- * limit. */
+ * space the reader's files take under it, and of how much. */
 function StoragePlace({ current }: { current: boolean }) {
   const [usage, setUsage] = useState<Usage | null>(null);
   const load = () => {
@@ -1081,7 +1081,6 @@ function StoragePlace({ current }: { current: boolean }) {
   };
   useEffect(load, []);
   useChanges(load);
-  const used = usage && formatSize(usage.used);
   return (
     <li>
       <div class="place-row">
@@ -1090,20 +1089,10 @@ function StoragePlace({ current }: { current: boolean }) {
           {t("drive.storage")}
         </a>
       </div>
-      {usage && used && (
+      {usage && (
         <div class="storage-meter">
-          {usage.quota !== null && (
-            <progress
-              max={usage.quota}
-              value={Math.min(usage.used, usage.quota)}
-              aria-label={t("drive.storageUsed", { used, quota: formatSize(usage.quota) })}
-            />
-          )}
-          <span class="storage-used">
-            {usage.quota === null
-              ? t("drive.storageUsedNoLimit", { used })
-              : t("drive.storageUsed", { used, quota: formatSize(usage.quota) })}
-          </span>
+          <StorageBar usage={usage} />
+          <span class="storage-used">{usedText(usage.used, usage.quota)}</span>
         </div>
       )}
     </li>

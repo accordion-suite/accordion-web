@@ -775,10 +775,29 @@ dialog.search-options .dialog-close {
   color: var(--muted);
 }
 
-.storage-meter progress {
-  width: 100%;
+/* How full someone's space is. The plain bar fills with the accent color,
+   and the Storage page's has a part for each type of file. */
+.storage-bar {
+  display: flex;
+  overflow: hidden;
   height: 4px;
-  accent-color: var(--accent);
+  background: var(--border);
+  border-radius: 999px;
+}
+
+.storage-part {
+  flex: none;
+  background: var(--accent);
+}
+
+.storage-bar.detailed {
+  height: 12px;
+  gap: 2px;
+}
+
+/* A sliver of a type still shows. */
+.storage-bar.detailed .storage-part {
+  min-width: 3px;
 }
 
 .storage-used {
@@ -3589,13 +3608,61 @@ dialog.shortcuts kbd {
   overflow-wrap: anywhere;
 }
 
-/* The storage page's summary above its list. */
+/* The storage page's summary above its list: what's used, the bar, and
+   each type of file with its size and share. */
+/* The bar takes the page's width, and the list of types stays narrow
+   enough to read across. */
 .storage-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin: 0 0 16px;
 }
 
-.storage-summary progress {
-  width: min(420px, 100%);
+.storage-total {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.storage-legend {
+  display: grid;
+  max-width: 560px;
+  grid-template-columns: 20px 1fr auto auto;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each row's parts line up in the list's columns. */
+.storage-legend li {
+  display: contents;
+}
+
+.storage-legend .item-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.storage-legend-size,
+.storage-legend-share {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.storage-legend-share {
+  min-width: 3.5em;
+  color: var(--muted);
+}
+
+.storage-swatch {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 3px;
+  background: var(--border);
+  border-radius: 4px;
 }
 
 /* Links in the share dialog (decision 22). */

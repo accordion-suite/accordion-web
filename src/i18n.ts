@@ -47,6 +47,15 @@ export function formatNumber(value: number): string {
   return new Intl.NumberFormat(locale).format(value);
 }
 
+/** A share of something, such as "12%", to a tenth of a percent when it's
+ * small. */
+export function formatPercent(share: number): string {
+  return new Intl.NumberFormat(locale, {
+    style: "percent",
+    maximumFractionDigits: share > 0 && share < 0.1 ? 1 : 0,
+  }).format(share);
+}
+
 const SIZE_UNITS = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"] as const;
 
 /** A file size, such as "1.5 MB". Units are 1,000 of the one before, as on

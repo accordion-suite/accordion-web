@@ -43,8 +43,15 @@ export function HomePage() {
         <PageTitle>{t("home.title")}</PageTitle>
         <PageTools />
       </div>
-      <h2 class="list-title">{t("home.recent")}</h2>
-      <FoundList items={items} error={error} label={t("home.recent")} empty={t("home.empty")} />
+      {/* Home only lists files, so the grid's heading over them says what
+          they are, in place of a heading over the whole list. */}
+      <FoundList
+        items={items}
+        error={error}
+        label={t("home.recent")}
+        empty={t("home.empty")}
+        filesTitle={t("home.recent")}
+      />
     </main>
   );
 }
@@ -59,6 +66,8 @@ export function FoundList({
   shares = false,
   sortScope,
   toolbar,
+  filesTitle,
+  summary,
 }: {
   items: Found[] | null;
   error: string;
@@ -72,15 +81,30 @@ export function FoundList({
   /** Filters in place of the list's own, for a page whose server applies
    * them. */
   toolbar?: ComponentChildren;
+  /** The grid's heading over the files, if not "Files". */
+  filesTitle?: string;
+  /** Something between the filters and the items. It shows while the
+   * items load, and if they can't. */
+  summary?: ComponentChildren;
 }) {
   if (error) {
     return (
-      <p class="error" role="alert">
-        {error}
-      </p>
+      <>
+        {summary}
+        <p class="error" role="alert">
+          {error}
+        </p>
+      </>
     );
   }
-  if (!items) return <p class="loading">{t("shell.loading")}</p>;
+  if (!items) {
+    return (
+      <>
+        {summary}
+        <p class="loading">{t("shell.loading")}</p>
+      </>
+    );
+  }
   // The list says when it's empty, under its filters, so a filter that
   // matches nothing can be changed.
   return (
@@ -93,6 +117,8 @@ export function FoundList({
       empty={empty}
       sortScope={sortScope}
       toolbar={toolbar}
+      filesTitle={filesTitle}
+      summary={summary}
     />
   );
 }

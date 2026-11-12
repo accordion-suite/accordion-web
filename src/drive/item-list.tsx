@@ -133,6 +133,8 @@ export function ItemList({
   sortScope,
   toolbar,
   trash,
+  filesTitle,
+  summary,
 }: {
   items: readonly (Item | Found)[];
   /** Names the list for screen readers, such as the folder's name. */
@@ -155,6 +157,12 @@ export function ItemList({
   /** For the trash: what restoring and deleting for good do. The list shows
    * when each item was deleted, in place of when it changed. */
   trash?: TrashActions;
+  /** The grid's heading over the files, if not "Files", such as "Recent
+   * files" on Home, which only lists files. */
+  filesTitle?: string;
+  /** Something between the filters and the items, such as the storage
+   * page's summary. */
+  summary?: ComponentChildren;
 }) {
   const settings = useDriveSettings();
   const thumbnails = settings?.thumbnails ?? true;
@@ -815,6 +823,7 @@ export function ItemList({
           </div>
         )}
       </div>
+      {summary}
 
       {items.length === 0 ? (
         <div class="empty">
@@ -898,7 +907,7 @@ export function ItemList({
           )}
           {files.length > 0 && (
             <section>
-              <h2 class="section-title">{t("drive.files")}</h2>
+              <h2 class="section-title">{filesTitle ?? t("drive.files")}</h2>
               <ul class="cards">
                 {files.map((item) => (
                   <li
