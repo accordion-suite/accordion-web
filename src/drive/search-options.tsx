@@ -12,7 +12,7 @@ import { formatCalendarDay, t } from "../i18n.ts";
 import { Dialog } from "../shell/dialog.tsx";
 import { navigate } from "../shell/router.ts";
 import { ChooseFolderDialog, type Person } from "./dialogs.tsx";
-import { Filter, named, TYPES, typeIcon } from "./filter-bar.tsx";
+import { Filter, named, TYPES, typeIcon, usePeople } from "./filter-bar.tsx";
 import { CheckIcon, CloseIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
 import { anyFilter, MODIFIED, NO_FILTERS, type SearchFilters, searchPath } from "./search.ts";
@@ -25,23 +25,6 @@ const CHOOSE = "choose";
  * shared. */
 function isFolder(place: string): boolean {
   return place !== "" && place !== "my-drive" && place !== "shared";
-}
-
-/** Everyone else on the server, for the owner and sharing filters. */
-function usePeople(): Person[] {
-  const [people, setPeople] = useState<Person[]>([]);
-  useEffect(() => {
-    let current = true;
-    api<Person[]>("GET", "/api/directory").then(
-      (all) => current && setPeople(all.filter((person) => !person.you)),
-      // Without the list, the filters offer only the reader's own choices.
-      () => {},
-    );
-    return () => {
-      current = false;
-    };
-  }, []);
-  return people;
 }
 
 /** The name of the folder a search looks in, if it looks in one. */

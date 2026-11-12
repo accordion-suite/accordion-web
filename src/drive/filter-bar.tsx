@@ -2,15 +2,28 @@
 // a menu of choices and shows the one that's chosen.
 
 import type { ComponentChildren } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
+
+import { api } from "../api.ts";
 
 import { type MessageKey, t } from "../i18n.ts";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
 import { navigate, useQuery } from "../shell/router.ts";
-import { FILTER_NAMES, type Filters, ownedBy, owners, sharedWith, sharees } from "./filters.ts";
-import { CheckIcon, DropdownIcon, ItemIcon } from "./icons.tsx";
+import type { Person } from "./dialogs.tsx";
+import {
+  FILTER_NAMES,
+  type Filters,
+  ownedBy,
+  owners,
+  type PersonIndex,
+  sharedWith,
+  sharees,
+  withPerson,
+} from "./filters.ts";
+import { CheckIcon, DriveIcon, DropdownIcon, ItemIcon, SharedOutIcon } from "./icons.tsx";
 import { MODIFIED } from "./search.ts";
-import type { Item } from "./item.ts";
+import type { Item, SharedOut } from "./item.ts";
+import { useChanges } from "./store.ts";
 
 /** The type filter's choices, with their messages. */
 export const TYPES: readonly [string, string][] = [
@@ -32,6 +45,58 @@ export const TYPES: readonly [string, string][] = [
 /** A type filter choice's icon, the one its items have in a list. */
 export function typeIcon(type: string): ComponentChildren {
   return <ItemIcon item={{ kind: type === "folders" ? "folder" : "file", name: "", type }} />;
+}
+
+/** Everyone else on the server, for the people filters. */
+export function usePeople(): Person[] {
+  const [people, setPeople] = useState<Person[]>([]);
+  useEffect(() => {
+    let current = true;
+    api<Person[]>("GET", "/api/directory").then(
+      (all) => current && setPeople(all.filter((person) => !person.you)),
+      // Without the list, the filters offer only the reader's own choices.
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+  }, []);
+  return people;
+}
+
+/** For the people filter set to someone: their name, and which of the
+ * reader's items are shared with them. Null while it loads, or when no one
+ * is chosen. */
+export function usePersonIndex(filter: string, people: readonly Person[]): PersonIndex | null {
+  const username = filter.startsWith("person:") ? filter.slice(7) : "";
+  const name = people.find((person) => person.username === username)?.display_name ?? null;
+  const [shared, setShared] = useState<{ username: string; ids: ReadonlySet<string> } | null>(null);
+  const [version, setVersion] = useState(0);
+  useChanges(() => setVersion((count) => count + 1));
+  useEffect(() => {
+    if (!username) return;
+    let current = true;
+    api<SharedOut[]>("GET", "/api/drive/shared-by-me").then(
+      (items) => {
+        const ids = items.filter((item) => item.shared_with.some((share) => share.username === username));
+        if (current) setShared({ username, ids: new Set(ids.map((item) => item.id)) });
+      },
+      // Without the list, the filter shows only what they own.
+      () => current && setShared({ username, ids: new Set() }),
+    );
+    return () => {
+      current = false;
+    };
+  }, [username, version]);
+  // The same object until something in it changes, since the list filters
+  // again whenever it does, and its effects run on what it shows.
+  const ready = username && name !== null && shared?.username === username;
+  return useMemo(() => (ready ? { username, name, shared: shared.ids } : null), [ready, username, name, shared]);
+}
+
+/** A person's first letter in a circle, as the account button shows it. */
+function Initial({ name }: { name: string }) {
+  return <span class="avatar tiny">{[...name.trim()][0]?.toUpperCase() ?? "?"}</span>;
 }
 
 /** The filters in the page's address. */
@@ -66,6 +131,7 @@ export function clearFilters(): void {
 
 export function FilterBar({
   items,
+  people: everyone,
   filters,
   source,
   mine,
@@ -74,6 +140,8 @@ export function FilterBar({
 }: {
   /** Every item on the page, before filtering, for the people to offer. */
   items: readonly Item[];
+  /** Everyone else on the server, from {@link usePeople}. */
+  people: readonly Person[];
   filters: Filters;
   /** Whether to offer Source, for pages with both the reader's items and
    * other people's. */
@@ -87,17 +155,37 @@ export function FilterBar({
    * deleted. */
   deleted?: boolean;
 }) {
-  const people: [string, string][] = shares
-    ? sharees(items).map(([username, name]): [string, string] => [sharedWith(username), t("filters.sharedWith", { name })])
-    : [
-    ...(mine
+  // Everyone on the server, by name, and anyone on the page who isn't,
+  // such as someone whose account was removed.
+  const names = new Set(everyone.map((person) => person.display_name));
+  const usernames = new Set(everyone.map((person) => person.username));
+  const people: [string, string][] = [
+    ...(mine && !shares
       ? ([
           ["me", t("filters.ownedByMe")],
           ["shared", t("filters.sharedByMe")],
         ] as [string, string][])
       : []),
-    ...owners(items).map((name): [string, string] => [ownedBy(name), t("filters.ownedBy", { name })]),
+    ...everyone.map((person): [string, string] => [withPerson(person.username), person.display_name]),
+    ...(shares
+      ? sharees(items)
+          .filter(([username]) => !usernames.has(username))
+          .map(([username, name]): [string, string] => [sharedWith(username), t("filters.sharedWith", { name })])
+      : owners(items)
+          .filter((name) => !names.has(name))
+          .map((name): [string, string] => [ownedBy(name), t("filters.ownedBy", { name })])),
   ];
+  /** Each choice's icon: the person's initial, or for the reader's own
+   * choices, the icons their pages have in the sidebar. */
+  const personIcon = (value: string) => {
+    if (value === "me") return <DriveIcon />;
+    if (value === "shared") return <SharedOutIcon />;
+    const person = everyone.find((each) => withPerson(each.username) === value);
+    const name = value.startsWith("by:")
+      ? value.slice(3)
+      : sharees(items).find(([username]) => sharedWith(username) === value)?.[1];
+    return <Initial name={person?.display_name ?? name ?? ""} />;
+  };
   const any = Object.values(filters).some(Boolean);
   return (
     <div class="filters" role="group" aria-label={t("search.filters")}>
@@ -115,6 +203,7 @@ export function FilterBar({
           choices={people}
           chosen={filters.people}
           any={t("filters.anyone")}
+          icon={personIcon}
           onChoose={(value) => navigate(withFilter("people", value))}
         />
       )}

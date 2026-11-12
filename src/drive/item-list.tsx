@@ -54,7 +54,7 @@ import { typing, useDrive } from "./layout.tsx";
 import { useDriveSettings } from "./preferences.ts";
 import { dropProps, endDrag, naming, startDrag } from "./move.ts";
 import { nextSort, type SortKey, sortItems } from "./sort.ts";
-import { clearFilters, FilterBar, useFilters } from "./filter-bar.tsx";
+import { clearFilters, FilterBar, useFilters, usePeople, usePersonIndex } from "./filter-bar.tsx";
 import { matches } from "./filters.ts";
 import { neighbor, range, useSelectionBand } from "./selection.ts";
 import {
@@ -161,11 +161,16 @@ export function ItemList({
   const clickAction = settings?.click ?? "select";
   const drive = useDrive();
   const filters = useFilters();
+  const people = usePeople();
+  const person = usePersonIndex(filters.people, people);
   // The same list until the items or the filters change, since effects
   // below run when it does.
   const items = useMemo(
-    () => (toolbar ? all : all.filter((item) => matches(item, filters, new Date(), trash ? "deleted" : "modified"))),
-    [all, filters.type, filters.people, filters.modified, filters.source],
+    () =>
+      toolbar
+        ? all
+        : all.filter((item) => matches(item, filters, new Date(), trash ? "deleted" : "modified", person)),
+    [all, filters.type, filters.people, filters.modified, filters.source, person],
   );
   const [mode] = useViewMode();
   const [sort, setSort] = useSort(sortScope ?? (trash ? "trash" : showLocation ? "found" : "folder"));
@@ -747,6 +752,7 @@ export function ItemList({
         {chosenItems.length === 0 ? (
           (toolbar ?? <FilterBar
             items={all}
+            people={people}
             filters={filters}
             // The storage page lists only the reader's own files.
             source={showLocation && !owners && !shares && sortScope !== "storage"}

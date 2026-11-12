@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { type Filters, matches, ownedBy, owners, sharedWith, sharees } from "./filters.ts";
+import { type Filters, matches, ownedBy, owners, sharedWith, sharees, withPerson } from "./filters.ts";
 import type { Item } from "./item.ts";
 import { setTypeList } from "./types.ts";
 
@@ -82,6 +82,19 @@ test("Shared by me filters by who an item is shared with", () => {
   const filters = { type: "", people: sharedWith("kim"), modified: "", source: "" };
   assert.deepEqual(items.filter((one) => matches(one, filters)).map((one) => one.name), ["b.txt"]);
   assert.deepEqual(sharees(items), [["kim", "Kim Lee"], ["sam", "Sam Rivera"]]);
+});
+
+test("a person keeps what they own and what the reader shared with them", () => {
+  const filters = { ...NONE, people: withPerson("sam") };
+  const sam = { username: "sam", name: "Sam Rivera", shared: new Set([PHOTO.id]) };
+  assert.deepEqual(
+    ALL.filter((one) => matches(one, filters, NOW, "modified", sam)).map((one) => one.name),
+    ["Beach.jpg", "Budget.xlsx"],
+  );
+  // Until who they are has loaded, nothing matches, rather than everything.
+  assert.deepEqual(kept({ people: withPerson("sam") }), []);
+  const kim = { username: "kim", name: "Kim Lee", shared: new Set<string>() };
+  assert.deepEqual(ALL.filter((one) => matches(one, filters, NOW, "modified", kim)), []);
 });
 
 test("in the trash, the date is when an item was deleted", () => {

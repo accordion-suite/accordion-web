@@ -19,6 +19,21 @@ export interface Filters {
 export const FILTER_NAMES = ["type", "people", "modified", "source"] as const;
 
 
+/** The people filter's value for someone: the items they own, and the
+ * reader's items shared with them. */
+export function withPerson(username: string): string {
+  return `person:${username}`;
+}
+
+/** What the people filter needs to know about the person chosen. */
+export interface PersonIndex {
+  username: string;
+  /** Their name, as items they own give it. */
+  name: string;
+  /** The reader's items shared with them. */
+  shared: ReadonlySet<string>;
+}
+
 /** The people filter's value for someone else's items. */
 export function ownedBy(name: string): string {
   return `by:${name}`;
@@ -31,17 +46,25 @@ export function sharedWith(username: string): string {
 }
 
 /** Whether `item` passes every filter that's set. In the trash, the date
- * filter is for when an item was deleted. */
+ * filter is for when an item was deleted. A person chosen in the people
+ * filter needs `person`, and nothing matches until it's there. */
 export function matches(
   item: Item | Found,
   filters: Filters,
   now = new Date(),
   date: "modified" | "deleted" = "modified",
+  person: PersonIndex | null = null,
 ): boolean {
   if (filters.type && kindOf(item) !== TYPE_KINDS[filters.type]) return false;
   if (filters.people === "me" && item.owner !== null) return false;
   if (filters.people === "shared" && !item.shared) return false;
   if (filters.people.startsWith("by:") && item.owner !== filters.people.slice(3)) return false;
+  if (filters.people.startsWith("person:")) {
+    if (person?.username !== filters.people.slice(7)) return false;
+    const sharedOut =
+      "shared_with" in item && (item as SharedOut).shared_with.some((share) => share.username === person.username);
+    if (item.owner !== person.name && !person.shared.has(item.id) && !sharedOut) return false;
+  }
   if (filters.people.startsWith("with:")) {
     const username = filters.people.slice(5);
     if (!("shared_with" in item) || !(item as SharedOut).shared_with.some((share) => share.username === username)) {
