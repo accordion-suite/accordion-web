@@ -3249,6 +3249,21 @@ label.choice {
   font-weight: normal;
 }
 
+/* A storage limit's amount and unit, side by side under its choice. */
+.limit-amount {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 8px 28px;
+}
+
+.limit-amount input {
+  width: 8em;
+}
+
+.limit-amount select {
+  width: auto;
+}
+
 label.choice input {
   flex: none;
   width: 18px;

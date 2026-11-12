@@ -167,6 +167,19 @@ export const settingsEn = {
   "people.exposedHint":
     "Accordion also deletes their app passwords, in case someone else made one. Each of their devices then needs a new app password.",
   "people.renameTitle": "Rename {name}",
+  "people.setLimit": "Set storage limit",
+  "people.limitTitle": "Storage limit for {name}",
+  "people.limitBody":
+    "Choose how much space {name}'s files can take, including older versions and the trash. They use {used} now.",
+  "people.noLimit": "No limit.",
+  "people.noLimitHint": "They can use any free space on the server.",
+  "people.limitTo": "Limit to:",
+  "people.limitAmount": "Limit",
+  "people.limitUnit": "Unit",
+  "people.limitBelow":
+    "That's less than {name} uses now. Their files stay, but they can't add more until they make room.",
+  "people.saveLimit": "Save limit",
+  "people.limitInvalid": "Enter a limit of at least 0.1, such as 10 or 1.5.",
   "people.renameNameHint": "How Accordion shows them to others.",
   "people.renameUsernameHint":
     "What they sign in with. If you change it, tell them, and change it on each of their devices that uses an app password, such as File Explorer.",

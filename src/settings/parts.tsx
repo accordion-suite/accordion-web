@@ -130,6 +130,7 @@ export function FormDialog({
   title,
   submit,
   danger = false,
+  noValidate = false,
   onSubmit,
   onClose,
   children,
@@ -137,6 +138,9 @@ export function FormDialog({
   title: string;
   submit: string;
   danger?: boolean;
+  /** Skips the browser's checks, for a dialog that checks its own fields,
+   * and says what's wrong by throwing. */
+  noValidate?: boolean;
   onSubmit: () => Promise<void>;
   onClose: () => void;
   children: ComponentChildren;
@@ -146,6 +150,7 @@ export function FormDialog({
   return (
     <Dialog title={title} onClose={onClose}>
       <form
+        noValidate={noValidate}
         onSubmit={async (event) => {
           event.preventDefault();
           setBusy(true);

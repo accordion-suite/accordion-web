@@ -1,14 +1,17 @@
 // People: everyone with an account on the server. Admins add people, who
 // set their own password from a link, and reset passwords, rename, turn
-// accounts off, and delete them. Each change needs a recent sign-in.
+// accounts off, and delete them. The owner also sets how much space each
+// person's files can take. Each change needs a recent sign-in.
 
 import { useState } from "preact/hooks";
 
 import { api } from "../api.ts";
-import { formatMoment, t } from "../i18n.ts";
+import { formatMoment, formatSize, t } from "../i18n.ts";
 import { ConfirmDialog, Dialog, problemText } from "../shell/dialog.tsx";
 import { Menu, SEPARATOR, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
 import { MoreIcon } from "../drive/icons.tsx";
+import { usedText } from "../drive/storage-meter.tsx";
+import { LIMIT_UNITS, limitBytes, limitParts } from "./limits.ts";
 import { SettingsPage } from "./layout.tsx";
 import { FormDialog, LoadState, Secret, useLoad } from "./parts.tsx";
 import { usePasswordCheck } from "./password-check.tsx";
@@ -23,12 +26,15 @@ interface Person {
   state: "active" | "waiting" | "turned_off";
   password_link: { purpose: "new_account" | "reset"; expires_at: string } | null;
   can_manage: boolean;
+  /** Null if the server couldn't say. */
+  storage: { used: number; limit: number | null } | null;
 }
 
 interface People {
   people: Person[];
   you: string;
   can_add_admins: boolean;
+  can_set_storage_limits: boolean;
 }
 
 /** A link for someone to set their password. */
@@ -44,6 +50,7 @@ type Open =
   | { kind: "link"; name: string; link: Link; purpose: "new_account" | "reset"; deletedAppPasswords: boolean }
   | { kind: "reset"; person: Person }
   | { kind: "rename"; person: Person }
+  | { kind: "limit"; person: Person }
   | { kind: "admin"; person: Person }
   | { kind: "turnOff"; person: Person }
   | { kind: "delete"; person: Person };
@@ -57,7 +64,8 @@ export function PeoplePage() {
   const [checked, passwordDialog] = usePasswordCheck();
 
   /** Sends a change, asking for the password first if it's needed, and
-   * reloads the list. Returns the change's result, or null if canceled. */
+   * reloads the list. Returns the change's result, or null if canceled. A
+   * change with no reply returns undefined, so check for null. */
   async function change<T>(method: string, path: string, body?: unknown): Promise<T | null> {
     const result = await checked(() => api<T>(method, path, body));
     await people.reload();
@@ -110,6 +118,9 @@ export function PeoplePage() {
       );
     }
     all.push({ label: t("people.rename"), onSelect: () => setOpen({ kind: "rename", person }) });
+    if (data.can_set_storage_limits && person.storage) {
+      all.push({ label: t("people.setLimit"), onSelect: () => setOpen({ kind: "limit", person }) });
+    }
     all.push(SEPARATOR);
     all.push(
       person.state === "turned_off"
@@ -155,6 +166,9 @@ export function PeoplePage() {
                   <span class="hint">
                     {person.username} · {t(ROLES[person.role])}
                   </span>
+                  {person.storage && (
+                    <span class="hint">{usedText(person.storage.used, person.storage.limit)}</span>
+                  )}
                   {describe(person) && <span>{describe(person)}</span>}
                 </div>
                 {person.can_manage && (
@@ -211,7 +225,17 @@ export function PeoplePage() {
         <RenameDialog
           person={open.person}
           onRename={async (names) => {
-            if (await change("PUT", `/api/people/${open.person.id}/name`, names)) setOpen(null);
+            if ((await change("PUT", `/api/people/${open.person.id}/name`, names)) !== null) setOpen(null);
+          }}
+          onClose={() => setOpen(null)}
+        />
+      )}
+      {open?.kind === "limit" && open.person.storage && (
+        <LimitDialog
+          person={open.person}
+          storage={open.person.storage}
+          onSave={async (bytes) => {
+            if ((await change("PUT", `/api/people/${open.person.id}/storage-limit`, { bytes })) !== null) setOpen(null);
           }}
           onClose={() => setOpen(null)}
         />
@@ -426,6 +450,89 @@ function RenameDialog({
         value={username}
         onInput={(event) => setUsername(event.currentTarget.value)}
       />
+    </FormDialog>
+  );
+}
+
+/** Sets how much space someone's files can take, or lifts the limit. */
+function LimitDialog({
+  person,
+  storage,
+  onSave,
+  onClose,
+}: {
+  person: Person;
+  storage: { used: number; limit: number | null };
+  onSave: (bytes: number | null) => Promise<void>;
+  onClose: () => void;
+}) {
+  const start = limitParts(storage.limit);
+  const [limited, setLimited] = useState(storage.limit !== null);
+  const [amount, setAmount] = useState(start.amount);
+  const [unit, setUnit] = useState(start.unit);
+  const bytes = limitBytes(amount, unit);
+  const name = person.display_name;
+  return (
+    <FormDialog
+      title={t("people.limitTitle", { name })}
+      submit={t("people.saveLimit")}
+      // The browser would turn down 1.5 when the arrows step by one, so the
+      // dialog checks the amount itself.
+      noValidate
+      onSubmit={async () => {
+        if (!limited) return onSave(null);
+        if (bytes === null) throw new Error(t("people.limitInvalid"));
+        return onSave(bytes);
+      }}
+      onClose={onClose}
+    >
+      <p>{t("people.limitBody", { name, used: formatSize(storage.used) })}</p>
+      <fieldset class="choices">
+        <label class="choice">
+          <input type="radio" name="limit" checked={!limited} onChange={() => setLimited(false)} />
+          <span>
+            <strong>{t("people.noLimit")}</strong> {t("people.noLimitHint")}
+          </span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="limit" checked={limited} onChange={() => setLimited(true)} />
+          <span>
+            <strong>{t("people.limitTo")}</strong>
+          </span>
+        </label>
+        {limited && (
+          <div class="limit-amount">
+            <input
+              type="number"
+              // The arrows step by whole numbers from zero, and typing
+              // allows one decimal place, such as 1.5.
+              min="0"
+              step="1"
+              required
+              autofocus
+              aria-label={t("people.limitAmount")}
+              value={amount}
+              onInput={(event) => setAmount(event.currentTarget.value)}
+            />
+            <select
+              aria-label={t("people.limitUnit")}
+              value={unit}
+              onChange={(event) => setUnit(Number(event.currentTarget.value))}
+            >
+              {LIMIT_UNITS.map(([label], index) => (
+                <option key={label} value={index}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </fieldset>
+      {limited && bytes !== null && bytes < storage.used && (
+        <p class="hint" role="status">
+          {t("people.limitBelow", { name })}
+        </p>
+      )}
     </FormDialog>
   );
 }
