@@ -392,6 +392,7 @@ export const en = {
   "starred.empty": "Nothing's starred yet. To star a file or folder, select ⋮ next to it, then Add to Starred.",
 
   "search.label": "Search in Drive",
+  "search.clear": "Clear search",
   "search.title": "Search",
   "search.titleFor": "Results for “{words}”",
   "search.results": "Search results",

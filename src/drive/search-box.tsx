@@ -1,13 +1,14 @@
 // The search box in the top bar. It searches names and the text inside
 // files across all of the reader's Drive, and shows the results on the
 // search page, keeping any filters chosen there. Its options button opens
-// the panel with a field for each filter.
+// the panel with a field for each filter. Once something's typed, an X
+// clears it.
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import { t } from "../i18n.ts";
 import { navigate, usePath, useQuery } from "../shell/router.ts";
-import { OptionsIcon, SearchIcon } from "./icons.tsx";
+import { CloseIcon, OptionsIcon, SearchIcon } from "./icons.tsx";
 import { NO_FILTERS, readSearch, type SearchFilters, searchPath } from "./search.ts";
 import { SearchOptions } from "./search-options.tsx";
 
@@ -16,6 +17,7 @@ export function SearchBox() {
   const searched = useQuery("q") ?? "";
   const [words, setWords] = useState(searched);
   const [options, setOptions] = useState<SearchFilters | null>(null);
+  const input = useRef<HTMLInputElement>(null);
 
   // Shows the words of the search that's open, and clears on other pages.
   useEffect(() => setWords(path === "/drive/search" ? searched : ""), [path, searched]);
@@ -38,6 +40,7 @@ export function SearchBox() {
       >
         <SearchIcon />
         <input
+          ref={input}
           type="search"
           aria-label={t("search.label")}
           placeholder={t("search.label")}
@@ -45,6 +48,21 @@ export function SearchBox() {
           value={words}
           onInput={(event) => setWords(event.currentTarget.value)}
         />
+        {words && (
+          // The focus goes back to the box, ready for new words.
+          <button
+            type="button"
+            class="icon-button search-clear"
+            title={t("search.clear")}
+            aria-label={t("search.clear")}
+            onClick={() => {
+              setWords("");
+              input.current?.focus();
+            }}
+          >
+            <CloseIcon />
+          </button>
+        )}
         <button
           type="button"
           class="icon-button search-options-button"

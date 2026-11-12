@@ -486,6 +486,11 @@ main.narrow {
   outline: none;
 }
 
+/* The box has its own X, so the browser's is hidden. */
+.search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
 /* Search options sits at the end of the box, as in Google Drive. */
 .search .search-options-button {
   margin-right: -8px;
