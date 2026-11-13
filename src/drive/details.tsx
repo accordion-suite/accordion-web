@@ -18,8 +18,8 @@ import { ShareDialog } from "./dialogs.tsx";
 import { CloseIcon, InfoIcon, ItemIcon, kindOf } from "./icons.tsx";
 import { folderPath } from "./item-actions.tsx";
 import { CardPreview } from "./item-list.tsx";
-import { type Item, type ShareEntry, canEdit } from "./item.ts";
-import { announceChange, pathTo } from "./store.ts";
+import { type Item, canEdit } from "./item.ts";
+import { type Access, announceChange, pathTo, whoHasAccess } from "./store.ts";
 
 const TYPES: Record<string, MessageKey> = {
   folder: "details.folder",
@@ -79,35 +79,6 @@ function extensionOf(name: string): string | null {
 /** The kinds of file whose pages the panel counts. A spreadsheet's printed
  * pages don't say much about it. */
 const PAGED = new Set(["document", "presentation", "pdf", "ebook"]);
-
-/** Someone who can open an item, and the folder that gives them access if
- * it's one above the item. */
-interface Access {
-  share: ShareEntry;
-  from: Item | null;
-}
-
-/** Everyone the owner shared `path`'s last item with, directly or through a
- * folder above it, with the most access each has. */
-async function whoHasAccess(path: readonly Item[]): Promise<Access[]> {
-  const item = path[path.length - 1]!;
-  const shared = path.filter((folder) => folder.shared);
-  const lists = await Promise.all(
-    shared.map((folder) => api<ShareEntry[]>("GET", `/api/drive/items/${folder.id}/shares`)),
-  );
-  const people = new Map<string, Access>();
-  lists.forEach((shares, at) => {
-    const folder = shared[at]!;
-    for (const share of shares) {
-      const before = people.get(share.user);
-      // Closer folders come later, so a tie goes to the closest.
-      if (!before || share.level === "editor" || before.share.level === "viewer") {
-        people.set(share.user, { share, from: folder.id === item.id ? null : folder });
-      }
-    }
-  });
-  return [...people.values()].sort((a, b) => a.share.display_name.localeCompare(b.share.display_name));
-}
 
 /** An item's name, with "My Drive" for the reader's top folder. */
 function nameOf(item: Item): string {

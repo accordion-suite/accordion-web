@@ -12,6 +12,7 @@ import type { Child } from "./folder-upload.ts";
 import { FOLDER_COLORS, type FolderColor, type Item, type ShareEntry } from "./item.ts";
 import { ItemIcon } from "./icons.tsx";
 import { LinksSection } from "./links.tsx";
+import { type Access, pathTo, whoHasAccess } from "./store.ts";
 import { keptFor, useRetention } from "./retention.ts";
 import { freeName, stemLength } from "./names.ts";
 
@@ -445,6 +446,9 @@ export interface Person {
 export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: boolean) => void }) {
   const [shares, setShares] = useState<ShareEntry[] | null>(null);
   const [people, setPeople] = useState<Person[] | null>(null);
+  // People who can open it through a folder above it, which the folder's
+  // own sharing changes.
+  const [through, setThrough] = useState<Access[]>([]);
   const [adding, setAdding] = useState("");
   const [level, setLevel] = useState<ShareEntry["level"]>("viewer");
   const [error, setError] = useState("");
@@ -454,12 +458,14 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
   const owner = item.access === "owner";
 
   async function load() {
-    const [nextShares, nextPeople] = await Promise.all([
+    const [nextShares, nextPeople, access] = await Promise.all([
       api<ShareEntry[]>("GET", `/api/drive/items/${item.id}/shares`),
       people ? Promise.resolve(people) : api<Person[]>("GET", "/api/directory"),
+      pathTo(item).then(whoHasAccess),
     ]);
     setShares(nextShares);
     setPeople(nextPeople);
+    setThrough(access.filter((each) => each.from !== null));
   }
 
   useEffect(() => {
@@ -511,7 +517,7 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
       ) : shares && people ? (
         <>
           {others.length === 0 ? (
-            <p class="hint">{t("share.everyone")}</p>
+            <p class="hint">{t(people.some((person) => !person.you) ? "share.everyone" : "share.noOthers")}</p>
           ) : (
             <form class="share-add" onSubmit={share} noValidate>
               <div class="share-field">
@@ -541,7 +547,7 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
               </button>
             </form>
           )}
-          <p class="hint">{t("share.help")}</p>
+          <p class="hint">{t(item.kind === "folder" ? "share.help" : "share.helpFile")}</p>
           <h3 class="share-heading">{t("share.who")}</h3>
           <ul class="share-people">
             {you && (
@@ -592,7 +598,20 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
               </li>
             ))}
           </ul>
-          {shares.length === 0 && <p class="hint">{t("share.nobody")}</p>}
+          {through.length > 0 && (
+            <ul class="share-people">
+              {through.map(({ share: entry, from }) => (
+                <li key={`${entry.user}-through`}>
+                  <span class="share-name">
+                    <span>{entry.display_name}</span>
+                    <span class="share-username">{t("details.from", { folder: from!.name })}</span>
+                  </span>
+                  <span class="share-role">{levelName(entry.level)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {shares.length === 0 && through.length === 0 && <p class="hint">{t("share.nobody")}</p>}
           <LinksSection item={item} onChanged={linksChanged} />
         </>
       ) : (

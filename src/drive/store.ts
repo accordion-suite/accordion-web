@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import { ApiError, api } from "../api.ts";
 import { onLive } from "../shell/live.ts";
-import type { Item } from "./item.ts";
+import type { Item, ShareEntry } from "./item.ts";
 import { readSort, type Sort } from "./sort.ts";
 
 export type ViewMode = "list" | "grid";
@@ -230,4 +230,33 @@ export async function pathTo(item: Item): Promise<Item[]> {
     path.unshift(at);
   }
   return path;
+}
+
+/** Someone who can open an item, and the folder that gives them access if
+ * it's one above the item. */
+export interface Access {
+  share: ShareEntry;
+  from: Item | null;
+}
+
+/** Everyone the owner shared `path`'s last item with, directly or through a
+ * folder above it, with the most access each has. */
+export async function whoHasAccess(path: readonly Item[]): Promise<Access[]> {
+  const item = path[path.length - 1]!;
+  const shared = path.filter((folder) => folder.shared);
+  const lists = await Promise.all(
+    shared.map((folder) => api<ShareEntry[]>("GET", `/api/drive/items/${folder.id}/shares`)),
+  );
+  const people = new Map<string, Access>();
+  lists.forEach((shares, at) => {
+    const folder = shared[at]!;
+    for (const share of shares) {
+      const before = people.get(share.user);
+      // Closer folders come later, so a tie goes to the closest.
+      if (!before || share.level === "editor" || before.share.level === "viewer") {
+        people.set(share.user, { share, from: folder.id === item.id ? null : folder });
+      }
+    }
+  });
+  return [...people.values()].sort((a, b) => a.share.display_name.localeCompare(b.share.display_name));
 }

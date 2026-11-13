@@ -347,8 +347,11 @@ export const en = {
   "share.remove": "Remove",
   "share.removeNamed": "Remove {name}",
   "share.everyone": "Everyone else on this server already has access.",
+  "share.noOthers": "There's nobody else on this server to share with yet. People show up here once they've set their password.",
   "share.help":
     "Viewers can open, download, and copy it. Editors can also add, rename, move, and delete what's inside. What they add counts toward your storage.",
+  "share.helpFile":
+    "Viewers can open, download, and copy it. Editors can also save changes to it, rename it, and move it to the trash. Their changes count toward your storage.",
   "share.shared": "Shared {item} with {name}.",
   "share.changed": "{name} is now a {level} of {item}.",
   "share.removed": "Stopped sharing {item} with {name}.",
