@@ -61,7 +61,7 @@ export function TopBar({
       <div class="top-bar-middle">{children}</div>
       <NotificationsButton me={session.user.id} />
       {settings && (
-        <a class="icon-button" href={settings} title={t("settings.title")} aria-label={t("settings.title")} onClick={followLink}>
+        <a class="icon-button settings-button" href={settings} title={t("settings.title")} aria-label={t("settings.title")} onClick={followLink}>
           <SettingsIcon />
         </a>
       )}

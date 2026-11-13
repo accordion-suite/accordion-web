@@ -434,7 +434,9 @@ export const settingsEn = {
   "driveSettings.saved": "Saved.",
   "driveSettings.startTitle": "Start page",
   "driveSettings.startIntro": "What Drive opens on when you go to Accordion's address.",
+  "driveSettings.home": "Home.",
   "driveSettings.homeHint": "Your recently changed files.",
+  "driveSettings.myDrive": "My Drive.",
   "driveSettings.myDriveHint": "All your folders and files.",
   "driveSettings.clickTitle": "Clicking an item",
   "driveSettings.clickIntro":
@@ -513,7 +515,8 @@ export const settingsEn = {
     "Only videos people watch take time and space. The first person to open one waits while it converts.",
   "previews.never": "Never",
   "previews.neverHint": "People download these videos to watch them.",
-  "previews.recommended": "Recommended for this server",
+  "previews.label": "{label}.",
+  "previews.labelRecommended": "{label}, recommended for this server.",
   "previews.whyUpload": {
     one: "This server has {count} processor core, so Accordion recommends converting after upload.",
     other: "This server has {count} processor cores, so Accordion recommends converting after upload.",

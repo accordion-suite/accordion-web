@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { formatCalendarDay, formatHour, formatLength, formatList, formatSize, t } from "./i18n.ts";
+import { formatCalendarDay, formatHour, formatLength, formatList, formatPercent, formatSize, t } from "./i18n.ts";
 
 test("fills in values", () => {
   assert.equal(t("drive.up", { name: "Photos" }), "Back to Photos");
@@ -18,6 +18,13 @@ test("picks the plural form", () => {
 
 test("leaves a placeholder without a value as it is", () => {
   assert.equal(t("drive.up"), "Back to {name}");
+});
+
+test("shows shares as percentages, and a tiny one as more than nothing", () => {
+  assert.equal(formatPercent(0.7), "70%");
+  assert.equal(formatPercent(0.015), "1.5%");
+  assert.equal(formatPercent(0.00015), "<0.1%");
+  assert.equal(formatPercent(0), "0%");
 });
 
 test("shows sizes in the unit that fits", () => {

@@ -50,10 +50,11 @@ export function formatNumber(value: number): string {
 /** A share of something, such as "12%", to a tenth of a percent when it's
  * small. */
 export function formatPercent(share: number): string {
-  return new Intl.NumberFormat(locale, {
-    style: "percent",
-    maximumFractionDigits: share > 0 && share < 0.1 ? 1 : 0,
-  }).format(share);
+  const format = (value: number, digits: number) =>
+    new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: digits }).format(value);
+  // A share too small to show still isn't nothing, so it isn't "0%".
+  if (share > 0 && share < 0.001) return `<${format(0.001, 1)}`;
+  return format(share, share > 0 && share < 0.1 ? 1 : 0);
 }
 
 const SIZE_UNITS = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"] as const;

@@ -53,7 +53,7 @@ export function DrivePage() {
               onChange={() => void save({ start_page: "home" })}
             />
             <span>
-              <strong>{t("drive.home")}</strong> {t("driveSettings.homeHint")}
+              <strong>{t("driveSettings.home")}</strong> {t("driveSettings.homeHint")}
             </span>
           </label>
           <label class="choice">
@@ -64,7 +64,7 @@ export function DrivePage() {
               onChange={() => void save({ start_page: "my-drive" })}
             />
             <span>
-              <strong>{t("drive.myDrive")}</strong> {t("driveSettings.myDriveHint")}
+              <strong>{t("driveSettings.myDrive")}</strong> {t("driveSettings.myDriveHint")}
             </span>
           </label>
         </fieldset>

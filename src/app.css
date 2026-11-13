@@ -3445,6 +3445,8 @@ input.switch:checked::before {
   .settings-frame .brand {
     display: flex;
     min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
   }
 
   .settings-card {
@@ -3719,4 +3721,22 @@ dialog.shortcuts kbd {
 .made-link-row input {
   flex: 1;
   min-width: 0;
+}
+
+/* Phones: the search needs the room for its words. Settings stays in the
+   account menu, and Settings' own top bar shows its name without
+   Accordion's, beside the logo. */
+@media (max-width: 480px) {
+  a.icon-button.settings-button {
+    display: none;
+  }
+
+  .search {
+    gap: 4px;
+    padding: 0 8px 0 12px;
+  }
+
+  .settings-frame .brand-name {
+    display: none;
+  }
 }

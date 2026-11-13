@@ -74,8 +74,12 @@ export function PreviewsPage() {
                     onChange={() => void choose({ convert_videos: choice === data.automatic ? null : choice })}
                   />
                   <span>
-                    <strong>{t(label)}</strong>
-                    {choice === data.automatic && <> ({t("previews.recommended")})</>} {t(hint)}
+                    <strong>
+                      {choice === data.automatic
+                        ? t("previews.labelRecommended", { label: t(label) })
+                        : t("previews.label", { label: t(label) })}
+                    </strong>{" "}
+                    {t(hint)}
                   </span>
                 </label>
               ))}
