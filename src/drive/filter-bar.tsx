@@ -175,17 +175,12 @@ export function FilterBar({
           .filter((name) => !names.has(name))
           .map((name): [string, string] => [ownedBy(name), t("filters.ownedBy", { name })])),
   ];
-  /** Each choice's icon: the person's initial, or for the reader's own
-   * choices, the icons their pages have in the sidebar. */
-  const personIcon = (value: string) => {
-    if (value === "me") return <DriveIcon />;
-    if (value === "shared") return <SharedOutIcon />;
-    const person = everyone.find((each) => withPerson(each.username) === value);
-    const name = value.startsWith("by:")
-      ? value.slice(3)
-      : sharees(items).find(([username]) => sharedWith(username) === value)?.[1];
-    return <Initial name={person?.display_name ?? name ?? ""} />;
-  };
+  const icon = (value: string) =>
+    personIcon(
+      value,
+      everyone,
+      value.startsWith("by:") ? value.slice(3) : sharees(items).find(([username]) => sharedWith(username) === value)?.[1],
+    );
   const any = Object.values(filters).some(Boolean);
   return (
     <div class="filters" role="group" aria-label={t("search.filters")}>
@@ -203,7 +198,7 @@ export function FilterBar({
           choices={people}
           chosen={filters.people}
           any={t("filters.anyone")}
-          icon={personIcon}
+          icon={icon}
           onChoose={(value) => navigate(withFilter("people", value))}
         />
       )}
@@ -233,6 +228,16 @@ export function FilterBar({
       )}
     </div>
   );
+}
+
+/** A People filter choice's icon: the person's initial, or for the reader's
+ * own choices, the icons their pages have in the sidebar. `name` is for a
+ * choice that isn't someone on the server, such as a removed account. */
+export function personIcon(value: string, everyone: readonly Person[], name?: string) {
+  if (value === "me") return <DriveIcon />;
+  if (value === "shared") return <SharedOutIcon />;
+  const person = everyone.find((each) => withPerson(each.username) === value);
+  return <Initial name={person?.display_name ?? name ?? ""} />;
 }
 
 /** Choices with their messages' keys, as choices with their words. */

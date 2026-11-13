@@ -40,6 +40,11 @@ interface AddedDevice {
   file_name: string;
 }
 
+/** Whether people can add devices through the WireGuard app. Off until the
+ * phone app exists: Accordion's own apps reach home through their own
+ * tunnel (decision 23), and nobody should need another app. */
+const WIREGUARD_DEVICES = false;
+
 export function DevicesPage({ username, admin }: { username: string; admin: boolean }) {
   const passwords = useLoad<AppPassword[]>("/api/app-passwords");
   const [creating, setCreating] = useState(false);
@@ -49,7 +54,9 @@ export function DevicesPage({ username, admin }: { username: string; admin: bool
     <SettingsPage title={t("settings.devices")} intro={t("devices.intro")}>
       <AppsCard />
       <SessionsCard />
-      <RemoteCard admin={admin} />
+      {/* Adding a phone or laptop through the WireGuard app waits for
+          Accordion's phone app, so people install nothing but Accordion. */}
+      {WIREGUARD_DEVICES && <RemoteCard admin={admin} />}
       <section class="settings-card">
         <h2>{t("devices.title")}</h2>
         <p>{t("devices.passwordsIntro")}</p>

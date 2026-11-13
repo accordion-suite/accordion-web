@@ -142,11 +142,12 @@ export function RemotePage() {
       <LinkSharingCard />
       <AllLinksCard />
 
-      <section class="settings-card">
-        <h2>{t("remote.devicesTitle")}</h2>
-        {data.devices.length === 0 ? (
-          <p class="hint">{t("remote.devicesNone")}</p>
-        ) : (
+      {/* Devices added through the WireGuard app, which Apps and devices
+          doesn't offer until the phone app exists. Ones added before still
+          show, so an admin can remove them. */}
+      {data.devices.length > 0 && (
+        <section class="settings-card">
+          <h2>{t("remote.devicesTitle")}</h2>
           <ul class="rows">
             {data.devices.map((device) => (
               <li key={device.id} class="row">
@@ -164,8 +165,8 @@ export function RemotePage() {
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
 
       {removing && (
         <ConfirmDialog

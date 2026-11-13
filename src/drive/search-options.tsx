@@ -12,7 +12,8 @@ import { formatCalendarDay, t } from "../i18n.ts";
 import { Dialog } from "../shell/dialog.tsx";
 import { navigate } from "../shell/router.ts";
 import { ChooseFolderDialog, type Person } from "./dialogs.tsx";
-import { Filter, named, TYPES, typeIcon, usePeople } from "./filter-bar.tsx";
+import { Filter, named, personIcon, TYPES, typeIcon, usePeople } from "./filter-bar.tsx";
+import { withPerson } from "./filters.ts";
 import { CheckIcon, CloseIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
 import { anyFilter, MODIFIED, NO_FILTERS, type SearchFilters, searchPath } from "./search.ts";
@@ -41,15 +42,30 @@ function useFolderName(place: string): string {
   return name;
 }
 
-/** People as filter choices, with the chosen one first known by username
- * until the list arrives. */
-function personChoices(
-  people: readonly Person[],
-  chosen: string,
-  label: (name: string) => string,
-): [string, string][] {
-  const choices = people.map((person): [string, string] => [person.username, label(person.display_name)]);
-  if (chosen && !people.some((person) => person.username === chosen)) choices.push([chosen, label(chosen)]);
+/** Shared with's choices: each person by username, with the chosen one
+ * known by username until the list arrives. */
+function sharedWithChoices(people: readonly Person[], chosen: string): [string, string][] {
+  const choices = people.map((person): [string, string] => [person.username, person.display_name]);
+  if (chosen && !people.some((person) => person.username === chosen)) choices.push([chosen, chosen]);
+  return choices;
+}
+
+/** The People filter's choices, as other pages' People filter has them:
+ * the reader's own items, what they shared, and each person, for what
+ * they own and what the reader shared with them. A choice from an older
+ * address, "others" or a username for what someone owns, stays chosen. */
+function peopleChoices(people: readonly Person[], chosen: string): [string, string][] {
+  const choices: [string, string][] = [
+    ["me", t("filters.ownedByMe")],
+    ["shared", t("filters.sharedByMe")],
+    ...people.map((person): [string, string] => [withPerson(person.username), person.display_name]),
+  ];
+  if (chosen && !choices.some(([value]) => value === chosen)) {
+    if (chosen === "others") choices.push([chosen, t("search.notOwnedByMe")]);
+    // Someone whose name hasn't arrived yet, or who can't sign in now.
+    else if (chosen.startsWith("person:")) choices.push([chosen, chosen.slice(7)]);
+    else choices.push([chosen, t("filters.ownedBy", { name: chosen })]);
+  }
   return choices;
 }
 
@@ -109,14 +125,10 @@ export function SearchOptions({ initial, onClose }: { initial: SearchFilters; on
         )}
         {row(
           "owner",
-          t("search.owner"),
+          t("filters.people"),
           <select id={`${id}-owner`} value={filters.owner} onChange={(event) => set("owner", event.currentTarget.value)}>
-            <option value="">{t("search.anyOwner")}</option>
-            <option value="me">{t("search.ownedByMe")}</option>
-            <option value="others">{t("search.notOwnedByMe")}</option>
-            {personChoices(people, filters.owner === "me" || filters.owner === "others" ? "" : filters.owner, (name) =>
-              t("search.ownedBy", { name }),
-            ).map(([value, label]) => (
+            <option value="">{t("filters.anyone")}</option>
+            {peopleChoices(people, filters.owner).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -147,7 +159,7 @@ export function SearchOptions({ initial, onClose }: { initial: SearchFilters; on
         )}
         {row(
           "in",
-          t("search.location"),
+          t("filters.source"),
           <>
             <select
               id={`${id}-in`}
@@ -164,7 +176,7 @@ export function SearchOptions({ initial, onClose }: { initial: SearchFilters; on
                 }
               }}
             >
-              <option value="">{t("search.anywhere")}</option>
+              <option value="">{t("filters.anywhere")}</option>
               <option value="my-drive">{t("drive.myDrive")}</option>
               <option value="shared">{t("search.sharedWithMe")}</option>
               {isFolder(filters.in) && <option value={filters.in}>{folderName || t("shell.loading")}</option>}
@@ -226,7 +238,7 @@ export function SearchOptions({ initial, onClose }: { initial: SearchFilters; on
             onChange={(event) => set("shared_with", event.currentTarget.value)}
           >
             <option value="">{t("search.sharedWithAnyone")}</option>
-            {personChoices(people, filters.shared_with, (name) => name).map(([value, label]) => (
+            {sharedWithChoices(people, filters.shared_with).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -261,7 +273,6 @@ export function SearchChips({ filters }: { filters: SearchFilters }) {
   const [choosing, setChoosing] = useState(false);
   const change = (next: Partial<SearchFilters>) => navigate(searchPath({ ...filters, ...next }));
 
-  const owner = filters.owner === "me" || filters.owner === "others" ? "" : filters.owner;
   const sharedWith =
     filters.shared_with &&
     (people.find((person) => person.username === filters.shared_with)?.display_name ?? filters.shared_with);
@@ -286,14 +297,11 @@ export function SearchChips({ filters }: { filters: SearchFilters }) {
         onChoose={(type) => change({ type })}
       />
       <Filter
-        label={t("search.owner")}
-        choices={[
-          ["me", t("search.ownedByMe")],
-          ["others", t("search.notOwnedByMe")],
-          ...personChoices(people, owner, (name) => t("search.ownedBy", { name })),
-        ]}
+        label={t("filters.people")}
+        choices={peopleChoices(people, filters.owner)}
         chosen={filters.owner}
-        any={t("search.anyOwner")}
+        any={t("filters.anyone")}
+        icon={(value) => personIcon(value, people)}
         onChoose={(value) => change({ owner: value })}
       />
       <Filter
@@ -304,7 +312,7 @@ export function SearchChips({ filters }: { filters: SearchFilters }) {
         onChoose={(modified) => change({ modified })}
       />
       <Filter
-        label={t("search.location")}
+        label={t("filters.source")}
         choices={[
           ["my-drive", t("drive.myDrive")],
           ["shared", t("search.sharedWithMe")],
@@ -312,7 +320,7 @@ export function SearchChips({ filters }: { filters: SearchFilters }) {
           [CHOOSE, t("search.chooseFolderMenu")],
         ]}
         chosen={filters.in}
-        any={t("search.anywhere")}
+        any={t("filters.anywhere")}
         onChoose={(value) => (value === CHOOSE ? setChoosing(true) : change({ in: value }))}
       />
       {set.map(([label, clear]) => (

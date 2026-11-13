@@ -11,7 +11,10 @@ export interface SearchFilters {
   name: string;
   /** One of `TYPE_KINDS`' names. */
   type: string;
-  /** "me", "others", or someone's username. */
+  /** The People filter: "me", "shared" for what the reader shared,
+  * "person:" and a username for what they own and what the reader shared
+  * with them, or from older addresses, "others" or a username for what
+  * they own. */
   owner: string;
   /** "my-drive", "shared", or a folder's ID. */
   in: string;
