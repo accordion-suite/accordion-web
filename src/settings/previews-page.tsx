@@ -73,13 +73,9 @@ export function PreviewsPage() {
                     // server's choice can change with its hardware.
                     onChange={() => void choose({ convert_videos: choice === data.automatic ? null : choice })}
                   />
-                  <span>
-                    <strong>
-                      {choice === data.automatic
-                        ? t("previews.labelRecommended", { label: t(label) })
-                        : t("previews.label", { label: t(label) })}
-                    </strong>{" "}
-                    {t(hint)}
+                  <span class="choice-text">
+                    <strong>{choice === data.automatic ? t("previews.labelRecommended", { label: t(label) }) : t(label)}</strong>
+                    <span class="hint">{t(hint)}</span>
                   </span>
                 </label>
               ))}

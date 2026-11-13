@@ -154,11 +154,14 @@ export function UpdatesPage() {
               checked={data.automatic}
               onChange={() => void send("settings", { automatic: true })}
             />
-            <span>
-              <strong>{t("updates.automatic")}</strong> {t("updates.automaticHint")}{" "}
-              <a href="/settings/backups" onClick={followLink}>
-                {t("updates.backupHour")}
-              </a>
+            <span class="choice-text">
+              <strong>{t("updates.automatic")}</strong>
+              <span class="hint">
+                {t("updates.automaticHint")}{" "}
+                <a href="/settings/backups" onClick={followLink}>
+                  {t("updates.backupHour")}
+                </a>
+              </span>
             </span>
           </label>
           <label class="choice">
@@ -168,8 +171,9 @@ export function UpdatesPage() {
               checked={!data.automatic}
               onChange={() => void send("settings", { automatic: false })}
             />
-            <span>
-              <strong>{t("updates.manual")}</strong> {t("updates.manualHint")}
+            <span class="choice-text">
+              <strong>{t("updates.manual")}</strong>
+              <span class="hint">{t("updates.manualHint")}</span>
             </span>
           </label>
         </fieldset>

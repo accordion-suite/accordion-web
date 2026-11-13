@@ -402,14 +402,16 @@ function ResetDialog({
       <fieldset class="choices">
         <label class="choice">
           <input type="radio" name="reason" checked={!exposed} onChange={() => setExposed(false)} />
-          <span>
-            <strong>{t("people.forgot")}</strong> {t("people.forgotHint")}
+          <span class="choice-text">
+            <strong>{t("people.forgot")}</strong>
+            <span class="hint">{t("people.forgotHint")}</span>
           </span>
         </label>
         <label class="choice">
           <input type="radio" name="reason" checked={exposed} onChange={() => setExposed(true)} />
-          <span>
-            <strong>{t("people.exposed")}</strong> {t("people.exposedHint")}
+          <span class="choice-text">
+            <strong>{t("people.exposed")}</strong>
+            <span class="hint">{t("people.exposedHint")}</span>
           </span>
         </label>
       </fieldset>
@@ -490,8 +492,9 @@ function LimitDialog({
       <fieldset class="choices">
         <label class="choice">
           <input type="radio" name="limit" checked={!limited} onChange={() => setLimited(false)} />
-          <span>
-            <strong>{t("people.noLimit")}</strong> {t("people.noLimitHint")}
+          <span class="choice-text">
+            <strong>{t("people.noLimit")}</strong>
+            <span class="hint">{t("people.noLimitHint")}</span>
           </span>
         </label>
         <label class="choice">
@@ -572,8 +575,9 @@ function DeleteDialog({
       <fieldset class="choices">
         <label class="choice">
           <input type="radio" name="files" checked={give} disabled={others.length === 0} onChange={() => setGive(true)} />
-          <span>
-            <strong>{t("people.give")}</strong> {t("people.giveHint")}
+          <span class="choice-text">
+            <strong>{t("people.give")}</strong>
+            <span class="hint">{t("people.giveHint")}</span>
           </span>
         </label>
         {give && (
@@ -590,8 +594,9 @@ function DeleteDialog({
         )}
         <label class="choice">
           <input type="radio" name="files" checked={!give} onChange={() => setGive(false)} />
-          <span>
-            <strong>{t("people.deleteFiles")}</strong> {t("people.deleteFilesHint")}
+          <span class="choice-text">
+            <strong>{t("people.deleteFiles")}</strong>
+            <span class="hint">{t("people.deleteFilesHint")}</span>
           </span>
         </label>
       </fieldset>

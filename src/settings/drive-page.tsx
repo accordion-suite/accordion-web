@@ -52,8 +52,9 @@ export function DrivePage() {
               checked={settings.start_page === "home"}
               onChange={() => void save({ start_page: "home" })}
             />
-            <span>
-              <strong>{t("driveSettings.home")}</strong> {t("driveSettings.homeHint")}
+            <span class="choice-text">
+              <strong>{t("driveSettings.home")}</strong>
+              <span class="hint">{t("driveSettings.homeHint")}</span>
             </span>
           </label>
           <label class="choice">
@@ -63,8 +64,9 @@ export function DrivePage() {
               checked={settings.start_page === "my-drive"}
               onChange={() => void save({ start_page: "my-drive" })}
             />
-            <span>
-              <strong>{t("driveSettings.myDrive")}</strong> {t("driveSettings.myDriveHint")}
+            <span class="choice-text">
+              <strong>{t("driveSettings.myDrive")}</strong>
+              <span class="hint">{t("driveSettings.myDriveHint")}</span>
             </span>
           </label>
         </fieldset>
@@ -81,8 +83,9 @@ export function DrivePage() {
                 checked={settings.click === choice.value}
                 onChange={() => void save({ click: choice.value })}
               />
-              <span>
-                <strong>{t(choice.label)}</strong> {t(choice.hint)}
+              <span class="choice-text">
+                <strong>{t(choice.label)}</strong>
+                <span class="hint">{t(choice.hint)}</span>
               </span>
             </label>
           ))}

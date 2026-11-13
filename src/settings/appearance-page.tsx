@@ -31,9 +31,9 @@ export function AppearancePage() {
                   setChosen(value);
                 }}
               />
-              <span>
+              <span class="choice-text">
                 <strong>{t(label)}</strong>
-                {value === "auto" && <> {t("appearance.autoHint")}</>}
+                {value === "auto" && <span class="hint">{t("appearance.autoHint")}</span>}
               </span>
             </label>
           ))}

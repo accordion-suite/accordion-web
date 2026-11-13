@@ -3264,6 +3264,18 @@ label.choice {
   width: auto;
 }
 
+/* A choice's name, with what it does on a gray line below, as in other
+   settings. */
+.choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+label.choice .hint {
+  margin: 0;
+}
+
 label.choice input {
   flex: none;
   width: 18px;

@@ -381,8 +381,9 @@ function AddTargetDialog({ onAdded, onClose }: { onAdded: () => Promise<void>; o
         {KINDS.map((choice) => (
           <label key={choice} class="choice">
             <input type="radio" name="target-kind" checked={kind === choice} onChange={() => setKind(choice)} />
-            <span>
-              <strong>{t(`backups.kind.${choice}`)}</strong> {t(`backups.kind.${choice}.hint`)}
+            <span class="choice-text">
+              <strong>{t(`backups.kind.${choice}`)}</strong>
+              <span class="hint">{t(`backups.kind.${choice}.hint`)}</span>
             </span>
           </label>
         ))}
