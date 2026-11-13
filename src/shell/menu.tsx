@@ -82,7 +82,24 @@ export function Menu({
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     const outside = (event: Event) => {
-      if (!menu.current?.contains(event.target as Node)) onClose();
+      const target = event.target as Node;
+      if (menu.current?.contains(target)) return;
+      // Pressing the button that opened the menu closes it, so its click
+      // mustn't open it again. The click comes right after the press is
+      // let go, if it comes at all, so later clicks are left alone.
+      if ("under" in place && place.under.contains(target)) {
+        const swallow = (click: Event) => {
+          click.stopPropagation();
+          click.preventDefault();
+        };
+        document.addEventListener("click", swallow, { capture: true, once: true });
+        document.addEventListener(
+          "pointerup",
+          () => setTimeout(() => document.removeEventListener("click", swallow, { capture: true })),
+          { capture: true, once: true },
+        );
+      }
+      onClose();
     };
     // Capture, so a press anywhere else closes the menu before it does
     // anything else.
