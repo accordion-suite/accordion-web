@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { formatList, t } from "../i18n.ts";
+import { useTabTitle } from "../shell/page.tsx";
 import { ConfirmDialog, Dialog } from "../shell/dialog.tsx";
 import { ItemIcon } from "./icons.tsx";
 import { type Item, thumbnailAddress } from "./item.ts";
@@ -49,6 +50,7 @@ export function Viewer({
   onShow: (file: Item) => void;
   onClose: () => void;
 }) {
+  useTabTitle(t("shell.tabTitle", { page: file.name }));
   const position = files.indexOf(file);
   // Steps wrap around, so the buttons never turn off under keyboard focus.
   const step = (by: number) => onShow(files[(position + by + files.length) % files.length]!);

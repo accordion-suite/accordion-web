@@ -149,7 +149,7 @@ export function SettingsPage({
   return (
     <main class="page settings-page">
       <div class="page-head">
-        <PageTitle>{title}</PageTitle>
+        <PageTitle tab={t("settings.tabTitle", { page: title })}>{title}</PageTitle>
       </div>
       {intro && <p class="settings-intro">{intro}</p>}
       {children}

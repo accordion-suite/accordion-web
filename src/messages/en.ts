@@ -19,6 +19,9 @@ export const en = {
   "signIn.intro": "Use the username and password your household's admin gave you.",
 
   "shell.loading": "Loading…",
+  // The browser tab's title, after the page that's showing.
+  "shell.tabTitle": "{page} - Accordion",
+  "shell.tabTitleNone": "Accordion",
   "shell.signedInAs": "Signed in as {name}",
   "shell.signOut": "Sign out",
   "shell.mainMenu": "Main menu",

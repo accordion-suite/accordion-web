@@ -78,7 +78,7 @@ export function OAuthPage({ session, onSignOut }: { session: Session; onSignOut:
   return (
     <main class="sign-in">
       <div class="sign-in-card">
-        <PageTitle>{t("oauth.title")}</PageTitle>
+        <PageTitle bare>{t("oauth.title")}</PageTitle>
         {stage === "checking" && <p class="loading">{t("shell.loading")}</p>}
         {stage === "problem" && (
           <p class="error" role="alert">
@@ -127,7 +127,7 @@ export function OAuthDone() {
   return (
     <main class="sign-in">
       <div class="sign-in-card">
-        <PageTitle>{t("oauth.title")}</PageTitle>
+        <PageTitle bare>{t("oauth.title")}</PageTitle>
         <p role="status">{message}</p>
       </div>
     </main>

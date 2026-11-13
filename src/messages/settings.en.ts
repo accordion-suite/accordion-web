@@ -10,6 +10,8 @@ export const settingsEn = {
   "settings.driveGroup": "Drive",
   "settings.driveGeneral": "General",
   "settings.driveTitle": "General",
+  // The browser tab's title, which shell.tabTitle ends with "- Accordion".
+  "settings.tabTitle": "{page} - Settings",
   "settings.devices": "Apps and devices",
   "settings.people": "People",
   "settings.health": "Server health",

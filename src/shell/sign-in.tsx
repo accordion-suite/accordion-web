@@ -27,7 +27,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: (session: Session) => void 
   return (
     <main class="sign-in">
       <div class="sign-in-card">
-        <PageTitle>{t("signIn.title")}</PageTitle>
+        <PageTitle bare>{t("signIn.title")}</PageTitle>
         <p class="hint">{t("signIn.intro")}</p>
         <form onSubmit={submit}>
         <label for="username">{t("signIn.username")}</label>
