@@ -575,10 +575,14 @@ export const settingsEn = {
   "remote.forwardGuide":
     "The router's manual or its maker's website shows where Port forwarding is. Once a device connects from away, Server health shows it.",
   "remote.shared":
-    "Your internet provider shares one public address among many homes, or your router is behind another router, so devices away from home can't reach the server through it.",
+    "Devices away from home can't reach the server through this internet connection, because it doesn't have a public address of its own.",
   "remote.sharedIpv6": "Devices on networks with IPv6 can still reach it, at {address}.",
-  "remote.sharedOptions":
-    "Other ways in are asking your provider for your own public address, a tailnet such as Tailscale, or a small server you rent as a relay.",
+  "remote.sharedProvider":
+    "Usually your internet provider shares one public address among many homes. Ask them for a public IP address of your own, or for IPv6. Some providers do that on request, and some charge for it.",
+  "remote.sharedModem":
+    "If your home has two routers, such as a modem from your provider and a router of your own, setting the modem to bridge mode can fix it too.",
+  "remote.sharedLater": "Once the connection has a public address, remote access starts working, with nothing to change here.",
+  "remote.routerShared": "Can't be reached from outside the home",
   "remote.addressTitle": "Where devices find home",
   "remote.addressBody":
     "Devices connect to {endpoint}. Accordion keeps it pointed at your home's public address. Its first part is random, so nobody can find your home's address from your server's name.",
@@ -620,7 +624,7 @@ export const settingsEn = {
   "linkSharing.routerRefused":
     "Didn't forward the port by itself. In your router's settings, forward TCP port {port} to port {to} on {home}.",
   "linkSharing.shared":
-    "Your internet provider shares one public address among many homes, or your router is behind another router, so links can't reach people outside the home.",
+    "Links can't reach people outside the home through this internet connection, because it doesn't have a public address of its own. Ask your internet provider for a public IP address of your own. If your home has two routers, setting the provider's modem to bridge mode can fix it too.",
   "linkSharing.allTitle": "Everyone's links",
   "linkSharing.none": "Nobody has made a link yet.",
   "linkSharing.linkLine": "{owner}'s, made by {maker}.",

@@ -192,7 +192,7 @@ function RouterCard({ data }: { data: Status }) {
   return (
     <section class="settings-card">
       <h2>{t("remote.routerTitle")}</h2>
-      {router.method ? (
+      {router.shared_address ? null : router.method ? (
         <p>{t("remote.routerMapped", { port: String(port), method: router.method })}</p>
       ) : router.problem ? (
         <p>{t("remote.routerRefused", { problem: router.problem })}</p>
@@ -203,10 +203,12 @@ function RouterCard({ data }: { data: Status }) {
         <>
           <p class="error">{t("remote.shared")}</p>
           {data.record?.ipv6 && <p>{t("remote.sharedIpv6", { address: data.record.ipv6 })}</p>}
-          <p>{t("remote.sharedOptions")}</p>
+          <p>{t("remote.sharedProvider")}</p>
+          <p>{t("remote.sharedModem")}</p>
+          <p>{t("remote.sharedLater")}</p>
         </>
       )}
-      {!router.method && router.problem && (
+      {!router.shared_address && !router.method && router.problem && (
         <>
           <h3>{t("remote.forwardTitle")}</h3>
           <p>{t("remote.forwardSteps")}</p>
@@ -380,15 +382,17 @@ function LinkSharingCard() {
             <>
               <dt>{t("remote.routerTitle")}</dt>
               <dd>
-                {router.method
-                  ? t("linkSharing.routerMapped", { port: String(data.port), method: router.method })
-                  : router.problem
-                    ? t("linkSharing.routerRefused", {
-                        port: String(data.port),
-                        to: String(data.listen_port ?? ""),
-                        home: data.home_address ?? t("remote.unknown"),
-                      })
-                    : t("remote.routerAsking", { port: String(data.port) })}
+                {router.shared_address
+                  ? t("remote.routerShared")
+                  : router.method
+                    ? t("linkSharing.routerMapped", { port: String(data.port), method: router.method })
+                    : router.problem
+                      ? t("linkSharing.routerRefused", {
+                          port: String(data.port),
+                          to: String(data.listen_port ?? ""),
+                          home: data.home_address ?? t("remote.unknown"),
+                        })
+                      : t("remote.routerAsking", { port: String(data.port) })}
               </dd>
             </>
           )}
