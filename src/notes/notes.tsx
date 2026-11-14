@@ -447,6 +447,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
         {(view.kind === "notes" || view.kind === "label" || view.kind === "folder") && (
           <Composer
             label={view.kind === "label" ? view.label : null}
+            labels={labels}
             folder={view.kind === "folder" ? view.id : null}
             start={start}
             onStarted={() => setStart(null)}

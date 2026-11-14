@@ -203,12 +203,15 @@ function ChecklistEditor({
 /** The box at the top of the list, which takes a new note when it closes. */
 export function Composer({
   label,
+  labels,
   folder = null,
   start = null,
   onStarted,
   onCreated,
 }: {
   label: string | null;
+  /** Every label, to choose from. */
+  labels: readonly string[];
   /** The folder a note taken here goes in, when a folder is open. */
   folder?: string | null;
   /** Opens the box from elsewhere, such as the page's menu: a new `at`
@@ -229,16 +232,20 @@ export function Composer({
   const [color, setColor] = useState<NoteColor | null>(null);
   const [pinned, setPinned] = useState(false);
   const [colors, setColors] = useState<MenuPlace | null>(null);
+  /** The labels chosen, or null for the open label's, if any. */
+  const [tags, setTags] = useState<string[] | null>(null);
+  const [picking, setPicking] = useState(false);
+  const chosenTags = tags ?? (label ? [label] : []);
   const [error, setError] = useState("");
   const box = useRef<HTMLDivElement>(null);
   const saving = useRef(false);
   /** The newest of everything, for a close that a click outside starts
    * before the page has drawn the last keystroke. */
-  const latest = useRef({ draft, color, pinned, colors });
-  latest.current = { draft, color, pinned, colors };
+  const latest = useRef({ draft, color, pinned, colors, chosenTags, picking });
+  latest.current = { draft, color, pinned, colors, chosenTags, picking };
 
   async function close() {
-    const { draft, color, pinned } = latest.current;
+    const { draft, color, pinned, chosenTags } = latest.current;
     if (!draft || saving.current) return;
     const body = bodyOf(draft);
     if (!draft.title.trim() && !body.trim()) {
@@ -247,7 +254,7 @@ export function Composer({
     }
     saving.current = true;
     try {
-      const note = await createNote({ title: draft.title, body, color, pinned, tags: label ? [label] : [], folder });
+      const note = await createNote({ title: draft.title, body, color, pinned, tags: chosenTags, folder });
       reset();
       onCreated(note);
     } catch (problem) {
@@ -261,6 +268,7 @@ export function Composer({
     setDraft(null);
     setColor(null);
     setPinned(false);
+    setTags(null);
     setError("");
   }
 
@@ -269,7 +277,8 @@ export function Composer({
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {
-      if (latest.current.colors) return;
+      // The colors and the label picker are outside the box.
+      if (latest.current.colors || latest.current.picking) return;
       if (box.current && !box.current.contains(event.target as Node)) void close();
     };
     document.addEventListener("pointerdown", outside);
@@ -299,13 +308,21 @@ export function Composer({
       ref={box}
       class={color ? `note-composer note-${color}` : "note-composer"}
       onKeyDown={(event) => {
-        if (event.key === "Escape") {
+        // Escape in the label picker closes only the picker.
+        if (event.key === "Escape" && !(event.target as Element).closest("dialog")) {
           event.preventDefault();
           void close();
         }
       }}
     >
       <NoteFields draft={draft} onDraft={setDraft} autofocusBody />
+      {chosenTags.length > 0 && (
+        <ul class="note-tags" aria-label={t("notes.labels")}>
+          {chosenTags.map((tag) => (
+            <li key={tag}>{tag}</li>
+          ))}
+        </ul>
+      )}
       {error && (
         <p class="error" role="alert">
           {error}
@@ -332,6 +349,15 @@ export function Composer({
         >
           <PaletteIcon />
         </button>
+        <button
+          type="button"
+          class="icon-button"
+          title={t(chosenTags.length > 0 ? "notes.changeLabels" : "notes.addLabel")}
+          aria-label={t(chosenTags.length > 0 ? "notes.changeLabels" : "notes.addLabel")}
+          onClick={() => setPicking(true)}
+        >
+          <LabelIcon />
+        </button>
         <CheckboxToggle draft={draft} onDraft={setDraft} />
         <span class="spacer" />
         <button type="button" class="secondary" onClick={() => void close()}>
@@ -348,6 +374,9 @@ export function Composer({
           }}
           onClose={() => setColors(null)}
         />
+      )}
+      {picking && (
+        <LabelPicker labels={labels} chosen={chosenTags} onChoose={setTags} onClose={() => setPicking(false)} />
       )}
     </div>
   );
