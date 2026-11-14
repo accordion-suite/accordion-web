@@ -38,29 +38,46 @@ export function startDrag(event: DragEvent, items: readonly Item[]): void {
   const data = event.dataTransfer!;
   data.effectAllowed = "move";
   data.setData(DRAG_TYPE, items.map((item) => item.id).join(","));
-
-  // The card has to be on the page when the browser takes its picture, so
-  // it's placed out of sight, then removed.
-  const card = document.createElement("div");
-  card.className = "drag-card";
-  card.textContent = items.length === 1 ? items[0]!.name : t("drive.dragging", { count: items.length });
-  document.body.append(card);
-  data.setDragImage(card, -12, -12);
-  requestAnimationFrame(() => card.remove());
-
-  document.addEventListener("dragover", anywhere);
-  document.addEventListener("drop", anywhere);
+  holdDrag(event, items.length === 1 ? items[0]!.name : t("drive.dragging", { count: items.length }));
 }
 
 export function endDrag(): void {
   dragging = null;
+  releaseDrag();
+}
+
+/** Whether a drag of Accordion's own is under way, which the page takes. */
+let holding = false;
+
+/** Starts a drag that moves something, which Notes uses too. A small card
+ * with `name` follows the pointer, in place of the browser's picture of
+ * what's dragged. The page takes the drag everywhere, so the pointer stays
+ * a move pointer, and a drop outside a folder does nothing. */
+export function holdDrag(event: DragEvent, name: string): void {
+  // The card has to be on the page when the browser takes its picture, so
+  // it's placed out of sight, then removed.
+  const card = document.createElement("div");
+  card.className = "drag-card";
+  card.textContent = name;
+  document.body.append(card);
+  event.dataTransfer!.setDragImage(card, -12, -12);
+  requestAnimationFrame(() => card.remove());
+
+  holding = true;
+  document.addEventListener("dragover", anywhere);
+  document.addEventListener("drop", anywhere);
+}
+
+/** Ends a drag that `holdDrag` started. */
+export function releaseDrag(): void {
+  holding = false;
   document.removeEventListener("dragover", anywhere);
   document.removeEventListener("drop", anywhere);
 }
 
 /** Takes the drag outside the folders, which then does nothing. */
 function anywhere(event: DragEvent): void {
-  if (dragging === null || event.defaultPrevented) return;
+  if (!holding || event.defaultPrevented) return;
   event.preventDefault();
   if (event.type === "dragover") event.dataTransfer!.dropEffect = "move";
 }

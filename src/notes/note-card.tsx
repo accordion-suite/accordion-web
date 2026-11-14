@@ -4,6 +4,7 @@
 // it opens its menu, and it can be dragged onto a folder in the sidebar.
 
 import { MarkdownView } from "../drive/markdown-view.tsx";
+import { holdDrag } from "../drive/move.ts";
 import { t } from "../i18n.ts";
 import { isChecklist, readChecklist } from "./checklist.ts";
 import { ArchiveIcon, LabelIcon, PaletteIcon, PinIcon } from "./icons.tsx";
@@ -63,6 +64,7 @@ export function NoteCard({
         if (!onDrag) return;
         event.dataTransfer!.effectAllowed = "move";
         event.dataTransfer!.setData("text/plain", label);
+        holdDrag(event, label);
         onDrag(note);
       }}
       onDragEnd={() => onDrag?.(null)}

@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import type { Session } from "../api.ts";
 import { NameDialog } from "../drive/dialogs.tsx";
+import { holdDrag, releaseDrag } from "../drive/move.ts";
 import { CloseIcon, ItemIcon, PlusIcon, SearchIcon, TrashIcon } from "../drive/icons.tsx";
 import { t } from "../i18n.ts";
 import { ConfirmDialog, Dialog, problemText } from "../shell/dialog.tsx";
@@ -358,7 +359,9 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
 
   const drag = (thing: Dragged | null) => {
     dragged.current = thing;
-    if (!thing) setDropOn(null);
+    if (thing) return;
+    releaseDrag();
+    setDropOn(null);
   };
 
   const cards = (shown: Note[]) => (
@@ -713,6 +716,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
                           draggable
                           onDragStart={(event) => {
                             event.dataTransfer!.effectAllowed = "move";
+                            holdDrag(event, folder.name);
                             drag({ kind: "folder", folder });
                           }}
                           onDragEnd={() => drag(null)}
