@@ -23,6 +23,7 @@ export const settingsEn = {
   "settings.adminLog": "Admin log",
   "settings.retention": "Trash and versions",
   "settings.previews": "Previews",
+  "settings.modules": "Modules",
   "settings.notHere":
     "Server settings only open on the same network as the server. Connect to your home network, then try again.",
   "settings.adminsOnly": "Only admins can change the server's settings.",
@@ -505,6 +506,25 @@ export const settingsEn = {
   "log.retentionChanged": "Changed how long activity is kept",
   "log.storageRetentionChanged": "Changed how long trash and older versions are kept",
   "log.previewsChanged": "Changed how previews are made",
+  "log.moduleOn": "Turned on {module}",
+  "log.moduleOff": "Turned off {module}",
+
+  "modules.intro":
+    "The apps this server offers. Turning one off takes it out of everyone's apps and menus. Its data stays, in Drive and in backups, and comes back as it was when you turn it on again.",
+  "modules.aboutDrive": "Files and folders, shared with the people you choose, on every device.",
+  "modules.aboutNotes": "Quick notes and checklists, kept as Markdown files in each person's Drive.",
+  "modules.size": "Its data takes {size}.",
+  "modules.neededBy": "{names} needs {name}, so turn that off first.",
+  "modules.memory": "Accordion is using {size} of memory.",
+  "modules.onTitle": "Turn on {name}?",
+  "modules.onBody": "{name} appears in everyone's apps, with any data it had before.",
+  "modules.onWithTitle": "Turn on {name} and {needs}?",
+  "modules.onWithBody": "{name} needs {needs}, so Accordion turns both on. They appear in everyone's apps, with any data they had before.",
+  "modules.offTitle": "Turn off {name}?",
+  "modules.offBody":
+    "{name} disappears from everyone's apps, and anyone using it now is moved out of it. Its data stays, and comes back when you turn it on again.",
+  "modules.turnOn": "Turn on {name}",
+  "modules.turnOff": "Turn off {name}",
   "previews.intro":
     "How Accordion prepares files the browser can't show on its own, for everyone on this server. Previews are copies, so the files themselves never change.",
   "previews.videosTitle": "Convert videos for playback",

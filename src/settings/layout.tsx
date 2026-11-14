@@ -13,6 +13,7 @@ import { lastDrivePage } from "../drive/layout.tsx";
 import { t, type MessageKey } from "../i18n.ts";
 import { PageTitle } from "../shell/page.tsx";
 import { followLink, usePath } from "../shell/router.ts";
+import { AppsIcon } from "../shell/apps.tsx";
 import { TopBar } from "../shell/top-bar.tsx";
 import {
   ActivityIcon,
@@ -55,6 +56,7 @@ export const SECTIONS: readonly Section[] = [
   { id: "activity", label: "settings.activity", icon: ActivityIcon, group: "you" },
   { id: "drive", label: "settings.driveGeneral", icon: DriveIcon, group: "drive" },
   { id: "people", label: "settings.people", icon: PeopleIcon, group: "server" },
+  { id: "modules", label: "settings.modules", icon: AppsIcon, group: "server" },
   { id: "health", label: "settings.health", icon: HealthIcon, group: "server" },
   { id: "backups", label: "settings.backups", icon: BackupIcon, group: "server" },
   { id: "updates", label: "settings.updates", icon: UpdatesIcon, group: "server" },

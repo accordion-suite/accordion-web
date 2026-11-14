@@ -5,10 +5,11 @@
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 
-import type { Session } from "../api.ts";
+import { modulesOn, type Session } from "../api.ts";
 import { MenuIcon } from "../drive/icons.tsx";
 import { SettingsIcon } from "../settings/icons.tsx";
 import { t } from "../i18n.ts";
+import { AppsButton } from "./apps.tsx";
 import { Menu, SEPARATOR, type MenuPlace } from "./menu.tsx";
 import { NotificationsButton } from "./notifications.tsx";
 import { followLink, navigate } from "./router.ts";
@@ -59,6 +60,7 @@ export function TopBar({
         <span class="brand-module">{module}</span>
       </a>
       <div class="top-bar-middle">{children}</div>
+      <AppsButton modules={modulesOn(session)} />
       <NotificationsButton me={session.user.id} />
       {settings && (
         <a class="icon-button settings-button" href={settings} title={t("settings.title")} aria-label={t("settings.title")} onClick={followLink}>

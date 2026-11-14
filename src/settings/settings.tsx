@@ -13,6 +13,7 @@ import { BackupsPage } from "./backups-page.tsx";
 import { DevicesPage } from "./devices-page.tsx";
 import { DrivePage } from "./drive-page.tsx";
 import { HealthPage } from "./health-page.tsx";
+import { ModulesPage } from "./modules-page.tsx";
 import { SECTIONS, SettingsLayout, SettingsPage } from "./layout.tsx";
 import { NetworkPage } from "./network-page.tsx";
 import { PeoplePage } from "./people-page.tsx";
@@ -87,6 +88,8 @@ function sectionPage(path: string, session: Session, onSessionChanged: () => Pro
       return <RetentionPage key={id} />;
     case "previews":
       return <PreviewsPage key={id} />;
+    case "modules":
+      return <ModulesPage key={id} />;
   }
   return null;
 }

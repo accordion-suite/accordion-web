@@ -56,4 +56,13 @@ export interface Session {
   /** Whether the server's admin pages open for this user here: they're for
    * admins, and usually only on the home network. */
   admin_pages: boolean;
+  /** The modules that are on and live in the web app, such as "drive" and
+   * "notes". Servers from before Notes don't send it. */
+  modules?: string[];
+}
+
+/** The modules that are on. A server from before Notes had only Drive,
+ * such as one that's still running while its web app was updated. */
+export function modulesOn(session: Session): readonly string[] {
+  return session.modules ?? ["drive"];
 }

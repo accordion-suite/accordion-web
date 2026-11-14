@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "preact/hooks";
 
-import { ApiError, api, type Session } from "../api.ts";
+import { ApiError, api, modulesOn, type Session } from "../api.ts";
 import { FolderPage } from "../drive/folder-page.tsx";
 import { HomePage } from "../drive/home-page.tsx";
 import { driveSettings, forgetDriveSettings, startPath } from "../drive/preferences.ts";
@@ -20,7 +20,7 @@ import { TrashPage } from "../drive/trash-page.tsx";
 import { loadTypes } from "../drive/types.ts";
 import { UploadPanel } from "../drive/upload-panel.tsx";
 import { t } from "../i18n.ts";
-import { startLive } from "./live.ts";
+import { startLive, useLive } from "./live.ts";
 import { PageTitle } from "./page.tsx";
 import { followLink, navigate, usePath } from "./router.ts";
 import { OAuthDone, OAuthPage } from "./oauth-page.tsx";
@@ -114,6 +114,8 @@ function SignedIn({
 
   // One stream of live updates for each tab while someone is signed in.
   useEffect(startLive, []);
+  // An admin turned a module on or off, so the apps and menus follow.
+  useLive("modules", () => void onSessionChanged());
 
   useEffect(() => {
     // A file dropped outside a folder's page would otherwise open in the
@@ -143,7 +145,9 @@ function SignedIn({
     onSignedOut();
   }
 
-  const page = drivePage(path);
+  const modules = modulesOn(session);
+  const page = modules.includes("drive") ? drivePage(path) : null;
+  const notesOn = modules.includes("notes");
   return (
     <>
       {page ? (
@@ -151,7 +155,9 @@ function SignedIn({
           {page}
         </DriveLayout>
       ) : path === "/" || path === "/drive" || path === "/drive/start" ? (
-        <StartPage />
+        modules.includes("drive") ? <StartPage /> : notesOn ? <Redirect to="/notes/" /> : <NoModules session={session} onSignOut={signOut} />
+      ) : notesOn && (path === "/notes" || path.startsWith("/notes/")) ? (
+        <LazyNotes session={session} onSignOut={signOut} />
       ) : path === "/oauth/authorize" ? (
         <OAuthPage session={session} onSignOut={signOut} />
       ) : path === "/oauth/done" ? (
@@ -195,6 +201,55 @@ function drivePage(path: string) {
   }
   const folder = /^\/drive\/folder\/([^/]+)$/.exec(trimmed);
   return folder ? <FolderPage key={trimmed} folder={folder[1]!} /> : null;
+}
+
+type NotesModule = typeof import("../notes/notes.tsx");
+
+/** Notes, whose code loads the first time it opens, as Settings' does. */
+let notesModule: NotesModule | null = null;
+
+function LazyNotes(props: Parameters<NotesModule["Notes"]>[0]) {
+  const [loaded, setLoaded] = useState(notesModule);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (loaded) return;
+    import("../notes/notes.tsx").then(
+      (module) => {
+        notesModule = module;
+        setLoaded(module);
+      },
+      () => {
+        setFailed(true);
+        void checkForUpdate();
+      },
+    );
+  }, []);
+
+  if (failed) {
+    return (
+      <main class="narrow">
+        <p class="error" role="alert">
+          {t("apps.notesLoadFailed")}
+        </p>
+      </main>
+    );
+  }
+  if (!loaded) return <p class="loading">{t("shell.loading")}</p>;
+  return <loaded.Notes {...props} />;
+}
+
+/** What someone sees when an admin turned every app off. */
+function NoModules({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
+  return (
+    <>
+      <TopBar session={session} onSignOut={onSignOut} />
+      <main class="page narrow">
+        <PageTitle>{t("shell.noModules")}</PageTitle>
+        <p>{t("shell.noModulesBody")}</p>
+      </main>
+    </>
+  );
 }
 
 type SettingsModule = typeof import("../settings/settings.tsx");

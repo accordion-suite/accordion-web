@@ -64,6 +64,19 @@
   --kind-design: #4f46e5;
   --kind-file: #6b7685;
 
+  /* Note colors, soft enough that text reads on them. */
+  --note-red: #f8cdc8;
+  --note-orange: #f9d8b8;
+  --note-yellow: #faf0ad;
+  --note-green: #d9f0c9;
+  --note-teal: #c6e7e1;
+  --note-blue: #d4e7f3;
+  --note-dark-blue: #bcd3ea;
+  --note-purple: #e2d3ee;
+  --note-pink: #f7dde8;
+  --note-brown: #e9dece;
+  --note-gray: #e5e8ec;
+
   --radius: 12px;
   --sidebar-width: 256px;
   --top-bar-height: 64px;
@@ -128,6 +141,18 @@
     --kind-ebook: #e0c25a;
     --kind-design: #a5a1f7;
     --kind-file: #a4adba;
+
+    --note-red: #5b2b2b;
+    --note-orange: #5c3b21;
+    --note-yellow: #574a19;
+    --note-green: #2b4631;
+    --note-teal: #1e4945;
+    --note-blue: #23415b;
+    --note-dark-blue: #263252;
+    --note-purple: #3f2e54;
+    --note-pink: #573140;
+    --note-brown: #483e32;
+    --note-gray: #33383e;
   }
 }
 
@@ -185,6 +210,18 @@
   --kind-ebook: #e0c25a;
   --kind-design: #a5a1f7;
   --kind-file: #a4adba;
+
+  --note-red: #5b2b2b;
+  --note-orange: #5c3b21;
+  --note-yellow: #574a19;
+  --note-green: #2b4631;
+  --note-teal: #1e4945;
+  --note-blue: #23415b;
+  --note-dark-blue: #263252;
+  --note-purple: #3f2e54;
+  --note-pink: #573140;
+  --note-brown: #483e32;
+  --note-gray: #33383e;
 
   color-scheme: dark;
 }
@@ -3751,5 +3788,393 @@ dialog.shortcuts kbd {
 
   .settings-frame .brand-name {
     display: none;
+  }
+}
+
+/* Notes (decision 31): cards in columns, as in Google Keep, the box that
+   takes a note, and the dialog that edits one. Each color sets --note-bg,
+   which cards, the box, the dialog, and the color menu's swatches use. */
+.note-red { --note-bg: var(--note-red); }
+.note-orange { --note-bg: var(--note-orange); }
+.note-yellow { --note-bg: var(--note-yellow); }
+.note-green { --note-bg: var(--note-green); }
+.note-teal { --note-bg: var(--note-teal); }
+.note-blue { --note-bg: var(--note-blue); }
+.note-dark-blue { --note-bg: var(--note-dark-blue); }
+.note-purple { --note-bg: var(--note-purple); }
+.note-pink { --note-bg: var(--note-pink); }
+.note-brown { --note-bg: var(--note-brown); }
+.note-gray { --note-bg: var(--note-gray); }
+
+.note-swatch {
+  display: block;
+  width: 18px;
+  height: 18px;
+  background: var(--note-bg, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 50%;
+}
+
+.note-grid {
+  columns: 240px;
+  column-gap: 16px;
+}
+
+.note-card {
+  position: relative;
+  margin: 0 0 16px;
+  padding: 12px 16px 44px;
+  break-inside: avoid;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  background: var(--note-bg, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* A colored note needs no border. Its color class follows a space. */
+.note-card[class*=" note-"],
+.note-composer[class*=" note-"] {
+  border-color: transparent;
+}
+
+.note-card:hover,
+.note-card:focus-visible {
+  box-shadow: var(--shadow);
+}
+
+.note-card.trashed {
+  padding-bottom: 12px;
+  cursor: default;
+}
+
+/* Room for the pin beside whatever comes first. */
+.note-card > :first-child {
+  margin-right: 28px;
+}
+
+.note-title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.note-body {
+  max-height: 24em;
+  overflow: hidden;
+  font-size: 0.9375rem;
+}
+
+.note-body .markdown > :first-child {
+  margin-top: 0;
+}
+
+.note-body .markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.note-body .markdown :is(h1, h2, h3, h4, h5, h6) {
+  padding: 0;
+  font-size: 1rem;
+  border: none;
+}
+
+.note-checklist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+.note-checklist input {
+  margin-top: 3px;
+}
+
+.note-more {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.note-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-tags li {
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  background: rgb(127 127 127 / 0.18);
+  border-radius: 999px;
+}
+
+/* A card's buttons show on hover and keyboard focus, and always on touch
+   screens, which can't hover. A pinned note's pin always shows. */
+.note-card .note-pin {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.note-actions {
+  position: absolute;
+  bottom: 4px;
+  left: 8px;
+  display: flex;
+  gap: 2px;
+}
+
+.note-card .note-pin:not([aria-pressed="true"]),
+.note-actions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.note-card:hover :is(.note-pin, .note-actions),
+.note-card:focus-within :is(.note-pin, .note-actions) {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .note-card .note-pin:not([aria-pressed="true"]),
+  .note-actions {
+    opacity: 1;
+  }
+}
+
+.note-trash-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.notes-section {
+  margin: 16px 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.notes-empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.notes-where {
+  margin: 16px 0 0;
+  padding: 0 16px;
+  font-size: 0.8125rem;
+}
+
+/* The sidebar's Edit labels is a button that looks like its links. */
+button.place {
+  justify-content: flex-start;
+  width: 100%;
+  font: inherit;
+  font-weight: normal;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.note-composer {
+  max-width: 600px;
+  margin: 0 auto 24px;
+  padding: 8px 16px;
+  background: var(--note-bg, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.note-composer.collapsed {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px 4px 16px;
+}
+
+button.note-composer-open {
+  flex: 1;
+  justify-content: flex-start;
+  padding: 10px 0;
+  font-weight: normal;
+  color: var(--muted);
+  cursor: text;
+  background: none;
+  border: none;
+}
+
+.note-title-field,
+.note-body-field {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+}
+
+input.note-title-field {
+  min-height: 0;
+  padding: 8px 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.note-body-field {
+  min-height: 3lh;
+  overflow: hidden;
+}
+
+.note-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.note-toolbar .spacer {
+  flex: 1;
+}
+
+dialog.note-editor {
+  position: relative;
+  width: min(600px, calc(100vw - 32px));
+  max-height: calc(100dvh - 64px);
+  padding: 16px 20px;
+  overflow-y: auto;
+  background: var(--note-bg, var(--panel));
+}
+
+/* The dialog's title is for screen readers. The note's own title is the
+   first field. */
+dialog.note-editor > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+dialog.note-editor .note-pin {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+dialog.note-editor .note-title-field {
+  padding-right: 40px;
+}
+
+.note-edited {
+  margin: 8px 0 0;
+  font-size: 0.8125rem;
+  text-align: right;
+}
+
+.checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+input.checklist-text {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 0;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  outline: none;
+}
+
+.checklist-row.checked .checklist-text {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.checklist-row .icon-button {
+  opacity: 0;
+}
+
+.checklist-row:hover .icon-button,
+.checklist-row:focus-within .icon-button {
+  opacity: 1;
+}
+
+button.checklist-add {
+  margin: 6px 0 6px 26px;
+  font-weight: normal;
+  color: var(--muted);
+}
+
+.checklist-done {
+  margin: 12px 0 4px;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.label-new {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.label-new input {
+  flex: 1;
+  min-width: 0;
+}
+
+.label-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.label-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .note-grid {
+    columns: 2 150px;
+    column-gap: 8px;
+  }
+
+  .note-card {
+    margin-bottom: 8px;
   }
 }

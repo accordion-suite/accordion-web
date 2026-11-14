@@ -26,6 +26,11 @@ export const en = {
   "shell.signOut": "Sign out",
   "shell.mainMenu": "Main menu",
   "shell.account": "Account: {name}",
+  "apps.title": "Apps",
+  "shell.noModules": "No apps are turned on",
+  "shell.noModulesBody": "An admin turned off every app on this server. Ask them to turn one back on in Settings, under Modules.",
+  "apps.notes": "Notes",
+  "apps.notesLoadFailed": "Accordion couldn't load Notes. Reload the page, then try again.",
 
   "update.ready": "Accordion was updated.",
   "update.reload": "Reload",

@@ -89,7 +89,21 @@ export function logText(event: LoggedEvent, me: string): string {
       return t(event.details?.trash_days !== undefined ? "log.storageRetentionChanged" : "log.retentionChanged");
     case "previews_changed":
       return t("log.previewsChanged");
+    case "module_changed":
+      return t(event.details?.on === true ? "log.moduleOn" : "log.moduleOff", { module: moduleName(String(event.details?.module ?? "")) });
     default:
       return t("log.other");
+  }
+}
+
+/** A module's name, from its ID in an event. */
+function moduleName(id: string): string {
+  switch (id) {
+    case "drive":
+      return t("drive.title");
+    case "notes":
+      return t("apps.notes");
+    default:
+      return id;
   }
 }

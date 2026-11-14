@@ -3,9 +3,10 @@
 // translations or formats ship in the app beyond the message files.
 
 import { en } from "./messages/en.ts";
+import type { notesEn } from "./messages/notes.en.ts";
 import type { settingsEn } from "./messages/settings.en.ts";
 
-export type MessageKey = keyof typeof en | keyof typeof settingsEn;
+export type MessageKey = keyof typeof en | keyof typeof settingsEn | keyof typeof notesEn;
 type Plural = { readonly other: string } & { readonly [category: string]: string };
 type Values = Readonly<Record<string, string | number>>;
 
