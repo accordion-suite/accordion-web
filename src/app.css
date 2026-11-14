@@ -3638,9 +3638,8 @@ dialog.shortcuts kbd {
 }
 
 /* The storage page's summary above its list: what's used, the bar, and
-   each type of file with its size and share. */
-/* The bar takes the page's width, and the list of types stays narrow
-   enough to read across. */
+   each type of file with its size and share, in a row that wraps, as a
+   chart's key does. */
 .storage-summary {
   display: flex;
   flex-direction: column;
@@ -3654,19 +3653,23 @@ dialog.shortcuts kbd {
 }
 
 .storage-legend {
-  display: grid;
-  max-width: 560px;
-  grid-template-columns: 20px 1fr auto auto;
-  gap: 8px 12px;
-  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* Each row's parts line up in the list's columns. */
 .storage-legend li {
-  display: contents;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.storage-legend-icon {
+  display: flex;
 }
 
 .storage-legend .item-icon {
@@ -3676,12 +3679,10 @@ dialog.shortcuts kbd {
 
 .storage-legend-size,
 .storage-legend-share {
-  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .storage-legend-share {
-  min-width: 3.5em;
   color: var(--muted);
 }
 
