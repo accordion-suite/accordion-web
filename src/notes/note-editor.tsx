@@ -81,6 +81,11 @@ function NoteFields({
   autofocusBody?: boolean;
 }) {
   const body = useRef<HTMLTextAreaElement>(null);
+  // Browsers honor the autofocus attribute only once a page, so the box
+  // takes focus itself each time it opens, as a list's first item does.
+  useEffect(() => {
+    if (autofocusBody) body.current?.focus();
+  }, []);
   // Grows with the text, so the note reads as one piece.
   useEffect(() => {
     const area = body.current;
@@ -107,7 +112,6 @@ function NoteFields({
           aria-label={t("notes.bodyPlaceholder")}
           placeholder={t("notes.bodyPlaceholder")}
           rows={3}
-          autofocus={autofocusBody}
           value={draft.text}
           onInput={(event) => onDraft({ ...draft, text: event.currentTarget.value })}
         />
