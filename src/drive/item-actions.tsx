@@ -19,20 +19,23 @@ import { clipFromMenu } from "./clipboard.ts";
 import { ColorDialog, MoveDialog, NameDialog, ShareDialog, VersionsDialog } from "./dialogs.tsx";
 import { type Found, type Item, canEdit } from "./item.ts";
 import type { Notice } from "./layout.tsx";
+import { consentFor, movedNotice, moveWithConsent } from "./move-check.tsx";
 import { naming } from "./move.ts";
+import { placePath } from "./places.ts";
 import { freeName } from "./names.ts";
 import { announceChange } from "./store.ts";
 
-/** A folder's page. My Drive has its own address. */
-export function folderPath(item: Pick<Item, "id" | "parent">): string {
-  return item.parent === null ? "/drive/my-drive" : `/drive/folder/${item.id}`;
+/** A folder's page. My Drive and each app's place have their own
+ * addresses. */
+export function folderPath(item: Pick<Item, "id" | "parent" | "place">): string {
+  return item.parent === null ? placePath(item.place) : `/drive/folder/${item.id}`;
 }
 
 /** The folder an item is in, from a list that says where items are.
  * Something shared with the reader on its own is in Shared with me. */
 export function locationPath(item: Found): string {
   if (item.folders.length > 0) return `/drive/folder/${item.parent}`;
-  return item.owner === null ? "/drive/my-drive" : "/drive/shared";
+  return item.owner === null ? placePath(item.place) : "/drive/shared";
 }
 
 /** This page's address with `file` open in the viewer. */
@@ -288,16 +291,22 @@ export function useItemActions({
     dialog = (
       <MoveDialog
         items={open.items}
-        onMoved={(to, id) => {
+        onMoved={(to, id, consent, lost) => {
           setOpen(null);
-          // Each goes back to the folder it came from.
+          // Each goes back to the folder it came from, which gives back
+          // what the move took away.
           const moved = open.items.filter((item) => item.parent !== id);
-          done(naming(open.items, "drive.movedOne", "drive.movedMany", to), {
+          const notice = movedNotice(naming(open.items, "drive.movedOne", "drive.movedMany", to), lost, moved.length);
+          done(notice.message, {
+            undone: notice.undone,
             async undo() {
-              for (const item of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: item.parent });
+              const back = consentFor(lost);
+              for (const item of moved) {
+                await moveWithConsent(item, { parent: item.parent! }, back, t("move.cameFrom"));
+              }
             },
             async redo() {
-              for (const item of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: id });
+              for (const item of moved) await moveWithConsent(item, { parent: id }, consent, to);
             },
           });
         }}

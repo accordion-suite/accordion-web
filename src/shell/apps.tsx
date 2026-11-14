@@ -24,6 +24,12 @@ export const AppsIcon = () => (
   </Icon>
 );
 
+/** A module's icon, such as for its place in Drive's sidebar, if the grid
+ * knows it. */
+export function appIcon(id: string): FunctionComponent | null {
+  return APPS.find((app) => app.id === id)?.icon ?? null;
+}
+
 /** The modules among `modules` that the grid shows. */
 export function appsOn(modules: readonly string[]) {
   return APPS.filter((app) => modules.includes(app.id));

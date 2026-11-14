@@ -16,6 +16,7 @@ import { Filter, named, personIcon, TYPES, typeIcon, usePeople } from "./filter-
 import { withPerson } from "./filters.ts";
 import { CheckIcon, CloseIcon } from "./icons.tsx";
 import type { Item } from "./item.ts";
+import { folderName } from "./places.ts";
 import { anyFilter, MODIFIED, NO_FILTERS, type SearchFilters, searchPath } from "./search.ts";
 
 /** The location filter's choice that opens the folder chooser, rather than
@@ -35,7 +36,7 @@ function useFolderName(place: string): string {
     setName("");
     if (!isFolder(place)) return;
     api<Item>("GET", `/api/drive/items/${place}`).then(
-      (folder) => setName(folder.parent === null ? t("drive.myDrive") : folder.name),
+      (folder) => setName(folderName(folder)),
       () => setName(t("search.chooseFolder")),
     );
   }, [place]);

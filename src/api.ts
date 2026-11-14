@@ -8,11 +8,15 @@ import { t } from "./i18n.ts";
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string | null;
+  /** The whole reply, for an error whose code comes with more, such as who
+   * a move would share something with. */
+  readonly data: unknown;
 
-  constructor(status: number, message: string, code: string | null = null) {
+  constructor(status: number, message: string, code: string | null = null, data: unknown = null) {
     super(message);
     this.status = status;
     this.code = code;
+    this.data = data;
   }
 }
 
@@ -40,6 +44,7 @@ export async function send<T>(method: string, path: string, init: { headers: Hea
       response.status,
       typeof error === "string" ? error : t("error.problem"),
       typeof code === "string" ? code : null,
+      data,
     );
   }
   return data as T;

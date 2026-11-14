@@ -12,6 +12,7 @@ import { api } from "../api.ts";
 import { t } from "../i18n.ts";
 import type { Item } from "./item.ts";
 import type { Notice } from "./layout.tsx";
+import { type Person, askToMove, consentFor, everyone, movedNotice, moveWithConsent } from "./move-check.tsx";
 import { naming } from "./move.ts";
 import { freeName } from "./names.ts";
 import { announceChange } from "./store.ts";
@@ -143,21 +144,31 @@ async function move(
   }
   /** What moved, and the name each has there. */
   const moved: { item: Item; name: string }[] = [];
+  const lost: Person[][] = [];
+  // Moving where more people can open them asks first.
+  const consent = await askToMove(moving, { id: folder.id, name: folderName });
+  if (!consent) return;
   const undo = async () => {
+    // Each goes back, which gives back what the move took away.
+    const back = consentFor(everyone(lost));
     for (const { item } of moved) {
-      await api("PATCH", `/api/drive/items/${item.id}`, { parent: item.parent, name: item.name });
+      await moveWithConsent(item, { parent: item.parent!, name: item.name }, back, t("move.cameFrom"));
     }
   };
   const redo = async () => {
-    for (const { item, name } of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: folder.id, name });
+    for (const { item, name } of moved) {
+      await moveWithConsent(item, { parent: folder.id, name }, consent, folderName);
+    }
   };
   try {
     for (const item of moving) {
       const name = freeName(item.name, taken);
       taken.add(name);
       const change = name === item.name ? { parent: folder.id } : { parent: folder.id, name };
-      await api("PATCH", `/api/drive/items/${item.id}`, change);
+      const gone = await moveWithConsent(item, change, consent, folderName);
+      if (!gone) break;
       moved.push({ item, name });
+      lost.push(gone);
     }
   } catch (problem) {
     // What moved before the problem can still go back.
@@ -165,14 +176,19 @@ async function move(
     notify({ message, problem: true, undo: moved.length > 0 ? undo : undefined });
     return;
   }
+  if (moved.length === 0) return;
   // Cut items move once, as in a file manager.
   set(null);
   notify({
-    message: naming(
-      moved.map(({ item }) => item),
-      "drive.movedOne",
-      "drive.movedMany",
-      folderName,
+    ...movedNotice(
+      naming(
+        moved.map(({ item }) => item),
+        "drive.movedOne",
+        "drive.movedMany",
+        folderName,
+      ),
+      everyone(lost),
+      moved.length,
     ),
     undo,
     redo,

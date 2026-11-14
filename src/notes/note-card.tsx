@@ -1,12 +1,13 @@
 // A note as a card in the list, as in Google Keep: its title if someone gave
 // it one, its text or checklist, and its labels. Its buttons show on hover
-// and on keyboard focus. Selecting the card opens the note.
+// and on keyboard focus. Selecting the card opens the note, right-clicking
+// it opens its menu, and it can be dragged onto a folder in the sidebar.
 
 import { MarkdownView } from "../drive/markdown-view.tsx";
 import { t } from "../i18n.ts";
 import { isChecklist, readChecklist } from "./checklist.ts";
-import { ArchiveIcon, PaletteIcon, PinIcon } from "./icons.tsx";
-import { TrashIcon } from "../drive/icons.tsx";
+import { ArchiveIcon, LabelIcon, PaletteIcon, PinIcon } from "./icons.tsx";
+import { MoveIcon, TrashIcon } from "../drive/icons.tsx";
 import type { Note } from "./notes-api.ts";
 
 /** How many unchecked items a card shows. */
@@ -17,14 +18,29 @@ export function NoteCard({
   onOpen,
   onPin,
   onColor,
+  onLabels,
+  onMove,
   onArchive,
   onTrash,
   onToggle,
+  onMenu,
+  onDrag,
+  menuOpen = false,
 }: {
   note: Note;
+  /** Opens the note's menu, for a right-click or the context menu key. */
+  onMenu?: (event: MouseEvent) => void;
+  /** Starts or ends a drag of the note, with null at the end. */
+  onDrag?: (dragging: Note | null) => void;
+  /** Whether its menu is open, which marks the card. */
+  menuOpen?: boolean;
   onOpen: () => void;
   onPin: () => void;
   onColor: (button: HTMLElement) => void;
+  /** Chooses the note's labels. */
+  onLabels: () => void;
+  /** Chooses a folder for the note. */
+  onMove: () => void;
   onArchive: () => void;
   onTrash: () => void;
   /** Ticks or unticks the `index`th item of a checklist. */
@@ -33,10 +49,23 @@ export function NoteCard({
   const label = note.titled ? note.title : note.title || t("notes.untitled");
   return (
     <article
-      class={note.color ? `note-card note-${note.color}` : "note-card"}
+      class={["note-card", note.color && `note-${note.color}`, menuOpen && "menu-open"].filter(Boolean).join(" ")}
       tabIndex={0}
       aria-label={label}
       onClick={onOpen}
+      onContextMenu={(event) => {
+        if (!onMenu || (event.target as Element).closest("input")) return;
+        event.preventDefault();
+        onMenu(event);
+      }}
+      draggable={!!onDrag}
+      onDragStart={(event) => {
+        if (!onDrag) return;
+        event.dataTransfer!.effectAllowed = "move";
+        event.dataTransfer!.setData("text/plain", label);
+        onDrag(note);
+      }}
+      onDragEnd={() => onDrag?.(null)}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
@@ -79,6 +108,30 @@ export function NoteCard({
           }}
         >
           <PaletteIcon />
+        </button>
+        <button
+          type="button"
+          class="icon-button"
+          title={t(note.tags.length > 0 ? "notes.changeLabels" : "notes.addLabel")}
+          aria-label={t(note.tags.length > 0 ? "notes.changeLabels" : "notes.addLabel")}
+          onClick={(event) => {
+            event.stopPropagation();
+            onLabels();
+          }}
+        >
+          <LabelIcon />
+        </button>
+        <button
+          type="button"
+          class="icon-button"
+          title={t("notes.moveToFolder")}
+          aria-label={t("notes.moveToFolder")}
+          onClick={(event) => {
+            event.stopPropagation();
+            onMove();
+          }}
+        >
+          <MoveIcon />
         </button>
         <button
           type="button"

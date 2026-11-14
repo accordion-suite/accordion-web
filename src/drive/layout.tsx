@@ -26,10 +26,11 @@ import type {
 import { createContext } from "preact";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 
-import { api, send, type Session } from "../api.ts";
+import { api, modulesOn, send, type Session } from "../api.ts";
 import { t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
 import { followLink, navigate, usePath, useQueryString } from "../shell/router.ts";
+import { appIcon } from "../shell/apps.tsx";
 import { TopBar } from "../shell/top-bar.tsx";
 import { hasClipped, pasteInto, pastingClipped } from "./clipboard.ts";
 import { type DetailsTab, DetailsPanel } from "./details.tsx";
@@ -65,6 +66,7 @@ import {
 import { folderPath, useItemActions } from "./item-actions.tsx";
 import type { Item } from "./item.ts";
 import { dropProps } from "./move.ts";
+import { type PlaceInfo, folderName, isAppPlace, loadPlaces, placePath } from "./places.ts";
 import { SearchBox } from "./search-box.tsx";
 import { announceChange, focusNextList, useChanges, useDetailsOpen, useViewMode } from "./store.ts";
 import { StorageBar, usedText } from "./storage-meter.tsx";
@@ -192,6 +194,8 @@ export function DriveLayout({
     lastPage = path + query;
   }, [path, query]);
   const [top, setTop] = useState<Item | null>(null);
+  /** Apps' places shown as tabs below My Drive, with their top folders. */
+  const [places, setPlaces] = useState<readonly { info: PlaceInfo; top: Item }[]>([]);
   const [target, setTargetState] = useState<{ folder: Item | null; drops: boolean; trail: readonly string[] }>({
     folder: null,
     drops: false,
@@ -206,15 +210,16 @@ export function DriveLayout({
   const [dropping, setDropping] = useState(false);
   const [dropOn, setDropOn] = useState<string | null>(null);
   const [, setShown] = useState(0);
-  const myDriveOpen = expanded.has(MY_DRIVE);
-  // Opening a folder in My Drive opens My Drive in the sidebar, once, so
-  // the reader can still close it while they're there.
+  // Opening a folder in My Drive, or in an app's place, opens it in the
+  // sidebar, once, so the reader can still close it while they're there.
   useEffect(() => {
-    if (top && target.trail.includes(top.id) && !expanded.has(MY_DRIVE)) {
-      expanded.add(MY_DRIVE);
-      setShown((count) => count + 1);
+    for (const shown of [top, ...places.map((place) => place.top)]) {
+      if (shown && target.trail.includes(shown.id) && !expanded.has(shown.id)) {
+        expanded.add(shown.id);
+        setShown((count) => count + 1);
+      }
     }
-  }, [top, target.trail]);
+  }, [top, places, target.trail]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sharedCounts = useSharedCounts();
   const [selection, setSelection] = useState<readonly Item[]>([]);
@@ -245,6 +250,22 @@ export function DriveLayout({
     },
   });
 
+  // An app's place shows while its app is on, or while it holds anything,
+  // so turning an app off never hides anyone's files (decision 32).
+  const modules = modulesOn(session).join(",");
+  useEffect(() => {
+    loadPlaces()
+      .then((all) =>
+        Promise.all(
+          all
+            .filter((info) => modules.split(",").includes(info.place) || !info.empty)
+            .map(async (info) => ({ info, top: await api<Item>("GET", `/api/drive/places/${info.place}`) })),
+        ),
+      )
+      // The sidebar does without what it can't load.
+      .then(setPlaces, () => setPlaces([]));
+  }, [modules]);
+
   useEffect(() => {
     api<Item>("GET", "/api/drive/top").then(setTop, (problem: Error) =>
       notify({ message: problem.message, problem: true }),
@@ -265,7 +286,7 @@ export function DriveLayout({
       if (pastingClipped(event)) {
         event.preventDefault();
         if (!target.drops || !target.folder) notify({ message: t("drive.pasteWhere"), problem: true });
-        else void pasteInto(target.folder, nameOf(target.folder), notify);
+        else void pasteInto(target.folder, folderName(target.folder), notify);
         return;
       }
       const files = [...(event.clipboardData?.files ?? [])];
@@ -487,7 +508,7 @@ export function DriveLayout({
   }
 
   const here = target.folder ?? top;
-  const hereName = here ? nameOf(here) : t("drive.myDrive");
+  const hereName = here ? folderName(here) : t("drive.myDrive");
 
   /** Asks whether to replace what has the upload's names, or keep both.
    * Null means cancel. */
@@ -499,7 +520,8 @@ export function DriveLayout({
    * the folders first. */
   async function upload(tree: Tree, folder: Item | null = here) {
     if (!folder) return;
-    const into = { id: folder.id, name: nameOf(folder), top: folder.parent === null };
+    // The upload panel links to My Drive by its own address.
+    const into = { id: folder.id, name: folderName(folder), top: folder.parent === null && !isAppPlace(folder) };
     let placed;
     try {
       const found = clashes(tree, await foldersWithQueue.children(into.id));
@@ -548,7 +570,7 @@ export function DriveLayout({
       paste && hasClipped()
         ? [
             "separator",
-            { label: t("drive.paste"), shortcut: "Ctrl+V", onSelect: () => void pasteInto(into, nameOf(into), notify) },
+            { label: t("drive.paste"), shortcut: "Ctrl+V", onSelect: () => void pasteInto(into, folderName(into), notify) },
           ]
         : [];
     return [
@@ -660,52 +682,40 @@ export function DriveLayout({
             <Place href="/drive/" current={path === "/drive/"} icon={<HomeIcon />}>
               {t("drive.home")}
             </Place>
-            <li>
-              <div
-                class={
-                  ["place-row", top && dropOn === top.id && "drop-target", menu?.into && menu.into === top && "menu-open"]
-                    .filter(Boolean)
-                    .join(" ")
-                }
-                {...(top ? dropProps({ id: top.id, name: t("drive.myDrive") }, setDropOn, notify) : {})}
-                onContextMenu={(event) => top && openNewMenu(top, event)}
-              >
-                {top && (
-                  <button
-                    type="button"
-                    class="tree-toggle place-toggle"
-                    aria-expanded={myDriveOpen}
-                    aria-label={t(myDriveOpen ? "drive.collapse" : "drive.expand", { name: t("drive.myDrive") })}
-                    onClick={() => {
-                      if (myDriveOpen) expanded.delete(MY_DRIVE);
-                      else expanded.add(MY_DRIVE);
-                      setShown((count) => count + 1);
-                    }}
-                  >
-                    <ChevronIcon />
-                  </button>
-                )}
-                <a
-                  class="place"
-                  href="/drive/my-drive"
-                  onClick={followLink}
-                  aria-current={path === "/drive/my-drive" ? "page" : undefined}
-                >
-                  <DriveIcon />
-                  {t("drive.myDrive")}
-                </a>
-              </div>
-              {top && myDriveOpen && (
-                <FolderTree
-                  parent={top.id}
+            <TopRow
+              top={top}
+              href="/drive/my-drive"
+              name={t("drive.myDrive")}
+              icon={<DriveIcon />}
+              path={path}
+              trail={target.trail}
+              dropOn={dropOn}
+              setDropOn={setDropOn}
+              menuInto={menu?.into ?? null}
+              folderMenuOn={folderMenu?.folder.id ?? null}
+              onNewMenu={openNewMenu}
+              onFolderMenu={openFolderMenu}
+            />
+            {places.map(({ info, top: placeTop }) => {
+              const Icon = appIcon(info.place);
+              return (
+                <TopRow
+                  key={info.place}
+                  top={placeTop}
+                  href={placePath(info.place)}
+                  name={info.name}
+                  icon={Icon ? <Icon /> : <ItemIcon item={placeTop} />}
+                  path={path}
                   trail={target.trail}
-                  current={path}
-                  depth={1}
-                  menuOn={folderMenu?.folder.id ?? null}
-                  onMenu={openFolderMenu}
+                  dropOn={dropOn}
+                  setDropOn={setDropOn}
+                  menuInto={menu?.into ?? null}
+                  folderMenuOn={folderMenu?.folder.id ?? null}
+                  onNewMenu={openNewMenu}
+                  onFolderMenu={openFolderMenu}
                 />
-              )}
-            </li>
+              );
+            })}
             <Place
               href="/drive/shared-by-me"
               current={path === "/drive/shared-by-me"}
@@ -783,7 +793,7 @@ export function DriveLayout({
 
       {menu && (
         <Menu
-          label={t("drive.newIn", { folder: menu.into ? nameOf(menu.into) : hereName })}
+          label={t("drive.newIn", { folder: menu.into ? folderName(menu.into) : hereName })}
           entries={newEntries(menu.into ?? here, !!menu.into)}
           place={menu.place}
           byKeyboard={menu.byKeyboard}
@@ -854,9 +864,73 @@ export function DriveLayout({
   );
 }
 
-/** A folder's name, or "My Drive" for the top folder. */
-function nameOf(folder: Item): string {
-  return folder.parent === null ? t("drive.myDrive") : folder.name;
+/** A top folder in the sidebar, My Drive or an app's place, which opens to
+ * show its folders. Items dragged onto it move into it, and right-clicking
+ * it opens New's menu for it. */
+function TopRow({
+  top,
+  href,
+  name,
+  icon,
+  path,
+  trail,
+  dropOn,
+  setDropOn,
+  menuInto,
+  folderMenuOn,
+  onNewMenu,
+  onFolderMenu,
+}: {
+  top: Item | null;
+  href: string;
+  name: string;
+  icon: ComponentChildren;
+  path: string;
+  trail: readonly string[];
+  dropOn: string | null;
+  setDropOn: (id: string | null) => void;
+  menuInto: Item | null;
+  folderMenuOn: string | null;
+  onNewMenu: (folder: Item, event: TargetedMouseEvent<HTMLElement>) => void;
+  onFolderMenu: (folder: Item, event: TargetedMouseEvent<HTMLElement>) => void;
+}) {
+  const [, setShown] = useState(0);
+  const drive = useDrive();
+  const open = top !== null && expanded.has(top.id);
+  return (
+    <li>
+      <div
+        class={["place-row", top && dropOn === top.id && "drop-target", menuInto && menuInto === top && "menu-open"]
+          .filter(Boolean)
+          .join(" ")}
+        {...(top ? dropProps({ id: top.id, name }, setDropOn, drive.notify) : {})}
+        onContextMenu={(event) => top && onNewMenu(top, event)}
+      >
+        {top && (
+          <button
+            type="button"
+            class="tree-toggle place-toggle"
+            aria-expanded={open}
+            aria-label={t(open ? "drive.collapse" : "drive.expand", { name })}
+            onClick={() => {
+              if (open) expanded.delete(top.id);
+              else expanded.add(top.id);
+              setShown((count) => count + 1);
+            }}
+          >
+            <ChevronIcon />
+          </button>
+        )}
+        <a class="place" href={href} onClick={followLink} aria-current={path === href ? "page" : undefined}>
+          {icon}
+          {name}
+        </a>
+      </div>
+      {top && open && (
+        <FolderTree parent={top.id} trail={trail} current={path} depth={1} menuOn={folderMenuOn} onMenu={onFolderMenu} />
+      )}
+    </li>
+  );
 }
 
 function Place({
@@ -928,10 +1002,6 @@ function NoticeBar({
 /** The folders opened in the sidebar. They stay open while the reader moves
  * between pages. */
 const expanded = new Set<string>();
-
-/** Stands for My Drive in `expanded`. It starts closed, and opens when the
- * reader opens My Drive or a folder in it. */
-const MY_DRIVE = "my-drive";
 
 /** The address of the Drive page the reader was last on, such as a
  * folder, so Settings can lead back to it. */

@@ -9,10 +9,10 @@
 // move pointer, and dropping outside a folder does nothing. A small card
 // with the items' name follows the pointer, as in Google Drive.
 
-import { api } from "../api.ts";
 import { t } from "../i18n.ts";
 import type { Item } from "./item.ts";
 import type { Notice } from "./layout.tsx";
+import { type Person, askToMove, consentFor, everyone, movedNotice, moveWithConsent } from "./move-check.tsx";
 import { announceChange } from "./store.ts";
 
 /** Marks a drag as Accordion's own, for other apps it's dropped on. */
@@ -114,18 +114,30 @@ async function moveInto(
 ): Promise<void> {
   const moving = items.filter((item) => item.parent !== folder.id);
   const moved: Item[] = [];
+  const lost: Person[][] = [];
   try {
+    // Moving where more people can open them asks first.
+    const consent = await askToMove(moving, folder);
+    if (!consent) return;
     for (const item of moving) {
-      await api("PATCH", `/api/drive/items/${item.id}`, { parent: folder.id });
+      const gone = await moveWithConsent(item, { parent: folder.id }, consent, folder.name);
+      if (!gone) break;
       moved.push(item);
+      lost.push(gone);
     }
+    if (moved.length === 0) return;
+    const leftOut = everyone(lost);
     notify({
-      message: naming(moving, "drive.movedOne", "drive.movedMany", folder.name),
+      ...movedNotice(naming(moved, "drive.movedOne", "drive.movedMany", folder.name), leftOut, moved.length),
       async undo() {
-        for (const item of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: item.parent });
+        // Each goes back, which gives back what the move took away.
+        const back = consentFor(leftOut);
+        for (const item of moved) {
+          await moveWithConsent(item, { parent: item.parent! }, back, t("move.cameFrom"));
+        }
       },
       async redo() {
-        for (const item of moved) await api("PATCH", `/api/drive/items/${item.id}`, { parent: folder.id });
+        for (const item of moved) await moveWithConsent(item, { parent: folder.id }, consent, folder.name);
       },
     });
   } catch (failure) {

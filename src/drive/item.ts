@@ -39,6 +39,9 @@ export interface Item {
   type?: string | null;
   /** When it was deleted, if it's in the trash itself. */
   trashed_at?: string | null;
+  /** For a top folder: which place it is, "drive" for My Drive, or an
+   * app's, such as "notes". */
+  place?: string | null;
 }
 
 /** Where a file's thumbnail is. Browsers keep it for a year, so the
@@ -61,11 +64,14 @@ export function canEdit(item: Pick<Item, "access" | "trashed_at">): boolean {
 
 /** An item in a list that reaches across folders, such as search results,
  * with the names of the folders it's in, outermost first, not counting My
- * Drive. */
+ * Drive or the app's place it's in. */
 export interface Found extends Item {
   /** For someone else's item, these start at the folder they shared, and
    * are empty for the shared item itself. */
   folders: string[];
+  /** For the reader's own: the place `folders` starts in, such as "drive"
+   * for My Drive or "notes". Null for what's shared with them. */
+  place?: string | null;
 }
 
 /** Part of a line of text from inside a file. */

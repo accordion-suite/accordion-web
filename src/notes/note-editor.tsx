@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { ApiError } from "../api.ts";
-import { CloseIcon } from "../drive/icons.tsx";
+import { CloseIcon, MoveIcon } from "../drive/icons.tsx";
 import { formatMoment, t } from "../i18n.ts";
 import { Dialog, problemText } from "../shell/dialog.tsx";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
@@ -197,8 +197,31 @@ function ChecklistEditor({
 }
 
 /** The box at the top of the list, which takes a new note when it closes. */
-export function Composer({ label, onCreated }: { label: string | null; onCreated: (note: Note) => void }) {
+export function Composer({
+  label,
+  folder = null,
+  start = null,
+  onStarted,
+  onCreated,
+}: {
+  label: string | null;
+  /** The folder a note taken here goes in, when a folder is open. */
+  folder?: string | null;
+  /** Opens the box from elsewhere, such as the page's menu: a new `at`
+   * opens it for a note or a list. */
+  start?: { kind: "note" | "list"; at: number } | null;
+  /** Called once `start` has opened the box, so it doesn't again. */
+  onStarted?: () => void;
+  onCreated: (note: Note) => void;
+}) {
   const [draft, setDraft] = useState<Draft | null>(null);
+  useEffect(() => {
+    if (!start) return;
+    onStarted?.();
+    if (latest.current.draft) return;
+    setDraft({ title: "", text: "", items: start.kind === "list" ? [{ checked: false, text: "" }] : null });
+    box.current?.scrollIntoView?.({ block: "nearest" });
+  }, [start?.at]);
   const [color, setColor] = useState<NoteColor | null>(null);
   const [pinned, setPinned] = useState(false);
   const [colors, setColors] = useState<MenuPlace | null>(null);
@@ -220,7 +243,7 @@ export function Composer({ label, onCreated }: { label: string | null; onCreated
     }
     saving.current = true;
     try {
-      const note = await createNote({ title: draft.title, body, color, pinned, tags: label ? [label] : [] });
+      const note = await createNote({ title: draft.title, body, color, pinned, tags: label ? [label] : [], folder });
       reset();
       onCreated(note);
     } catch (problem) {
@@ -355,10 +378,13 @@ export function NoteEditor({
   labels,
   onChanged,
   onTrash,
+  onMove,
   onClose,
 }: {
   id: string;
   labels: readonly string[];
+  /** Chooses a folder for the note. */
+  onMove: (note: Note) => void;
   /** After each save, so the list behind shows it. */
   onChanged: (note: Note) => void;
   onTrash: (note: Note) => void;
@@ -501,6 +527,18 @@ export function NoteEditor({
             </button>
             <button type="button" class="icon-button" title={t("notes.addLabel")} aria-label={t("notes.addLabel")} onClick={() => setPicking(true)}>
               <LabelIcon />
+            </button>
+            <button
+              type="button"
+              class="icon-button"
+              title={t("notes.moveToFolder")}
+              aria-label={t("notes.moveToFolder")}
+              onClick={() => {
+                window.clearTimeout(timer.current);
+                void saveText(draft).then(() => latest.current && onMove(latest.current));
+              }}
+            >
+              <MoveIcon />
             </button>
             <CheckboxToggle draft={draft} onDraft={edit} />
             <button

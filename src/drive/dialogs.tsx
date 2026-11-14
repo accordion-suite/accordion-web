@@ -15,6 +15,8 @@ import { LinksSection } from "./links.tsx";
 import { type Access, pathTo, whoHasAccess } from "./store.ts";
 import { keptFor, useRetention } from "./retention.ts";
 import { freeName, stemLength } from "./names.ts";
+import { type Consent, type Person as Leaving, askToMove, everyone, moveWithConsent } from "./move-check.tsx";
+import { folderName, isAppPlace, loadPlaces } from "./places.ts";
 
 /** Asks for a name, such as for a new folder. `onSubmit` throws to show a
  * problem, such as a name that's taken, and leaves the dialog open. */
@@ -135,6 +137,20 @@ interface Place {
   folder: Item;
   parent: Item | null;
   folders: Item[];
+  /** At one of the reader's top folders: their others, such as Notes from
+   * My Drive (decision 32). */
+  others: Item[];
+}
+
+/** The reader's top folders other than `folder`, when it's one of theirs. */
+async function otherTops(folder: Item): Promise<Item[]> {
+  if (folder.parent !== null || folder.access !== "owner") return [];
+  const places = await loadPlaces().catch(() => []);
+  const wanted = [
+    ...(isAppPlace(folder) ? ["drive"] : []),
+    ...places.filter((place) => place.id !== null && place.id !== folder.id).map((place) => place.place),
+  ];
+  return Promise.all(wanted.map((place) => api<Item>("GET", `/api/drive/places/${place}`)));
 }
 
 /** The folder `id` is in, or null if the reader can't open it, such as
@@ -151,9 +167,10 @@ async function parentOf(folder: Item): Promise<Item | null> {
 
 async function place(id: string | null, moving: ReadonlySet<string>): Promise<Place> {
   const folder = await api<Item>("GET", id === null ? "/api/drive/top" : `/api/drive/items/${id}`);
-  const [parent, children] = await Promise.all([
+  const [parent, children, others] = await Promise.all([
     parentOf(folder),
     api<Item[]>("GET", `/api/drive/items/${folder.id}/children`),
+    otherTops(folder),
   ]);
   const collator = new Intl.Collator(undefined, { numeric: true });
   // A folder can't move into itself, so the folders being moved aren't
@@ -161,7 +178,7 @@ async function place(id: string | null, moving: ReadonlySet<string>): Promise<Pl
   const folders = children
     .filter((child) => child.kind === "folder" && !moving.has(child.id))
     .sort((a, b) => collator.compare(a.name, b.name));
-  return { folder, parent, folders };
+  return { folder, parent, folders, others };
 }
 
 /** Lets the reader browse to a folder, then moves `items` into it. Items
@@ -173,8 +190,9 @@ export function MoveDialog({
   onClose,
 }: {
   items: readonly Item[];
-  /** With the folder's name and ID. */
-  onMoved: (to: string, id: string) => void;
+  /** With the folder's name and ID, what the reader agreed to, and who
+   * can't open the items anymore. */
+  onMoved: (to: string, id: string, consent: Consent, lost: Leaving[]) => void;
   onClose: () => void;
 }) {
   const moving = new Set(items.map((item) => item.id));
@@ -190,7 +208,7 @@ export function MoveDialog({
     place(at, moving).then(setShown, (problem) => setError(message(problem)));
   }, [at]);
 
-  const name = (folder: Item) => (folder.parent === null ? t("drive.myDrive") : folder.name);
+  const name = folderName;
   const here = shown?.folder;
   // Moving to where everything already is would change nothing.
   const already = here !== undefined && items.every((item) => item.parent === here.id);
@@ -200,12 +218,24 @@ export function MoveDialog({
     setBusy(true);
     setError("");
     try {
+      // Moving where more people can open them asks first.
+      const consent = await askToMove(items, { id: here.id, name: name(here) });
+      if (!consent) {
+        setBusy(false);
+        return;
+      }
+      const lost: Leaving[][] = [];
       for (const item of items) {
         if (item.parent !== here.id) {
-          await api("PATCH", `/api/drive/items/${item.id}`, { parent: here.id });
+          const gone = await moveWithConsent(item, { parent: here.id }, consent, name(here));
+          if (!gone) {
+            setBusy(false);
+            return;
+          }
+          lost.push(gone);
         }
       }
-      onMoved(name(here), here.id);
+      onMoved(name(here), here.id, consent, everyone(lost));
     } catch (problem) {
       setError(message(problem));
       setBusy(false);
@@ -278,6 +308,18 @@ function FolderBrowser({
           ))}
         </ul>
       )}
+      {shown.others.length > 0 && <p class="hint">{t("drive.otherPlaces")}</p>}
+      {shown.others.length > 0 && (
+        <ul class="move-folders" aria-label={t("drive.otherPlaces")}>
+          {shown.others.map((top) => (
+            <li key={top.id}>
+              <button type="button" class="link" onClick={() => open(top.id)}>
+                {name(top)}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   );
 }
@@ -301,7 +343,7 @@ export function ChooseFolderDialog({
     place(at, new Set()).then(setShown, (problem) => setError(message(problem)));
   }, [at]);
 
-  const name = (folder: Item) => (folder.parent === null ? t("drive.myDrive") : folder.name);
+  const name = folderName;
 
   function open(id: string) {
     setAt(id);

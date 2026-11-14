@@ -200,7 +200,10 @@ function drivePage(path: string) {
       return <SearchPage key={trimmed} />;
   }
   const folder = /^\/drive\/folder\/([^/]+)$/.exec(trimmed);
-  return folder ? <FolderPage key={trimmed} folder={folder[1]!} /> : null;
+  if (folder) return <FolderPage key={trimmed} folder={folder[1]!} />;
+  // An app's place beside My Drive, such as Notes (decision 32).
+  const place = /^\/drive\/place\/([a-z]+)$/.exec(trimmed);
+  return place ? <FolderPage key={trimmed} folder={null} place={place[1]!} /> : null;
 }
 
 type NotesModule = typeof import("../notes/notes.tsx");

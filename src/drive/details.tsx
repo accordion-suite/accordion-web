@@ -19,6 +19,7 @@ import { CloseIcon, InfoIcon, ItemIcon, kindOf } from "./icons.tsx";
 import { folderPath } from "./item-actions.tsx";
 import { CardPreview } from "./item-list.tsx";
 import { type Item, canEdit } from "./item.ts";
+import { folderName } from "./places.ts";
 import { type Access, announceChange, pathTo, whoHasAccess } from "./store.ts";
 
 const TYPES: Record<string, MessageKey> = {
@@ -80,10 +81,8 @@ function extensionOf(name: string): string | null {
  * pages don't say much about it. */
 const PAGED = new Set(["document", "presentation", "pdf", "ebook"]);
 
-/** An item's name, with "My Drive" for the reader's top folder. */
-function nameOf(item: Item): string {
-  return item.parent === null ? t("drive.myDrive") : item.name;
-}
+/** An item's name, with "My Drive" or the app's place for a top folder. */
+const nameOf = folderName;
 
 export type DetailsTab = "details" | "activity";
 

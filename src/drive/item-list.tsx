@@ -50,6 +50,7 @@ import {
   TrashIcon,
 } from "./icons.tsx";
 import { type Found, type Hit, type Item, type SharedOut, canEdit, thumbnailAddress } from "./item.ts";
+import { placeName } from "./places.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { useDriveSettings } from "./preferences.ts";
 import { dropProps, endDrag, naming, startDrag } from "./move.ts";
@@ -683,7 +684,7 @@ export function ItemList({
   function where(item: Item | Found) {
     if (!located(item)) return null;
     if (owners) return <span>{item.owner}</span>;
-    const path = [item.owner === null ? t("drive.myDrive") : t("shared.title"), ...item.folders];
+    const path = [item.owner === null ? placeName((item as Found).place) : t("shared.title"), ...item.folders];
     return (
       <a href={locationPath(item)} onClick={followLink} title={path.join(" › ")}>
         {path[path.length - 1]}

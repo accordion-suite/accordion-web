@@ -71,7 +71,9 @@ export function matches(
       return false;
     }
   }
-  if (filters.source === "my-drive" && item.owner !== null) return false;
+  // Apps' places, such as Notes, aren't part of My Drive.
+  const place = (item as Partial<Found>).place;
+  if (filters.source === "my-drive" && (item.owner !== null || (place && place !== "drive"))) return false;
   if (filters.source === "shared" && item.owner === null) return false;
   if (filters.modified) {
     const { after, before } = modifiedRange(filters.modified, now);

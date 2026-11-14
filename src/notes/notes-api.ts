@@ -30,6 +30,8 @@ export interface Note {
   pinned: boolean;
   archived: boolean;
   tags: string[];
+  /** The folder it's in, or null at the top of the Notes place. */
+  folder: string | null;
   /** The contents' hash, sent back with a new text. */
   hash: string;
   created_at: string;
@@ -56,12 +58,37 @@ export interface NoteChange {
   tags?: string[];
 }
 
-export function listNotes(q?: string): Promise<{ notes: Note[]; labels: string[] }> {
+/** A folder in the Notes place. Notes makes, renames, and moves folders
+ * through Drive's API, so a move that would share something asks first. */
+export interface NoteFolder {
+  id: string;
+  name: string;
+  /** The folder it's in, or null at the top. */
+  parent: string | null;
+}
+
+export interface NoteList {
+  notes: Note[];
+  labels: string[];
+  folders: NoteFolder[];
+  /** The Notes place's top folder in Drive. */
+  top: string;
+}
+
+export function listNotes(q?: string): Promise<NoteList> {
   const query = q ? `?q=${encodeURIComponent(q)}` : "";
   return api("GET", `/api/notes/notes${query}`);
 }
 
-export function createNote(note: { title?: string; body: string; color?: string | null; pinned?: boolean; tags?: string[] }): Promise<Note> {
+export function createNote(note: {
+  title?: string;
+  body: string;
+  color?: string | null;
+  pinned?: boolean;
+  tags?: string[];
+  /** A folder in the Notes place to save it in. */
+  folder?: string | null;
+}): Promise<Note> {
   return api("POST", "/api/notes/notes", { ...note, color: note.color ?? undefined });
 }
 
@@ -103,4 +130,22 @@ export function renameLabel(from: string, name: string): Promise<{ labels: strin
 
 export function removeLabel(name: string): Promise<{ labels: string[] }> {
   return api("DELETE", `/api/notes/labels/${encodeURIComponent(name)}`);
+}
+
+/** Makes a folder in the Notes place, in `parent` or its top folder. */
+export function makeFolder(parent: string, name: string): Promise<{ id: string; name: string }> {
+  return api("POST", `/api/drive/items/${parent}/children`, { name });
+}
+
+export function renameFolder(id: string, name: string): Promise<unknown> {
+  return api("PATCH", `/api/drive/items/${id}`, { name });
+}
+
+/** Moves a folder to Drive's trash, with the notes in it. */
+export function trashFolder(id: string): Promise<unknown> {
+  return api("DELETE", `/api/drive/items/${id}`);
+}
+
+export function restoreFolder(id: string): Promise<unknown> {
+  return api("POST", `/api/drive/items/${id}/restore`);
 }

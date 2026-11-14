@@ -1,5 +1,5 @@
-// A folder in Drive, with the path down to it from My Drive, or from Shared
-// with me for someone else's folder. Right-clicking empty space opens New's
+// A folder in Drive, with the path down to it from My Drive or an app's
+// place, such as Notes, or from Shared with me for someone else's folder. Right-clicking empty space opens New's
 // menu for the folder, and files dropped on the page upload into it, unless
 // the reader can only view it. The folders in the path work as they do in
 // the sidebar: right-clicking one opens its menu, and items dragged onto
@@ -18,6 +18,7 @@ import { ItemList, PageTools } from "./item-list.tsx";
 import { type Item, canEdit } from "./item.ts";
 import { typing, useDrive, useTarget } from "./layout.tsx";
 import { dropProps } from "./move.ts";
+import { folderName, placeName } from "./places.ts";
 import { focusNextList, pathTo, remember, useChanges } from "./store.ts";
 
 interface Loaded {
@@ -34,8 +35,10 @@ export function sortChildren(children: Item[]): Item[] {
   );
 }
 
-async function load(id: string | null): Promise<Loaded> {
-  const folder = await api<Item>("GET", id === null ? "/api/drive/top" : `/api/drive/items/${id}`);
+async function load(id: string | null, place: string | undefined): Promise<Loaded> {
+  const address =
+    id !== null ? `/api/drive/items/${id}` : place ? `/api/drive/places/${place}` : "/api/drive/top";
+  const folder = await api<Item>("GET", address);
   const [path, children] = await Promise.all([
     pathTo(folder),
     api<Item[]>("GET", `/api/drive/items/${folder.id}/children`),
@@ -44,13 +47,9 @@ async function load(id: string | null): Promise<Loaded> {
   return { path, children: sortChildren(children) };
 }
 
-/** A folder's name, or "My Drive" for the top folder. */
-export function folderName(folder: Item): string {
-  return folder.parent === null ? t("drive.myDrive") : folder.name;
-}
-
-/** `folder` is null for My Drive. */
-export function FolderPage({ folder }: { folder: string | null }) {
+/** `folder` is null for a top folder: My Drive, or `place`, such as
+ * "notes". */
+export function FolderPage({ folder, place }: { folder: string | null; place?: string }) {
   const drive = useDrive();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState("");
@@ -59,12 +58,12 @@ export function FolderPage({ folder }: { folder: string | null }) {
   const here = loaded?.path[loaded.path.length - 1] ?? null;
 
   function refresh() {
-    load(folder).then(setLoaded, (problem: Error) =>
+    load(folder, place).then(setLoaded, (problem: Error) =>
       loaded ? drive.notify({ message: problem.message, problem: true }) : setError(problem.message),
     );
   }
 
-  useEffect(refresh, [folder]);
+  useEffect(refresh, [folder, place]);
   useChanges(refresh, { folder: here?.id });
   // With nothing selected, the details panel shows the folder.
   useEffect(() => {
@@ -151,7 +150,7 @@ export function FolderPage({ folder }: { folder: string | null }) {
   if (error) {
     return (
       <main class="page">
-        <PageTitle>{t("drive.myDrive")}</PageTitle>
+        <PageTitle>{place ? placeName(place) : t("drive.myDrive")}</PageTitle>
         <p class="error" role="alert">
           {error}
         </p>
