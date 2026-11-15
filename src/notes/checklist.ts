@@ -62,3 +62,21 @@ export function toggleTask(body: string, index: number): string {
     })
     .join("\n");
 }
+
+const TASK_START = /^\s*[-*+] \[[ xX]\] ?/;
+
+/** Where each task's text is in `body`, in order, as offsets from the
+ * start: from just after its checkbox to the end of its line. Others'
+ * carets in a shared list are offsets in the body, and these place them
+ * in an item. */
+export function taskTexts(body: string): { start: number; end: number }[] {
+  const texts: { start: number; end: number }[] = [];
+  let at = 0;
+  for (const line of body.split("\n")) {
+    const bare = line.replace(/\r$/, "");
+    const start = TASK_START.exec(bare);
+    if (start && TASK.test(bare)) texts.push({ start: at + start[0].length, end: at + bare.length });
+    at += line.length + 1;
+  }
+  return texts;
+}

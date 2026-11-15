@@ -3,14 +3,18 @@
 // checkbox on each item. The dialog saves a second after typing stops, and
 // at once for a color, a pin, labels, or archiving (decision 31).
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import type { TargetedKeyboardEvent } from "preact";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 
 import { ApiError } from "../api.ts";
-import { CloseIcon, MoveIcon } from "../drive/icons.tsx";
+import { CloseIcon, MoveIcon, PeopleIcon } from "../drive/icons.tsx";
 import { formatMoment, t } from "../i18n.ts";
+import { useLive } from "../shell/live.ts";
 import { Dialog, problemText } from "../shell/dialog.tsx";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
-import { type ChecklistItem, fromChecklist, isChecklist, readChecklist, toChecklist, writeChecklist } from "./checklist.ts";
+import { type ChecklistItem, fromChecklist, isChecklist, readChecklist, taskTexts, toChecklist, writeChecklist } from "./checklist.ts";
+import { type LiveStatus, LiveNote, type Visitor } from "./live.ts";
+import { shiftCaret } from "./text-change.ts";
 import { useListSettings } from "./preferences.ts";
 import { ArchiveIcon, ChecklistIcon, LabelIcon, NoColorIcon, PaletteIcon, PinIcon } from "./icons.tsx";
 import { TrashIcon } from "../drive/icons.tsx";
@@ -71,17 +75,143 @@ export function ColorMenu({
   );
 }
 
+/** Someone else's caret in one field: an offset in the text box, or in
+ * a list item's text. */
+export interface FieldCaret {
+  key: number;
+  name: string;
+  color: string;
+  at: number;
+  /** The list item it's in, in a list. */
+  item?: number;
+}
+
+/** The reader's own caret: in the text box, or in a list item's text. */
+export type OwnCaret = { start: number; end: number; item?: number };
+
+/** Where the caret for `index` would be in `field`, in pixels from the
+ * field's top left, measured with a copy of the field's text laid out the
+ * same way. */
+function caretPoint(field: HTMLTextAreaElement | HTMLInputElement, index: number) {
+  const style = getComputedStyle(field);
+  const mirror = document.createElement("div");
+  for (const name of [
+    "boxSizing", "width", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+    "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "borderStyle",
+    "fontFamily", "fontSize", "fontWeight", "fontStyle", "letterSpacing", "lineHeight",
+    "textTransform", "wordSpacing", "tabSize", "textIndent",
+  ] as const) {
+    mirror.style[name] = style[name];
+  }
+  Object.assign(mirror.style, {
+    position: "absolute",
+    visibility: "hidden",
+    top: "0",
+    left: "-9999px",
+    whiteSpace: field instanceof HTMLTextAreaElement ? "pre-wrap" : "pre",
+    overflowWrap: "break-word",
+  });
+  mirror.textContent = field.value.slice(0, index);
+  const marker = document.createElement("span");
+  marker.textContent = "\u200b";
+  mirror.appendChild(marker);
+  document.body.appendChild(mirror);
+  const point = {
+    left: field.offsetLeft + marker.offsetLeft - field.scrollLeft,
+    top: field.offsetTop + marker.offsetTop - field.scrollTop,
+    height: marker.offsetHeight,
+  };
+  mirror.remove();
+  return point;
+}
+
+/** Others' carets over a text field, each in their color, with their
+ * name. */
+function Carets({
+  field,
+  carets,
+  text,
+}: {
+  field: { current: HTMLTextAreaElement | HTMLInputElement | null };
+  carets: readonly FieldCaret[];
+  text: string;
+}) {
+  const [points, setPoints] = useState<(FieldCaret & { left: number; top: number; height: number })[]>([]);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const resized = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", resized);
+    return () => window.removeEventListener("resize", resized);
+  }, []);
+  const key = carets.map((caret) => `${caret.key}:${caret.at}`).join(",");
+  useLayoutEffect(() => {
+    const element = field.current;
+    if (!element || carets.length === 0) {
+      setPoints([]);
+      return;
+    }
+    setPoints(carets.map((caret) => ({ ...caret, ...caretPoint(element, Math.min(caret.at, element.value.length)) })));
+  }, [key, text, width]);
+  return (
+    <>
+      {points.map((point) => (
+        <span
+          key={point.key}
+          class="remote-caret"
+          aria-hidden="true"
+          style={{ left: `${point.left}px`, top: `${point.top}px`, height: `${point.height}px`, "--caret": point.color }}
+        >
+          {/* Keyed by where it is, so the name shows again each time the
+              caret moves, then fades so it doesn't cover the text. */}
+          <span key={point.at} class="remote-caret-name">
+            {point.name}
+          </span>
+        </span>
+      ))}
+    </>
+  );
+}
+
 /** The fields for writing a note, shared by the box and the dialog. */
 function NoteFields({
   draft,
   onDraft,
   autofocusBody,
+  readOnly = false,
+  carets = [],
+  onCaret,
 }: {
   draft: Draft;
   onDraft: (draft: Draft) => void;
   autofocusBody?: boolean;
+  /** For someone who can see a shared note but not change it. */
+  readOnly?: boolean;
+  /** Others' carets, in a shared note. */
+  carets?: readonly FieldCaret[];
+  /** Where the reader's caret is, as it moves, in a shared note. */
+  onCaret?: (caret: OwnCaret | null) => void;
 }) {
   const body = useRef<HTMLTextAreaElement>(null);
+  /** What the text was, and where the caret, as the reader last left it,
+   * so a change from someone else keeps the caret with its words. */
+  const shown = useRef({ text: draft.text, start: 0, end: 0 });
+  const remember = () => {
+    const area = body.current;
+    if (!area) return;
+    shown.current = { text: area.value, start: area.selectionStart, end: area.selectionEnd };
+    if (document.activeElement === area) onCaret?.({ start: area.selectionStart, end: area.selectionEnd });
+  };
+  useLayoutEffect(() => {
+    const area = body.current;
+    const before = shown.current;
+    if (area && document.activeElement === area && before.text !== draft.text) {
+      area.setSelectionRange(
+        shiftCaret(before.text, draft.text, before.start),
+        shiftCaret(before.text, draft.text, before.end),
+      );
+    }
+    remember();
+  }, [draft.text]);
   // Browsers honor the autofocus attribute only once a page, so the box
   // takes focus itself each time it opens, as a list's first item does.
   useEffect(() => {
@@ -101,23 +231,104 @@ function NoteFields({
         aria-label={t("notes.titlePlaceholder")}
         placeholder={t("notes.titlePlaceholder")}
         maxLength={100}
+        readOnly={readOnly}
         value={draft.title}
         onInput={(event) => onDraft({ ...draft, title: event.currentTarget.value })}
       />
       {draft.items ? (
-        <ChecklistEditor items={draft.items} onItems={(items) => onDraft({ ...draft, items })} autofocus={autofocusBody} />
+        <ChecklistEditor
+          items={draft.items}
+          onItems={(items) => onDraft({ ...draft, items })}
+          autofocus={autofocusBody}
+          readOnly={readOnly}
+          carets={carets}
+          onCaret={onCaret}
+        />
       ) : (
+        <div class="caret-host">
         <textarea
           ref={body}
           class="note-body-field"
           aria-label={t("notes.bodyPlaceholder")}
-          placeholder={t("notes.bodyPlaceholder")}
+          placeholder={readOnly ? "" : t("notes.bodyPlaceholder")}
           rows={3}
+          readOnly={readOnly}
           value={draft.text}
-          onInput={(event) => onDraft({ ...draft, text: event.currentTarget.value })}
+          onSelect={remember}
+          onKeyUp={remember}
+          onPointerUp={remember}
+          onFocus={remember}
+          onInput={(event) => {
+            remember();
+            onDraft({ ...draft, text: event.currentTarget.value });
+          }}
         />
+        <Carets field={body} carets={carets} text={draft.text} />
+        </div>
       )}
     </>
+  );
+}
+
+/** A list item's text, with others' carets over it. */
+function ItemText({
+  index,
+  text,
+  readOnly,
+  carets,
+  onCaret,
+  onInput,
+  onKeyDown,
+}: {
+  index: number;
+  text: string;
+  readOnly: boolean;
+  carets: readonly FieldCaret[];
+  onCaret?: (caret: OwnCaret | null) => void;
+  onInput: (text: string) => void;
+  onKeyDown: (event: TargetedKeyboardEvent<HTMLInputElement>) => void;
+}) {
+  const field = useRef<HTMLInputElement>(null);
+  /** The text and caret as the reader left them, so someone else's change
+   * to this item keeps the caret with its words. */
+  const shown = useRef({ text, start: 0, end: 0 });
+  const report = () => {
+    const input = field.current;
+    if (!input) return;
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? 0;
+    shown.current = { text: input.value, start, end };
+    if (document.activeElement === input) onCaret?.({ item: index, start, end });
+  };
+  useLayoutEffect(() => {
+    const input = field.current;
+    const before = shown.current;
+    if (input && document.activeElement === input && before.text !== text) {
+      input.setSelectionRange(shiftCaret(before.text, text, before.start), shiftCaret(before.text, text, before.end));
+    }
+    report();
+  }, [text]);
+  return (
+    <span class="caret-host checklist-text-host">
+      <input
+        ref={field}
+        data-item={index}
+        class="checklist-text"
+        aria-label={t("notes.listItem")}
+        readOnly={readOnly}
+        value={text}
+        onInput={(event) => {
+          onInput(event.currentTarget.value);
+          report();
+        }}
+        onKeyDown={onKeyDown}
+        onKeyUp={report}
+        onSelect={report}
+        onFocus={report}
+        onPointerUp={report}
+      />
+      <Carets field={field} carets={carets} text={text} />
+    </span>
   );
 }
 
@@ -129,10 +340,18 @@ function ChecklistEditor({
   items,
   onItems,
   autofocus,
+  readOnly = false,
+  carets = [],
+  onCaret,
 }: {
   items: ChecklistItem[];
   onItems: (items: ChecklistItem[]) => void;
   autofocus?: boolean;
+  readOnly?: boolean;
+  /** Others' carets, each in an item. */
+  carets?: readonly FieldCaret[];
+  /** Where the reader's caret is, in which item, in a shared list. */
+  onCaret?: (caret: OwnCaret | null) => void;
 }) {
   const settings = useListSettings();
   const atTop = settings.new_items === "top";
@@ -151,16 +370,19 @@ function ChecklistEditor({
       <input
         type="checkbox"
         checked={item.checked}
+        disabled={readOnly}
         aria-label={item.text || t("notes.listItem")}
         onChange={() => set(index, { ...item, checked: !item.checked })}
       />
-      <input
-        data-item={index}
-        class="checklist-text"
-        aria-label={t("notes.listItem")}
-        value={item.text}
-        onInput={(event) => set(index, { ...item, text: event.currentTarget.value })}
+      <ItemText
+        index={index}
+        text={item.text}
+        readOnly={readOnly}
+        carets={carets.filter((caret) => caret.item === index)}
+        onCaret={onCaret}
+        onInput={(text) => set(index, { ...item, text })}
         onKeyDown={(event) => {
+          if (readOnly) return;
           if (event.key === "Enter") {
             event.preventDefault();
             const next = [...items];
@@ -174,9 +396,11 @@ function ChecklistEditor({
           }
         }}
       />
-      <button type="button" class="icon-button" title={t("notes.removeItem")} aria-label={t("notes.removeItem")} onClick={() => remove(index)}>
-        <CloseIcon />
-      </button>
+      {!readOnly && (
+        <button type="button" class="icon-button" title={t("notes.removeItem")} aria-label={t("notes.removeItem")} onClick={() => remove(index)}>
+          <CloseIcon />
+        </button>
+      )}
     </div>
   );
   const all = items.map((item, index) => ({ item, index }));
@@ -197,9 +421,9 @@ function ChecklistEditor({
   );
   return (
     <div class="checklist-editor" ref={list}>
-      {atTop && add}
+      {atTop && !readOnly && add}
       {open.map(({ item, index }) => row(item, index))}
-      {!atTop && add}
+      {!atTop && !readOnly && add}
       {done.length > 0 && (
         <>
           <p class="checklist-done">{t("notes.checked", { count: done.length })}</p>
@@ -415,19 +639,44 @@ function CheckboxToggle({ draft, onDraft }: { draft: Draft; onDraft: (draft: Dra
   );
 }
 
-/** A note open for editing. */
+/** A shared note's body as the draft shows it. Once someone shows or hides
+ * checkboxes, `checkboxes` says which for everyone. Until then the draft
+ * keeps its kind, so plain text stays plain as someone types "- [ ]" into
+ * it. A list shows as text when its text no longer reads as one. */
+function liveDraft(previous: Draft, body: string, checkboxes: boolean | undefined): Draft {
+  if (checkboxes ?? previous.items !== null) {
+    if (body.trim() === "") return { ...previous, text: "", items: [{ checked: false, text: "" }] };
+    if (isChecklist(body)) return { ...previous, text: "", items: readChecklist(body) };
+  }
+  return { ...previous, text: body, items: null };
+}
+
+/** A shared note's body for a draft. Empty items stay, so a new item
+ * someone is about to type into reaches everyone else. */
+function liveBody(draft: Draft): string {
+  return draft.items ? writeChecklist(draft.items) : draft.text;
+}
+
+/** A note open for editing. A shared note is edited together with
+ * everyone else who has it open, live. */
 export function NoteEditor({
   id,
+  me,
   labels,
   onChanged,
   onTrash,
   onMove,
+  onShare,
   onClose,
 }: {
   id: string;
+  /** The reader's name, which others editing a shared note see. */
+  me: string;
   labels: readonly string[];
   /** Chooses a folder for the note. */
   onMove: (note: Note) => void;
+  /** Shares the note with people. */
+  onShare: (note: Note) => void;
   /** After each save, so the list behind shows it. */
   onChanged: (note: Note) => void;
   onTrash: (note: Note) => void;
@@ -447,6 +696,13 @@ export function NoteEditor({
   const timer = useRef<number | undefined>(undefined);
   /** The text that's saved, so an unchanged draft doesn't save. */
   const saved = useRef<{ title: string; body: string } | null>(null);
+  /** A shared note's live document, while it's open. */
+  const live = useRef<LiveNote | null>(null);
+  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
+  const [visitors, setVisitors] = useState<Visitor[]>([]);
+  /** Whether the body of a shared note changed while it was open, so an
+   * untitled one is named after its new first words when it closes. */
+  const bodyChanged = useRef(false);
 
   useEffect(() => {
     openNote(id).then(
@@ -456,11 +712,74 @@ export function NoteEditor({
         const first = draftOf(opened);
         setDraft(first);
         saved.current = { title: first.title, body: opened.body };
+        if (opened.shared) startLive(opened);
       },
       (problem) => setError(problemText(problem)),
     );
-    return () => window.clearTimeout(timer.current);
+    return () => {
+      window.clearTimeout(timer.current);
+      live.current?.close();
+      live.current = null;
+    };
   }, [id]);
+
+  // Someone else changing a shared note's color or title, or what the
+  // reader may do with it, shows here as it happens. Its text comes
+  // through the live document.
+  useLive("drive.activity", (ids) => {
+    if (live.current && (ids === null || ids.includes(id))) void refresh();
+  });
+
+  async function refresh() {
+    let fresh: Note;
+    try {
+      fresh = await openNote(id);
+    } catch {
+      return;
+    }
+    const current = latest.current;
+    if (!current) return;
+    // The text and its hash stay the live document's.
+    const next = { ...fresh, body: current.body, hash: current.hash };
+    latest.current = next;
+    setNote(next);
+    const title = fresh.titled ? fresh.title : "";
+    setDraft((draft) => {
+      // A title the reader is changing stays theirs.
+      if (!draft || draft.title !== saved.current?.title || draft.title === title) return draft;
+      if (saved.current) saved.current = { ...saved.current, title };
+      return { ...draft, title };
+    });
+  }
+
+  function startLive(opened: Note) {
+    // Whether the note's first text has arrived, after which a choice of
+    // checkboxes is someone making it.
+    let loaded = false;
+    const note = new LiveNote(opened.id, { name: me }, (status) => {
+      if (status === "live") loaded = true;
+      setLiveStatus(status);
+    });
+    live.current = note;
+    // The reader's own typing is in the draft already, so only others'
+    // changes, to the text or to whether it shows checkboxes, change it.
+    // The choice of checkboxes is kept with the document between sessions,
+    // but the file may have changed since, so it counts only once someone
+    // makes it while the reader has the note open.
+    let chosen = false;
+    const follow = (transaction: { local: boolean }) => {
+      if (transaction.local) return;
+      const body = note.body.toString();
+      const checkboxes = chosen ? note.checkboxes() : undefined;
+      setDraft((previous) => (previous ? liveDraft(previous, body, checkboxes) : previous));
+    };
+    note.body.observe((_event, transaction) => follow(transaction));
+    note.view.observe((_event, transaction) => {
+      if (loaded) chosen = true;
+      follow(transaction);
+    });
+    note.awareness.on("change", () => setVisitors(note.visitors()));
+  }
 
   function run(change: () => NoteChange | null) {
     queue.current = queue.current.then(async () => {
@@ -494,15 +813,16 @@ export function NoteEditor({
     return queue.current;
   }
 
-  /** Saves the title and text, if they changed. */
+  /** Saves the title and text, if they changed. A shared note's text goes
+   * through its live document instead, so only its title saves here. */
   function saveText(current: Draft) {
     window.clearTimeout(timer.current);
     return run(() => {
-      const body = bodyOf(current);
+      const body = live.current ? (saved.current?.body ?? "") : bodyOf(current);
       const before = saved.current;
       if (before && before.title === current.title && before.body === body) return null;
       saved.current = { title: current.title, body };
-      return { title: current.title, body };
+      return live.current ? { title: current.title } : { title: current.title, body };
     });
   }
 
@@ -510,14 +830,63 @@ export function NoteEditor({
     setDraft(next);
     setError("");
     window.clearTimeout(timer.current);
+    if (live.current) {
+      const body = liveBody(next);
+      // Showing or hiding checkboxes switches everyone.
+      const switched = draft !== null && (draft.items !== null) !== (next.items !== null);
+      if (body !== live.current.body.toString() || switched) {
+        live.current.setBody(body, switched ? next.items !== null : undefined);
+        bodyChanged.current = true;
+      }
+      // Only a new title waits to save.
+      if (next.title === saved.current?.title) return;
+    }
     timer.current = window.setTimeout(() => void saveText(next), SAVE_AFTER_MS);
   }
 
   async function close() {
     if (draft) await saveText(draft);
+    if (live.current) {
+      live.current.close();
+      live.current = null;
+      // A note without a title follows its first words, which are now the
+      // server's to read, so it's asked to name it again.
+      if (bodyChanged.current && latest.current && !latest.current.titled && latest.current.access !== "viewer") {
+        await run(() => ({ title: "" }));
+      }
+    }
     onClose();
   }
 
+  /** Sends where the reader's caret is, as an offset in the body. */
+  function sendCaret(caret: OwnCaret | null) {
+    const note = live.current;
+    if (!note) return;
+    if (!caret || caret.item === undefined) {
+      note.setCaret(caret);
+      return;
+    }
+    const text = taskTexts(note.body.toString())[caret.item];
+    if (text) note.setCaret({ start: text.start + caret.start, end: text.start + caret.end });
+  }
+
+  /** Others' carets, in the text box or in the list's items. */
+  const carets: FieldCaret[] = [];
+  if (live.current && draft && visitors.length > 0) {
+    const texts = draft.items ? taskTexts(live.current.body.toString()) : null;
+    for (const caret of live.current.carets()) {
+      const shown = { key: caret.client, name: caret.name, color: caret.color };
+      if (!texts) {
+        carets.push({ ...shown, at: caret.at });
+        continue;
+      }
+      const item = texts.findIndex((text) => caret.at >= text.start && caret.at <= text.end);
+      if (item >= 0) carets.push({ ...shown, item, at: caret.at - texts[item]!.start });
+    }
+  }
+
+  const readOnly = note?.access === "viewer";
+  const own = note?.access === "owner";
   const shown = note && draft;
   return (
     <Dialog title={t("notes.title")} class={note?.color ? `note-editor note-${note.color}` : "note-editor"} onClose={() => void close()}>
@@ -541,7 +910,17 @@ export function NoteEditor({
           >
             <PinIcon filled={note.pinned} />
           </button>
-          <NoteFields draft={draft} onDraft={edit} />
+          {liveStatus === "connecting" ? (
+            <p class="loading">{t("shell.loading")}</p>
+          ) : (
+            <NoteFields
+              draft={draft}
+              onDraft={edit}
+              readOnly={readOnly || liveStatus === "gone" || liveStatus === "signedOut"}
+              carets={carets}
+              onCaret={live.current ? sendCaret : undefined}
+            />
+          )}
           {note.tags.length > 0 && (
             <ul class="note-tags" aria-label={t("notes.labels")}>
               {note.tags.map((tag) => (
@@ -554,36 +933,75 @@ export function NoteEditor({
               {error}
             </p>
           )}
+          {liveStatus === "gone" && (
+            <p class="error" role="alert">
+              {t("notes.liveGone")}
+            </p>
+          )}
+          {liveStatus === "signedOut" && (
+            <p class="error" role="alert">
+              {t("notes.liveSignedOut")}
+            </p>
+          )}
           <p class="note-edited hint" role="status">
-            {status === "saving" ? t("notes.saving") : t("notes.edited", { when: formatMoment(note.modified_at) })}
+            {liveStatus === "reconnecting"
+              ? t("notes.liveReconnecting")
+              : status === "saving"
+                ? t("notes.saving")
+                : note.owner
+                  ? t(readOnly ? "notes.sharedByViewOnly" : "notes.sharedBy", { name: note.owner.name ?? t("notes.someone") })
+                  : t("notes.edited", { when: formatMoment(note.modified_at) })}
           </p>
+          {visitors.length > 0 && (
+            <p class="note-visitors hint">
+              {t("notes.alsoHere", { names: visitors.map((visitor) => visitor.name).join(", ") })}
+            </p>
+          )}
           <div class="note-toolbar">
-            <button
-              type="button"
-              class="icon-button"
-              title={t("notes.color")}
-              aria-label={t("notes.color")}
-              aria-haspopup="menu"
-              onClick={(event) => setColors({ under: event.currentTarget })}
-            >
-              <PaletteIcon />
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                class="icon-button"
+                title={t("notes.color")}
+                aria-label={t("notes.color")}
+                aria-haspopup="menu"
+                onClick={(event) => setColors({ under: event.currentTarget })}
+              >
+                <PaletteIcon />
+              </button>
+            )}
             <button type="button" class="icon-button" title={t("notes.addLabel")} aria-label={t("notes.addLabel")} onClick={() => setPicking(true)}>
               <LabelIcon />
             </button>
-            <button
-              type="button"
-              class="icon-button"
-              title={t("notes.moveToFolder")}
-              aria-label={t("notes.moveToFolder")}
-              onClick={() => {
-                window.clearTimeout(timer.current);
-                void saveText(draft).then(() => latest.current && onMove(latest.current));
-              }}
-            >
-              <MoveIcon />
-            </button>
-            <CheckboxToggle draft={draft} onDraft={edit} />
+            {own && (
+              <button
+                type="button"
+                class="icon-button"
+                title={t("notes.share")}
+                aria-label={t("notes.share")}
+                onClick={() => {
+                  window.clearTimeout(timer.current);
+                  void saveText(draft).then(() => latest.current && onShare(latest.current));
+                }}
+              >
+                <PeopleIcon />
+              </button>
+            )}
+            {own && (
+              <button
+                type="button"
+                class="icon-button"
+                title={t("notes.moveToFolder")}
+                aria-label={t("notes.moveToFolder")}
+                onClick={() => {
+                  window.clearTimeout(timer.current);
+                  void saveText(draft).then(() => latest.current && onMove(latest.current));
+                }}
+              >
+                <MoveIcon />
+              </button>
+            )}
+            {!readOnly && <CheckboxToggle draft={draft} onDraft={edit} />}
             <button
               type="button"
               class="icon-button"
@@ -593,18 +1011,20 @@ export function NoteEditor({
             >
               <ArchiveIcon />
             </button>
-            <button
-              type="button"
-              class="icon-button"
-              title={t("notes.toTrash")}
-              aria-label={t("notes.toTrash")}
-              onClick={() => {
-                window.clearTimeout(timer.current);
-                void queue.current.then(() => latest.current && onTrash(latest.current));
-              }}
-            >
-              <TrashIcon />
-            </button>
+            {own && (
+              <button
+                type="button"
+                class="icon-button"
+                title={t("notes.toTrash")}
+                aria-label={t("notes.toTrash")}
+                onClick={() => {
+                  window.clearTimeout(timer.current);
+                  void queue.current.then(() => latest.current && onTrash(latest.current));
+                }}
+              >
+                <TrashIcon />
+              </button>
+            )}
             <span class="spacer" />
             <button type="button" class="secondary" onClick={() => void close()}>
               {t("notes.close")}

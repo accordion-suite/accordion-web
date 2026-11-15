@@ -36,6 +36,14 @@ export interface Note {
   hash: string;
   created_at: string;
   modified_at: string;
+  /** Whether anyone else can open it, which makes it edited together,
+   * live. */
+  shared: boolean;
+  /** Who owns it, when it's someone else's. */
+  owner: { id: string; name: string | null } | null;
+  /** What the reader may do. Others' pins, archive, and labels are their
+   * own, and only an editor or the owner changes the note itself. */
+  access: "owner" | "editor" | "viewer";
 }
 
 export interface TrashedNote {

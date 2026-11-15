@@ -3971,6 +3971,26 @@ label.choice.folder-choice {
   list-style: none;
 }
 
+/* Who a shared note is from, or a mark that the reader's note is shared. */
+.note-sharing {
+  display: flex;
+  margin: 10px 0 0;
+}
+
+.note-shared-mark {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.note-shared-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.note-visitors {
+  margin: 0;
+}
+
 .note-tags li {
   padding: 2px 10px;
   font-size: 0.75rem;
@@ -4159,6 +4179,56 @@ dialog.note-editor .note-title-field {
   margin: 8px 0 0;
   font-size: 0.8125rem;
   text-align: right;
+}
+
+/* Others' carets in a shared note: a bar in their color, with their name
+   above it. */
+.caret-host {
+  position: relative;
+}
+
+.checklist-text-host {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.remote-caret {
+  position: absolute;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--caret);
+  pointer-events: none;
+}
+
+.remote-caret-name {
+  position: absolute;
+  bottom: 100%;
+  left: -1px;
+  padding: 0 4px;
+  border-radius: 3px 3px 3px 0;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--caret);
+  animation: remote-caret-name 3s forwards;
+}
+
+@keyframes remote-caret-name {
+  0%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remote-caret-name {
+    animation-timing-function: step-end;
+  }
 }
 
 .checklist-row {

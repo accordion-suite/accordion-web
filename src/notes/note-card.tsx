@@ -9,7 +9,7 @@ import { t } from "../i18n.ts";
 import { isChecklist, readChecklist } from "./checklist.ts";
 import { useListSettings } from "./preferences.ts";
 import { ArchiveIcon, LabelIcon, PaletteIcon, PinIcon } from "./icons.tsx";
-import { MoveIcon, TrashIcon } from "../drive/icons.tsx";
+import { MoveIcon, PeopleIcon, TrashIcon } from "../drive/icons.tsx";
 import type { Note } from "./notes-api.ts";
 
 /** How many items a card shows. */
@@ -25,6 +25,7 @@ export function NoteCard({
   onArchive,
   onTrash,
   onToggle,
+  onShare,
   onMenu,
   onDrag,
   menuOpen = false,
@@ -45,10 +46,15 @@ export function NoteCard({
   onMove: () => void;
   onArchive: () => void;
   onTrash: () => void;
-  /** Ticks or unticks the `index`th item of a checklist. */
-  onToggle: (index: number) => void;
+  /** Ticks or unticks the `index`th item of a checklist. Not given for a
+   * viewer. */
+  onToggle?: (index: number) => void;
+  /** Shares the note, which only its owner can. */
+  onShare?: () => void;
 }) {
   const label = note.titled ? note.title : note.title || t("notes.untitled");
+  const own = note.access === "owner";
+  const ownerName = note.owner?.name ?? t("notes.someone");
   return (
     <article
       class={["note-card", note.color && `note-${note.color}`, menuOpen && "menu-open"].filter(Boolean).join(" ")}
@@ -85,6 +91,19 @@ export function NoteCard({
           ))}
         </ul>
       )}
+      {(note.owner || note.shared) && (
+        <p class="note-sharing">
+          {note.owner ? (
+            <span class="avatar tiny" title={t("notes.sharedBy", { name: ownerName })} aria-label={t("notes.sharedBy", { name: ownerName })}>
+              {[...ownerName.trim()][0]?.toUpperCase() ?? "?"}
+            </span>
+          ) : (
+            <span class="note-shared-mark" title={t("notes.sharedWithOthers")} aria-label={t("notes.sharedWithOthers")}>
+              <PeopleIcon />
+            </span>
+          )}
+        </p>
+      )}
       <button
         type="button"
         class="icon-button note-pin"
@@ -99,19 +118,21 @@ export function NoteCard({
         <PinIcon filled={note.pinned} />
       </button>
       <div class="note-actions">
-        <button
-          type="button"
-          class="icon-button"
-          title={t("notes.color")}
-          aria-label={t("notes.color")}
-          aria-haspopup="menu"
-          onClick={(event) => {
-            event.stopPropagation();
-            onColor(event.currentTarget);
-          }}
-        >
-          <PaletteIcon />
-        </button>
+        {note.access !== "viewer" && (
+          <button
+            type="button"
+            class="icon-button"
+            title={t("notes.color")}
+            aria-label={t("notes.color")}
+            aria-haspopup="menu"
+            onClick={(event) => {
+              event.stopPropagation();
+              onColor(event.currentTarget);
+            }}
+          >
+            <PaletteIcon />
+          </button>
+        )}
         <button
           type="button"
           class="icon-button"
@@ -124,18 +145,34 @@ export function NoteCard({
         >
           <LabelIcon />
         </button>
-        <button
-          type="button"
-          class="icon-button"
-          title={t("notes.moveToFolder")}
-          aria-label={t("notes.moveToFolder")}
-          onClick={(event) => {
-            event.stopPropagation();
-            onMove();
-          }}
-        >
-          <MoveIcon />
-        </button>
+        {own && onShare && (
+          <button
+            type="button"
+            class="icon-button"
+            title={t("notes.share")}
+            aria-label={t("notes.share")}
+            onClick={(event) => {
+              event.stopPropagation();
+              onShare();
+            }}
+          >
+            <PeopleIcon />
+          </button>
+        )}
+        {own && (
+          <button
+            type="button"
+            class="icon-button"
+            title={t("notes.moveToFolder")}
+            aria-label={t("notes.moveToFolder")}
+            onClick={(event) => {
+              event.stopPropagation();
+              onMove();
+            }}
+          >
+            <MoveIcon />
+          </button>
+        )}
         <button
           type="button"
           class="icon-button"
@@ -148,18 +185,20 @@ export function NoteCard({
         >
           <ArchiveIcon />
         </button>
-        <button
-          type="button"
-          class="icon-button"
-          title={t("notes.toTrash")}
-          aria-label={t("notes.toTrash")}
-          onClick={(event) => {
-            event.stopPropagation();
-            onTrash();
-          }}
-        >
-          <TrashIcon />
-        </button>
+        {own && (
+          <button
+            type="button"
+            class="icon-button"
+            title={t("notes.toTrash")}
+            aria-label={t("notes.toTrash")}
+            onClick={(event) => {
+              event.stopPropagation();
+              onTrash();
+            }}
+          >
+            <TrashIcon />
+          </button>
+        )}
       </div>
     </article>
   );

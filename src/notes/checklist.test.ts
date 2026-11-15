@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { fromChecklist, isChecklist, readChecklist, toChecklist, toggleTask, writeChecklist } from "./checklist.ts";
+import { fromChecklist, isChecklist, readChecklist, taskTexts, toChecklist, toggleTask, writeChecklist } from "./checklist.ts";
 
 test("a note is a checklist when every line is a task", () => {
   assert.equal(isChecklist("- [ ] Milk\n- [x] Bread\n"), true);
@@ -31,4 +31,14 @@ test("ticks one task and leaves the rest", () => {
   const body = "Shopping\n- [ ] Milk\n- [x] Bread\n";
   assert.equal(toggleTask(body, 0), "Shopping\n- [x] Milk\n- [x] Bread\n");
   assert.equal(toggleTask(body, 1), "Shopping\n- [ ] Milk\n- [ ] Bread\n");
+});
+
+test("finds where each task's text is", () => {
+  const body = "- [ ] Milk\n- [x] Bread\n- [ ]\n";
+  assert.deepEqual(taskTexts(body), [
+    { start: 6, end: 10 },
+    { start: 17, end: 22 },
+    { start: 28, end: 28 },
+  ]);
+  assert.equal(body.slice(17, 22), "Bread");
 });

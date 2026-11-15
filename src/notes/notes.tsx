@@ -16,7 +16,9 @@ import type { ComponentChildren, HTMLAttributes, TargetedMouseEvent } from "prea
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import type { Session } from "../api.ts";
-import { NameDialog } from "../drive/dialogs.tsx";
+import { api, ApiError } from "../api.ts";
+import { NameDialog, ShareDialog } from "../drive/dialogs.tsx";
+import type { Item } from "../drive/item.ts";
 import { holdDrag, releaseDrag } from "../drive/move.ts";
 import { CloseIcon, ItemIcon, PlusIcon, SearchIcon, TrashIcon } from "../drive/icons.tsx";
 import { t } from "../i18n.ts";
@@ -125,6 +127,7 @@ function menuAt(event: MouseEvent, holder: Element): { place: MenuPlace; byKeybo
 type Open =
   | { kind: "move"; things: Movable[] }
   | { kind: "labels"; note: Note }
+  | { kind: "share"; item: Item }
   | { kind: "newFolder"; parent: string }
   | { kind: "renameFolder"; folder: NoteFolder }
   | { kind: "deleteFolder"; folder: NoteFolder }
@@ -144,6 +147,9 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
   // notes rather than after.
   useEffect(() => void notesSettings(), []);
   const [notes, setNotes] = useState<Note[] | null>(null);
+  /** The notes shown, for live updates to check against. */
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
   const [labels, setLabels] = useState<string[]>([]);
   const [folders, setFolders] = useState<NoteFolder[]>([]);
   const [top, setTop] = useState<string | null>(null);
@@ -176,6 +182,13 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
   // Notes are files in Drive, so a change there, in another tab, or on
   // another device can change them.
   useLive("drive.items", () => void load());
+  // Notes others shared are in their owners' folders, which the reader
+  // can't open, so changes to them come as activity on each note, and
+  // sharing changes as what's shared with the reader.
+  useLive("drive.activity", (ids) => {
+    if (ids === null || notesRef.current?.some((note) => note.owner && ids.includes(note.id))) void load();
+  });
+  useLive("drive.shared", () => void load());
   useEffect(() => setSidebarOpen(false), [path]);
 
   /** Shows a change to one note at once, before the list loads again. */
@@ -202,12 +215,23 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
     });
   const pin = (note: Note) => act(() => changeNote(note.id, { pinned: !note.pinned }).then(replace));
   // The card has only the start of the text, so the note is opened first,
-  // and the whole of it is saved.
+  // and the whole of it is saved. A shared note may be saved by someone
+  // typing in it in between, so that's tried once more.
   const toggle = (note: Note, index: number) =>
     act(async () => {
-      const full = await openNote(note.id);
-      replace(await changeNote(note.id, { base: full.hash, body: toggleTask(full.body, index) }));
+      for (let attempt = 0; ; attempt++) {
+        const full = await openNote(note.id);
+        try {
+          replace(await changeNote(note.id, { base: full.hash, body: toggleTask(full.body, index) }));
+          return;
+        } catch (problem) {
+          if (attempt > 0 || !(problem instanceof ApiError && problem.status === 412)) throw problem;
+        }
+      }
     });
+  /** Opens the share dialog, which is Drive's. */
+  const share = (note: Note) =>
+    act(async () => setOpen({ kind: "share", item: await api<Item>("GET", `/api/drive/items/${note.id}`) }));
   const copy = (note: Note) =>
     act(async () => {
       const full = await openNote(note.id);
@@ -260,16 +284,34 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
     ];
   }
 
-  /** A note's menu. Its colors open at `place`, where the menu was. */
+  /** A note's menu. Its colors open at `place`, where the menu was. Notes
+   * others shared can't be moved or thrown away, and a viewer can't change
+   * the color. */
   function noteEntries(note: Note, place: MenuPlace): MenuEntry[] {
+    const own = note.access === "owner";
     const entries: MenuEntry[] = [
       { label: t("notes.open"), onSelect: () => setEditing(note.id) },
       { label: t(note.pinned ? "notes.unpin" : "notes.pin"), onSelect: () => void pin(note) },
       SEPARATOR,
-      { label: t("notes.color"), onSelect: () => setColors({ note, place }) },
-      { label: t(note.tags.length > 0 ? "notes.changeLabels" : "notes.addLabel"), onSelect: () => setOpen({ kind: "labels", note }) },
-      { label: t("notes.moveToFolder"), onSelect: () => top && setOpen({ kind: "move", things: [movableNote(note, top)] }) },
     ];
+    if (note.access !== "viewer") entries.push({ label: t("notes.color"), onSelect: () => setColors({ note, place }) });
+    entries.push({
+      label: t(note.tags.length > 0 ? "notes.changeLabels" : "notes.addLabel"),
+      onSelect: () => setOpen({ kind: "labels", note }),
+    });
+    if (!own) {
+      entries.push(
+        { label: t("notes.makeCopy"), onSelect: () => void copy(note) },
+        { label: t("notes.showInDrive"), onSelect: () => navigate(`/drive/shared?file=${note.id}`) },
+        SEPARATOR,
+        { label: t(note.archived ? "notes.unarchiveNote" : "notes.archiveNote"), onSelect: () => void archive(note) },
+      );
+      return entries;
+    }
+    entries.push(
+      { label: t("notes.share"), onSelect: () => void share(note) },
+      { label: t("notes.moveToFolder"), onSelect: () => top && setOpen({ kind: "move", things: [movableNote(note, top)] }) },
+    );
     if (note.folder && top) {
       entries.push({ label: t("notes.removeFromFolder"), onSelect: () => void move([movableNote(note, top)], top) });
     }
@@ -384,13 +426,14 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
           onMove={() => top && setOpen({ kind: "move", things: [movableNote(note, top)] })}
           onArchive={() => void archive(note)}
           onTrash={() => void trash(note)}
-          onToggle={(index) => void toggle(note, index)}
+          onToggle={note.access === "viewer" ? undefined : (index) => void toggle(note, index)}
+          onShare={() => void share(note)}
           onMenu={(event) => {
             const card = event.currentTarget as Element;
             const entries = noteEntries(note, menuAt(event, card).place);
             openMenu(event, card, note.id, t("notes.actionsFor", { name: noteName(note) }), entries);
           }}
-          onDrag={(dragging) => drag(dragging && { kind: "note", note: dragging })}
+          onDrag={note.access === "owner" ? (dragging) => drag(dragging && { kind: "note", note: dragging }) : undefined}
         />
       ))}
     </div>
@@ -508,6 +551,16 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
           return made.id;
         }}
         onClose={close}
+      />
+    );
+  } else if (open?.kind === "share") {
+    dialog = (
+      <ShareDialog
+        item={open.item}
+        onClose={(changed) => {
+          close();
+          if (changed) void load();
+        }}
       />
     );
   } else if (open?.kind === "labels") {
@@ -749,7 +802,13 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
         <NoteEditor
           key={editing}
           id={editing}
+          me={session.user.display_name}
           labels={labels}
+          onShare={(note) => {
+            setEditing(null);
+            void share(note);
+            void load();
+          }}
           onChanged={replace}
           onTrash={(note) => {
             setEditing(null);
