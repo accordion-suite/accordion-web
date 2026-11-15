@@ -10,6 +10,8 @@ import { driveSettings, forgetDriveSettings, startPath } from "../drive/preferen
 import { uploads } from "../drive/http-transport.ts";
 import { CloseIcon } from "../drive/icons.tsx";
 import { DriveLayout, forgetSidebar } from "../drive/layout.tsx";
+import { forgetNotesSettings } from "../notes/preferences.ts";
+import { forgetAppPage } from "./last-app.ts";
 import { SearchPage } from "../drive/search-page.tsx";
 import { SharedByMePage } from "../drive/shared-by-me-page.tsx";
 import { SharedPage } from "../drive/shared-page.tsx";
@@ -83,6 +85,8 @@ function Shell() {
           forgetFolders();
           forgetDriveSettings();
           forgetSidebar();
+          forgetNotesSettings();
+          forgetAppPage();
           setSession(next);
         }}
       />

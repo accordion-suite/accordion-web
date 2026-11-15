@@ -3,6 +3,7 @@
 export const settingsEn = {
   "settings.sections": "Settings sections",
   "settings.backToDrive": "Back to Drive",
+  "settings.backToNotes": "Back to Notes",
   "settings.you": "You",
   "settings.server": "Server",
   "settings.account": "Account",
@@ -10,6 +11,8 @@ export const settingsEn = {
   "settings.driveGroup": "Drive",
   "settings.driveGeneral": "General",
   "settings.driveTitle": "General",
+  "settings.notesGroup": "Notes",
+  "settings.notesLists": "Lists",
   // The browser tab's title, which shell.tabTitle ends with "- Accordion".
   "settings.tabTitle": "{page} - Settings",
   "settings.devices": "Apps and devices",
@@ -435,6 +438,16 @@ export const settingsEn = {
   "appearance.autoHint": "Matches this device's setting, and changes when it does.",
 
   "driveSettings.saved": "Saved.",
+  "notesSettings.saved": "Saved.",
+  "notesSettings.newItemsTitle": "New items",
+  "notesSettings.newItemsIntro": "Where Add item puts a new item in a list.",
+  "notesSettings.bottom": "At the bottom",
+  "notesSettings.bottomHint": "Below the items already there.",
+  "notesSettings.top": "At the top",
+  "notesSettings.topHint": "Above the items already there.",
+  "notesSettings.checkedTitle": "Move checked items to the bottom",
+  "notesSettings.checkedHint":
+    "Checked items go under \"checked items\" at the end of the list. When this is off, they stay where they are.",
   "driveSettings.startTitle": "Start page",
   "driveSettings.startIntro": "What Drive opens on when you go to Accordion's address.",
   "driveSettings.home": "Home",

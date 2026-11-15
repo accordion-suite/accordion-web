@@ -1,7 +1,8 @@
 // Checklist notes: a note whose lines are all Markdown task items, such as
 // "- [ ] Milk", shows as a list with checkboxes, as in Google Keep. The file
-// keeps the items in their order. Checked items show at the bottom, but they
-// don't move in the file (decision 31).
+// keeps the items in their order. Checked items show at the bottom unless
+// the reader's settings say otherwise, but they don't move in the file
+// (decision 31).
 
 export interface ChecklistItem {
   checked: boolean;

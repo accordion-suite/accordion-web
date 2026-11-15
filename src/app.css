@@ -3949,6 +3949,11 @@ label.choice.folder-choice {
   margin-top: 3px;
 }
 
+.note-checklist li.checked span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 .note-more {
   display: flex;
   gap: 8px;

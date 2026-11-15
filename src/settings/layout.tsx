@@ -7,10 +7,11 @@
 import type { ComponentChildren, FunctionComponent } from "preact";
 import { useEffect, useState } from "preact/hooks";
 
-import type { Session } from "../api.ts";
+import { modulesOn, type Session } from "../api.ts";
 import { DriveIcon, TrashIcon } from "../drive/icons.tsx";
-import { lastDrivePage } from "../drive/layout.tsx";
 import { t, type MessageKey } from "../i18n.ts";
+import { NoteIcon } from "../notes/icons.tsx";
+import { lastAppPage } from "../shell/last-app.ts";
 import { PageTitle } from "../shell/page.tsx";
 import { followLink, usePath } from "../shell/router.ts";
 import { AppsIcon } from "../shell/apps.tsx";
@@ -41,11 +42,12 @@ export interface Section {
 
 /** The reader's own settings, an app's, or the server's, which are for
  * admins. */
-type Group = "you" | "drive" | "server";
+type Group = "you" | "drive" | "notes" | "server";
 
 const GROUPS: readonly [Group, MessageKey][] = [
   ["you", "settings.you"],
   ["drive", "settings.driveGroup"],
+  ["notes", "settings.notesGroup"],
   ["server", "settings.server"],
 ];
 
@@ -55,6 +57,7 @@ export const SECTIONS: readonly Section[] = [
   { id: "devices", label: "settings.devices", icon: DevicesIcon, group: "you" },
   { id: "activity", label: "settings.activity", icon: ActivityIcon, group: "you" },
   { id: "drive", label: "settings.driveGeneral", icon: DriveIcon, group: "drive" },
+  { id: "notes", label: "settings.notesLists", icon: NoteIcon, group: "notes" },
   { id: "people", label: "settings.people", icon: PeopleIcon, group: "server" },
   { id: "modules", label: "settings.modules", icon: AppsIcon, group: "server" },
   { id: "health", label: "settings.health", icon: HealthIcon, group: "server" },
@@ -82,6 +85,12 @@ export function SettingsLayout({
   // A page on a phone starts with the sidebar out of the way.
   useEffect(() => setSidebarOpen(false), [path]);
 
+  const modules = modulesOn(session);
+  // An app's group shows while the app is on. The server's are for admins.
+  const shown = (group: Group) =>
+    group === "server" ? session.admin_pages : group === "you" || modules.includes(group);
+  const back = lastAppPage() ?? (modules.includes("drive") ? { app: "drive", href: "/drive/start" } : { app: "notes", href: "/notes/" });
+
   return (
     <div class={sidebarOpen ? "frame settings-frame sidebar-open" : "frame settings-frame"}>
       <TopBar
@@ -93,13 +102,13 @@ export function SettingsLayout({
         onMenu={() => setSidebarOpen(!sidebarOpen)}
       />
       <nav id="sidebar" class="sidebar" aria-label={t("settings.sections")}>
-        {/* Back to the Drive page the reader left, or their start page if
+        {/* Back to the app page the reader left, or Drive's start page if
             they came straight to Settings. */}
-        <a class="place back" href={lastDrivePage() ?? "/drive/start"} onClick={followLink}>
+        <a class="place back" href={back.href} onClick={followLink}>
           <BackIcon />
-          {t("settings.backToDrive")}
+          {t(back.app === "notes" ? "settings.backToNotes" : "settings.backToDrive")}
         </a>
-        {GROUPS.filter(([group]) => group !== "server" || session.admin_pages).map(([group, title]) => (
+        {GROUPS.filter(([group]) => shown(group)).map(([group, title]) => (
           <GroupLinks
             key={group}
             title={t(title)}

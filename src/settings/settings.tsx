@@ -16,6 +16,7 @@ import { HealthPage } from "./health-page.tsx";
 import { ModulesPage } from "./modules-page.tsx";
 import { SECTIONS, SettingsLayout, SettingsPage } from "./layout.tsx";
 import { NetworkPage } from "./network-page.tsx";
+import { NotesPage } from "./notes-page.tsx";
 import { PeoplePage } from "./people-page.tsx";
 import { RemotePage } from "./remote-page.tsx";
 import { PreviewsPage } from "./previews-page.tsx";
@@ -64,6 +65,8 @@ function sectionPage(path: string, session: Session, onSessionChanged: () => Pro
       return <AppearancePage key={id} />;
     case "drive":
       return <DrivePage key={id} />;
+    case "notes":
+      return <NotesPage key={id} />;
     case "devices":
       return (
         <DevicesPage key={id} username={session.user.username} admin={(session.user.role === "owner" || session.user.role === "admin") && session.admin_pages} />

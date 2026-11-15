@@ -11,6 +11,7 @@ import { formatMoment, t } from "../i18n.ts";
 import { Dialog, problemText } from "../shell/dialog.tsx";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
 import { type ChecklistItem, fromChecklist, isChecklist, readChecklist, toChecklist, writeChecklist } from "./checklist.ts";
+import { useListSettings } from "./preferences.ts";
 import { ArchiveIcon, ChecklistIcon, LabelIcon, NoColorIcon, PaletteIcon, PinIcon } from "./icons.tsx";
 import { TrashIcon } from "../drive/icons.tsx";
 import { changeNote, createNote, NOTE_COLORS, type Note, type NoteChange, type NoteColor, openNote } from "./notes-api.ts";
@@ -121,8 +122,9 @@ function NoteFields({
 }
 
 /** A checklist's items, each with a checkbox. Enter adds an item below,
- * and Backspace in an empty item removes it. Checked items go below the
- * others. */
+ * and Backspace in an empty item removes it. The reader's settings say
+ * whether the add button puts items at the top or the bottom, and whether
+ * checked items go below the others. */
 function ChecklistEditor({
   items,
   onItems,
@@ -132,8 +134,10 @@ function ChecklistEditor({
   onItems: (items: ChecklistItem[]) => void;
   autofocus?: boolean;
 }) {
+  const settings = useListSettings();
+  const atTop = settings.new_items === "top";
   const list = useRef<HTMLDivElement>(null);
-  const [focus, setFocus] = useState<number | null>(autofocus ? Math.max(0, items.length - 1) : null);
+  const [focus, setFocus] = useState<number | null>(autofocus ? (atTop ? 0 : Math.max(0, items.length - 1)) : null);
   useEffect(() => {
     if (focus === null) return;
     list.current?.querySelector<HTMLInputElement>(`input[data-item="${focus}"]`)?.focus();
@@ -175,21 +179,27 @@ function ChecklistEditor({
       </button>
     </div>
   );
-  const open = items.map((item, index) => ({ item, index })).filter(({ item }) => !item.checked);
-  const done = items.map((item, index) => ({ item, index })).filter(({ item }) => item.checked);
+  const all = items.map((item, index) => ({ item, index }));
+  const open = settings.checked_at_bottom ? all.filter(({ item }) => !item.checked) : all;
+  const done = settings.checked_at_bottom ? all.filter(({ item }) => item.checked) : [];
+  const add = (
+    <button
+      type="button"
+      class="link checklist-add"
+      onClick={() => {
+        const blank = { checked: false, text: "" };
+        onItems(atTop ? [blank, ...items] : [...items, blank]);
+        setFocus(atTop ? 0 : items.length);
+      }}
+    >
+      + {t("notes.addItem")}
+    </button>
+  );
   return (
     <div class="checklist-editor" ref={list}>
+      {atTop && add}
       {open.map(({ item, index }) => row(item, index))}
-      <button
-        type="button"
-        class="link checklist-add"
-        onClick={() => {
-          onItems([...items, { checked: false, text: "" }]);
-          setFocus(items.length);
-        }}
-      >
-        + {t("notes.addItem")}
-      </button>
+      {!atTop && add}
       {done.length > 0 && (
         <>
           <p class="checklist-done">{t("notes.checked", { count: done.length })}</p>

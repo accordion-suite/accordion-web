@@ -30,6 +30,7 @@ import { api, modulesOn, send, type Session } from "../api.ts";
 import { t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
 import { followLink, navigate, usePath, useQueryString } from "../shell/router.ts";
+import { rememberAppPage } from "../shell/last-app.ts";
 import { appIcon } from "../shell/apps.tsx";
 import { TopBar } from "../shell/top-bar.tsx";
 import { hasClipped, pasteInto, pastingClipped } from "./clipboard.ts";
@@ -190,9 +191,7 @@ export function DriveLayout({
 }) {
   const path = usePath();
   const query = useQueryString();
-  useEffect(() => {
-    lastPage = path + query;
-  }, [path, query]);
+  useEffect(() => rememberAppPage("drive", path + query), [path, query]);
   const [top, setTop] = useState<Item | null>(null);
   /** Apps' places shown as tabs below My Drive, with their top folders. */
   const [places, setPlaces] = useState<readonly { info: PlaceInfo; top: Item }[]>([]);
@@ -1003,19 +1002,10 @@ function NoticeBar({
  * between pages. */
 const expanded = new Set<string>();
 
-/** The address of the Drive page the reader was last on, such as a
- * folder, so Settings can lead back to it. */
-let lastPage: string | null = null;
-
-export function lastDrivePage(): string | null {
-  return lastPage;
-}
-
-/** Closes the sidebar's folders and forgets the last page, which belong to
- * whoever was signed in before. */
+/** Closes the sidebar's folders, which belong to whoever was signed in
+ * before. */
 export function forgetSidebar(): void {
   expanded.clear();
-  lastPage = null;
 }
 
 /** The folders inside `parent`, each of which can open to show its own. */

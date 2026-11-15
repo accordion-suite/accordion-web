@@ -26,7 +26,9 @@ import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.t
 import { PageTitle } from "../shell/page.tsx";
 import { followLink, navigate, usePath, useQuery } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
+import { rememberAppPage } from "../shell/last-app.ts";
 import { toggleTask } from "./checklist.ts";
+import { notesSettings } from "./preferences.ts";
 import {
   FolderPicker,
   type Movable,
@@ -137,6 +139,10 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
   const path = usePath();
   const q = useQuery("q");
   const view = viewOf(path, q);
+  useEffect(() => rememberAppPage("notes", q ? `${path}?q=${encodeURIComponent(q)}` : path), [path, q]);
+  // Lists show the way the reader's settings say, so they load with the
+  // notes rather than after.
+  useEffect(() => void notesSettings(), []);
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [folders, setFolders] = useState<NoteFolder[]>([]);
@@ -617,6 +623,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
         onSignOut={onSignOut}
         module={t("notes.title")}
         home="/notes/"
+        settings="/settings/notes"
         menuOpen={sidebarOpen}
         onMenu={() => setSidebarOpen(!sidebarOpen)}
       >

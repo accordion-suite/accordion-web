@@ -7,11 +7,12 @@ import { MarkdownView } from "../drive/markdown-view.tsx";
 import { holdDrag } from "../drive/move.ts";
 import { t } from "../i18n.ts";
 import { isChecklist, readChecklist } from "./checklist.ts";
+import { useListSettings } from "./preferences.ts";
 import { ArchiveIcon, LabelIcon, PaletteIcon, PinIcon } from "./icons.tsx";
 import { MoveIcon, TrashIcon } from "../drive/icons.tsx";
 import type { Note } from "./notes-api.ts";
 
-/** How many unchecked items a card shows. */
+/** How many items a card shows. */
 const CARD_ITEMS = 8;
 
 export function NoteCard({
@@ -166,6 +167,7 @@ export function NoteCard({
 
 /** A note's text on its card: a checklist with checkboxes, or Markdown. */
 export function NoteBody({ body, onToggle }: { body: string; onToggle?: (index: number) => void }) {
+  const settings = useListSettings();
   if (!isChecklist(body)) {
     return body.trim() ? (
       <div class="note-body">
@@ -174,17 +176,19 @@ export function NoteBody({ body, onToggle }: { body: string; onToggle?: (index: 
     ) : null;
   }
   const items = readChecklist(body).map((item, index) => ({ ...item, index }));
-  const open = items.filter((item) => !item.checked);
-  const done = items.length - open.length;
+  // With checked items at the bottom, the card shows only the others and
+  // counts the checked ones. Otherwise every item shows where it is.
+  const open = settings.checked_at_bottom ? items.filter((item) => !item.checked) : items;
+  const done = settings.checked_at_bottom ? items.length - open.length : 0;
   return (
     <div class="note-body">
       <ul class="note-checklist">
         {open.slice(0, CARD_ITEMS).map((item) => (
-          <li key={item.index}>
+          <li key={item.index} class={item.checked ? "checked" : undefined}>
             <input
               type="checkbox"
               aria-label={item.text}
-              checked={false}
+              checked={item.checked}
               disabled={!onToggle}
               onClick={(event) => event.stopPropagation()}
               onChange={() => onToggle?.(item.index)}
