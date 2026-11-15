@@ -141,8 +141,9 @@ export function ActivityTab({ item, me }: { item: Item; me: string }) {
   const [loading, setLoading] = useState(false);
   const address = `/api/drive/items/${item.id}/activity`;
 
-  // The newest page, loaded again when the server says the item or its
-  // folder changed. Older pages loaded since are let go.
+  // The newest page, loaded again when the server says something happened
+  // to the item or to anything inside it. Older pages loaded since are let
+  // go.
   const latest = useRef(0);
   function load() {
     const asked = ++latest.current;
@@ -164,8 +165,8 @@ export function ActivityTab({ item, me }: { item: Item; me: string }) {
       latest.current++;
     };
   }, [item.id]);
-  useLive("drive.items", (ids) => {
-    if (ids === null || ids.includes(item.id) || (item.parent !== null && ids.includes(item.parent))) load();
+  useLive("drive.activity", (ids) => {
+    if (ids === null || ids.includes(item.id)) load();
   });
 
   async function loadMore() {
