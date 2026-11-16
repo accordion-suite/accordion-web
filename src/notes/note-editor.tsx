@@ -1264,7 +1264,11 @@ export function NoteEditor({
   const own = note?.access === "owner";
   const shown = note && draft;
   return (
-    <Dialog title={t("notes.title")} class={note?.color ? `note-editor note-${note.color}` : "note-editor"} onClose={() => void close()}>
+    <Dialog
+      title={t("notes.title")}
+      class={note?.color ? `note-editor note-${note.color}` : "note-editor"}
+      closeOutside
+      onClose={() => void close()}>
       {!shown ? (
         error ? (
           <p class="error" role="alert">
