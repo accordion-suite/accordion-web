@@ -11,7 +11,8 @@ export type Inline =
   /** `href` is null for an address that isn't safe to follow, such as a
    * script, so the link shows as plain text. */
   | { type: "link"; href: string | null; children: Inline[] }
-  | { type: "image"; href: string | null; alt: string }
+  /** `target` is the address as written, such as a file beside a note. */
+  | { type: "image"; href: string | null; alt: string; target: string }
   | { type: "break" };
 
 export type Align = "left" | "center" | "right" | null;
@@ -342,7 +343,7 @@ export function inlines(source: string): Inline[] {
         const href = safeHref(link.href);
         out.push(
           picture
-            ? { type: "image", href, alt: plain(inlines(link.label)) }
+            ? { type: "image", href, alt: plain(inlines(link.label)), target: link.href }
             : { type: "link", href, children: inlines(link.label) },
         );
         i = link.end;

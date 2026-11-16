@@ -160,6 +160,8 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
   const [top, setTop] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
+  /** Pictures to add to the note being opened, chosen while taking it. */
+  const [adding, setAdding] = useState<{ id: string; files: File[] } | null>(null);
   const [editingLabels, setEditingLabels] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [colors, setColors] = useState<{ note: Note; place: MenuPlace } | null>(null);
@@ -536,6 +538,10 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
               setNotes((current) => [note, ...(current ?? [])]);
               void load();
             }}
+            onImages={(note, files) => {
+              setAdding({ id: note.id, files });
+              setEditing(note.id);
+            }}
           />
         )}
         {error ? (
@@ -853,6 +859,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
           id={editing}
           me={session.user.display_name}
           labels={labels}
+          images={adding?.id === editing ? adding.files : undefined}
           onShare={(note) => {
             setEditing(null);
             void share(note);
@@ -870,6 +877,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
           }}
           onClose={() => {
             setEditing(null);
+            setAdding(null);
             void load();
           }}
         />

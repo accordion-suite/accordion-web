@@ -11,6 +11,7 @@ import { useListSettings } from "./preferences.ts";
 import { ArchiveIcon, LabelIcon, PaletteIcon, PinIcon, ReminderIcon } from "./icons.tsx";
 import { MoveIcon, PeopleIcon, TrashIcon } from "../drive/icons.tsx";
 import type { Note } from "./notes-api.ts";
+import { decodeTarget, imageTarget, imageUrl, splitImages } from "./note-images.ts";
 import { ReminderChip } from "./reminder-menu.tsx";
 
 /** How many items a card shows. */
@@ -58,6 +59,7 @@ export function NoteCard({
 }) {
   const label = note.titled ? note.title : note.title || t("notes.untitled");
   const own = note.access === "owner";
+  const cover = splitImages(note.body).lines.map(imageTarget)[0];
   const ownerName = note.owner?.name ?? t("notes.someone");
   return (
     <article
@@ -86,8 +88,9 @@ export function NoteCard({
         }
       }}
     >
+      {cover && <Cover src={imageUrl(note.id, cover, "small")} />}
       {note.titled && <h3 class="note-title">{note.title}</h3>}
-      <NoteBody body={note.body} onToggle={onToggle} />
+      <NoteBody body={note.body} note={note.id} onToggle={onToggle} />
       {note.tags.length > 0 && (
         <ul class="note-tags" aria-label={t("notes.labels")}>
           {note.tags.map((tag) => (
@@ -224,13 +227,31 @@ export function NoteCard({
   );
 }
 
-/** A note's text on its card: a checklist with checkboxes, or Markdown. */
-export function NoteBody({ body, onToggle }: { body: string; onToggle?: (index: number) => void }) {
+/** A note's first picture, across the top of its card. A picture that
+ * can't be shown, such as one moved out of Notes, leaves no gap. */
+function Cover({ src }: { src: string }) {
+  return (
+    <div class="note-cover">
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        onError={(event) => ((event.currentTarget.parentElement as HTMLElement).hidden = true)}
+      />
+    </div>
+  );
+}
+
+/** A note's text on its card, below its pictures: a checklist with
+ * checkboxes, or Markdown. `note` shows pictures further down the text,
+ * and a note in the trash, without it, shows none. */
+export function NoteBody({ body: whole, note, onToggle }: { body: string; note?: string; onToggle?: (index: number) => void }) {
   const settings = useListSettings();
+  const body = splitImages(whole).rest;
   if (!isChecklist(body)) {
     return body.trim() ? (
       <div class="note-body">
-        <MarkdownView source={body} />
+        <MarkdownView source={body} pictures={note ? (target) => imageUrl(note, decodeTarget(target), "small") : undefined} />
       </div>
     ) : null;
   }

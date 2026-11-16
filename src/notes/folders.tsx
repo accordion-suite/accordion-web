@@ -19,6 +19,9 @@ export interface Movable {
   /** What the reader calls it, such as a note's title. */
   name: string;
   parent: string;
+  /** What moves with it: a note's pictures beside it, so they stay side
+   * by side (decision 31). */
+  along?: Movable[];
 }
 
 /** What a move says, with how to undo it. */
@@ -34,7 +37,9 @@ export function noteName(note: Pick<Note, "title" | "titled">): string {
 
 /** A note as something to move. A note at the top is in `top`. */
 export function movableNote(note: Note, top: string): Movable {
-  return { id: note.id, name: noteName(note), parent: note.folder ?? top };
+  const parent = note.folder ?? top;
+  const along = note.images.filter((image) => image.beside).map((image) => ({ id: image.id, name: image.name, parent }));
+  return { id: note.id, name: noteName(note), parent, along };
 }
 
 /** A folder as something to move. */
@@ -61,6 +66,15 @@ export async function moveInto(things: readonly Movable[], folder: { id: string;
     if (gone === null) break;
     done.push(thing);
     lost.push(gone);
+    // The pictures follow their note. One that won't move stays where it
+    // is, and the note still shows it.
+    for (const image of thing.along ?? []) {
+      try {
+        await moveOne(image, folder.id, consent, folder.name);
+      } catch {
+        // Left where it was.
+      }
+    }
   }
   if (done.length === 0) return null;
   const who = everyone(lost);
@@ -73,7 +87,10 @@ export async function moveInto(things: readonly Movable[], folder: { id: string;
     async undo() {
       // Each goes back where it was, which gives back what the move took.
       const back = consentFor(who);
-      for (const thing of done) await moveOne(thing, thing.parent, back, t("move.cameFrom"));
+      for (const thing of done) {
+        await moveOne(thing, thing.parent, back, t("move.cameFrom"));
+        for (const image of thing.along ?? []) await moveOne(image, image.parent, back, t("move.cameFrom")).catch(() => null);
+      }
     },
   };
 }

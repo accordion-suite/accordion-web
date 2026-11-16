@@ -1,6 +1,6 @@
 // Notes' calls to the server, at /api/notes (decision 31).
 
-import { api } from "../api.ts";
+import { api, send } from "../api.ts";
 import type { Reminder, Repeat } from "./reminders.ts";
 
 /** The colors a note can have, as the server names them. */
@@ -47,6 +47,17 @@ export interface Note {
   access: "owner" | "editor" | "viewer";
   /** The reader's own reminder on it. Nobody else's shows. */
   reminder: Reminder | null;
+  /** The pictures one of the reader's own notes shows. Empty for others'
+   * notes. */
+  images: NoteImage[];
+}
+
+/** A picture one of the reader's own notes shows. */
+export interface NoteImage {
+  id: string;
+  name: string;
+  /** Whether it's in the note's folder, so it moves with the note. */
+  beside: boolean;
 }
 
 export interface TrashedNote {
@@ -180,4 +191,19 @@ export function snoozeReminder(id: string, until: Date): Promise<Reminder> {
  * time, and comes back; one that doesn't is gone, which comes back null. */
 export function finishReminder(id: string): Promise<Reminder | null> {
   return api("POST", `/api/notes/notes/${id}/reminder/done`);
+}
+
+/** Saves a picture beside a note, named after it, and replies with the
+ * line that shows it, for the top of the note's text. */
+export function addImage(id: string, file: File): Promise<{ path: string; line: string }> {
+  return send("POST", `/api/notes/notes/${id}/images?name=${encodeURIComponent(file.name || "Pasted.png")}`, {
+    headers: { "Content-Type": "application/octet-stream" },
+    body: file,
+  });
+}
+
+/** After a picture was taken out of a note, moves its file to the trash,
+ * unless a note still shows it. */
+export function removeImage(id: string, target: string): Promise<void> {
+  return api("DELETE", `/api/notes/notes/${id}/image?path=${encodeURIComponent(target)}`);
 }

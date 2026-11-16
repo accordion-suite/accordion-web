@@ -82,3 +82,11 @@ export const ReminderIcon = () => (
     <path d="M10 19.5a2.2 2.2 0 0 0 4 0" {...line} />
   </Icon>
 );
+
+export const ImageIcon = () => (
+  <Icon>
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2" {...line} />
+    <circle cx="9" cy="10" r="1.6" {...line} />
+    <path d="m20.5 16-4.5-4.5-7.5 8" {...line} />
+  </Icon>
+);

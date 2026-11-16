@@ -16,33 +16,44 @@ import { type ChecklistItem, fromChecklist, isChecklist, readChecklist, taskText
 import { type LiveStatus, LiveNote, type Visitor } from "./live.ts";
 import { shiftCaret } from "./text-change.ts";
 import { useListSettings } from "./preferences.ts";
-import { ArchiveIcon, ChecklistIcon, LabelIcon, NoColorIcon, PaletteIcon, PinIcon, ReminderIcon } from "./icons.tsx";
+import { ArchiveIcon, ChecklistIcon, ImageIcon, LabelIcon, NoColorIcon, PaletteIcon, PinIcon, ReminderIcon } from "./icons.tsx";
 import { TrashIcon } from "../drive/icons.tsx";
-import { changeNote, createNote, NOTE_COLORS, type Note, type NoteChange, type NoteColor, openNote } from "./notes-api.ts";
+import { addImage, changeNote, createNote, NOTE_COLORS, type Note, type NoteChange, type NoteColor, openNote, removeImage } from "./notes-api.ts";
+import { IMAGE_TYPES, imageTarget, imageUrl, isImageName, joinImages, MAX_IMAGE_BYTES, restOffset, splitImages } from "./note-images.ts";
 import { applyReminder, type ReminderAction, ReminderChip, ReminderDialog, ReminderMenu } from "./reminder-menu.tsx";
 
 /** How long typing has to stop before the note saves. */
 const SAVE_AFTER_MS = 1000;
 
-/** What's being written: a title, and plain text or a checklist. */
+/** What's being written: a title, its pictures, and plain text or a
+ * checklist. */
 interface Draft {
   title: string;
+  /** The lines at the top of the text that show pictures, as written. */
+  images: string[];
   text: string;
   /** The checklist's items, when it shows checkboxes. */
   items: ChecklistItem[] | null;
 }
 
+/** A new note's draft, for text or a list. */
+function emptyDraft(list: boolean): Draft {
+  return { title: "", images: [], text: "", items: list ? [{ checked: false, text: "" }] : null };
+}
+
 function draftOf(note: Pick<Note, "title" | "titled" | "body">): Draft {
-  const checklist = isChecklist(note.body);
+  const { lines, rest } = splitImages(note.body);
+  const checklist = isChecklist(rest);
   return {
     title: note.titled ? note.title : "",
-    text: checklist ? "" : note.body,
-    items: checklist ? readChecklist(note.body) : null,
+    images: lines,
+    text: checklist ? "" : rest,
+    items: checklist ? readChecklist(rest) : null,
   };
 }
 
 function bodyOf(draft: Draft): string {
-  return draft.items ? writeChecklist(draft.items.filter((item) => item.text.trim() !== "")) : draft.text;
+  return joinImages(draft.images, draft.items ? writeChecklist(draft.items.filter((item) => item.text.trim() !== "")) : draft.text);
 }
 
 /** The menu of colors, for a card or the editor. */
@@ -443,6 +454,7 @@ export function Composer({
   start = null,
   onStarted,
   onCreated,
+  onImages,
 }: {
   label: string | null;
   /** Every label, to choose from. */
@@ -455,13 +467,16 @@ export function Composer({
   /** Called once `start` has opened the box, so it doesn't again. */
   onStarted?: () => void;
   onCreated: (note: Note) => void;
+  /** Opens a note taken here with pictures to add to it, chosen in the
+   * box, which takes the note first. */
+  onImages?: (note: Note, files: File[]) => void;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   useEffect(() => {
     if (!start) return;
     onStarted?.();
     if (latest.current.draft) return;
-    setDraft({ title: "", text: "", items: start.kind === "list" ? [{ checked: false, text: "" }] : null });
+    setDraft(emptyDraft(start.kind === "list"));
     box.current?.scrollIntoView?.({ block: "nearest" });
   }, [start?.at]);
   const [color, setColor] = useState<NoteColor | null>(null);
@@ -499,6 +514,24 @@ export function Composer({
     }
   }
 
+  /** Takes the note as it is so far, then opens it to add the pictures. */
+  async function withImages(files: File[]) {
+    if (saving.current) return;
+    const { draft, color, pinned, chosenTags } = latest.current;
+    const now = draft ?? emptyDraft(false);
+    saving.current = true;
+    try {
+      const note = await createNote({ title: now.title, body: bodyOf(now), color, pinned, tags: chosenTags, folder });
+      reset();
+      onCreated(note);
+      onImages?.(note, files);
+    } catch (problem) {
+      setError(problemText(problem));
+    } finally {
+      saving.current = false;
+    }
+  }
+
   function reset() {
     setDraft(null);
     setColor(null);
@@ -523,7 +556,7 @@ export function Composer({
   if (!draft) {
     return (
       <div class="note-composer collapsed">
-        <button type="button" class="note-composer-open" onClick={() => setDraft({ title: "", text: "", items: null })}>
+        <button type="button" class="note-composer-open" onClick={() => setDraft(emptyDraft(false))}>
           {t("notes.take")}
         </button>
         <button
@@ -531,10 +564,11 @@ export function Composer({
           class="icon-button"
           title={t("notes.takeChecklist")}
           aria-label={t("notes.takeChecklist")}
-          onClick={() => setDraft({ title: "", text: "", items: [{ checked: false, text: "" }] })}
+          onClick={() => setDraft(emptyDraft(true))}
         >
           <ChecklistIcon />
         </button>
+        {onImages && <ImageButton onFiles={(files) => void withImages(files)} />}
       </div>
     );
   }
@@ -594,6 +628,7 @@ export function Composer({
           <LabelIcon />
         </button>
         <CheckboxToggle draft={draft} onDraft={setDraft} />
+        {onImages && <ImageButton onFiles={(files) => void withImages(files)} />}
         <span class="spacer" />
         <button type="button" class="secondary" onClick={() => void close()}>
           {t("notes.close")}
@@ -644,18 +679,99 @@ function CheckboxToggle({ draft, onDraft }: { draft: Draft; onDraft: (draft: Dra
  * checkboxes, `checkboxes` says which for everyone. Until then the draft
  * keeps its kind, so plain text stays plain as someone types "- [ ]" into
  * it. A list shows as text when its text no longer reads as one. */
-function liveDraft(previous: Draft, body: string, checkboxes: boolean | undefined): Draft {
+function liveDraft(previous: Draft, whole: string, checkboxes: boolean | undefined): Draft {
+  const { lines: images, rest: body } = splitImages(whole);
   if (checkboxes ?? previous.items !== null) {
-    if (body.trim() === "") return { ...previous, text: "", items: [{ checked: false, text: "" }] };
-    if (isChecklist(body)) return { ...previous, text: "", items: readChecklist(body) };
+    if (body.trim() === "") return { ...previous, images, text: "", items: [{ checked: false, text: "" }] };
+    if (isChecklist(body)) return { ...previous, images, text: "", items: readChecklist(body) };
   }
-  return { ...previous, text: body, items: null };
+  return { ...previous, images, text: body, items: null };
 }
 
 /** A shared note's body for a draft. Empty items stay, so a new item
  * someone is about to type into reaches everyone else. */
 function liveBody(draft: Draft): string {
-  return draft.items ? writeChecklist(draft.items) : draft.text;
+  return joinImages(draft.images, draft.items ? writeChecklist(draft.items) : draft.text);
+}
+
+/** A button that chooses pictures from the device. */
+function ImageButton({ onFiles, disabled = false }: { onFiles: (files: File[]) => void; disabled?: boolean }) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <button
+        type="button"
+        class="icon-button"
+        title={t("notes.addImage")}
+        aria-label={t("notes.addImage")}
+        disabled={disabled}
+        onClick={() => input.current?.click()}
+      >
+        <ImageIcon />
+      </button>
+      <input
+        ref={input}
+        type="file"
+        accept={IMAGE_TYPES}
+        multiple
+        hidden
+        onChange={(event) => {
+          const files = [...(event.currentTarget.files ?? [])];
+          event.currentTarget.value = "";
+          if (files.length > 0) onFiles(files);
+        }}
+      />
+    </>
+  );
+}
+
+/** The pictures at the top of a note, each with a button to take it out. */
+function NoteImages({ note, lines, onRemove }: { note: string; lines: readonly string[]; onRemove?: (line: string) => void }) {
+  return (
+    <ul class={lines.length === 1 ? "note-images single" : "note-images"}>
+      {lines.map((line, index) => (
+        <NoteImage key={line} note={note} line={line} number={index + 1} onRemove={onRemove} />
+      ))}
+    </ul>
+  );
+}
+
+function NoteImage({ note, line, number, onRemove }: { note: string; line: string; number: number; onRemove?: (line: string) => void }) {
+  const [missing, setMissing] = useState(false);
+  const target = imageTarget(line) ?? "";
+  return (
+    <li>
+      {missing ? (
+        <p class="note-image-missing hint">{t("notes.imageMissing")}</p>
+      ) : (
+        <img src={imageUrl(note, target, "large")} alt={t("notes.image", { number })} onError={() => setMissing(true)} />
+      )}
+      {onRemove && (
+        <button
+          type="button"
+          class="icon-button note-image-remove"
+          title={t("notes.removeImage")}
+          aria-label={t("notes.removeImage")}
+          onClick={() => onRemove(line)}
+        >
+          <TrashIcon />
+        </button>
+      )}
+    </li>
+  );
+}
+
+/** Why a file can't be added as a picture, or null if it can. */
+function imageProblem(file: File): string | null {
+  const name = file.name || "image.png";
+  if (!isImageName(name)) return t("notes.imageNotPicture", { name });
+  if (file.size > MAX_IMAGE_BYTES) return t("notes.imageTooBig", { name });
+  return null;
+}
+
+/** The pictures among files dragged or pasted in. */
+function picturesIn(data: DataTransfer | null): File[] {
+  return [...(data?.files ?? [])].filter((file) => file.type.startsWith("image/") || isImageName(file.name));
 }
 
 /** A note open for editing. A shared note is edited together with
@@ -664,6 +780,7 @@ export function NoteEditor({
   id,
   me,
   labels,
+  images: firstImages = [],
   onChanged,
   onTrash,
   onMove,
@@ -674,6 +791,9 @@ export function NoteEditor({
   /** The reader's name, which others editing a shared note see. */
   me: string;
   labels: readonly string[];
+  /** Pictures to add once the note opens, such as ones chosen while
+   * taking it. */
+  images?: readonly File[];
   /** Chooses a folder for the note. */
   onMove: (note: Note) => void;
   /** Shares the note with people. */
@@ -706,6 +826,13 @@ export function NoteEditor({
   /** Whether the body of a shared note changed while it was open, so an
    * untitled one is named after its new first words when it closes. */
   const bodyChanged = useRef(false);
+  /** The newest draft, for pictures that finish adding after the page
+   * last drew. */
+  const current = useRef<Draft | null>(null);
+  current.current = draft;
+  /** How many pictures are on their way. */
+  const [adding, setAdding] = useState(0);
+  const [dropping, setDropping] = useState(false);
 
   useEffect(() => {
     openNote(id).then(
@@ -713,9 +840,11 @@ export function NoteEditor({
         latest.current = opened;
         setNote(opened);
         const first = draftOf(opened);
+        current.current = first;
         setDraft(first);
         saved.current = { title: first.title, body: opened.body };
         if (opened.shared) startLive(opened);
+        if (firstImages.length > 0 && opened.access !== "viewer") void addPictures([...firstImages]);
       },
       (problem) => setError(problemText(problem)),
     );
@@ -847,13 +976,15 @@ export function NoteEditor({
   }
 
   function edit(next: Draft) {
+    const before = current.current;
+    current.current = next;
     setDraft(next);
     setError("");
     window.clearTimeout(timer.current);
     if (live.current) {
       const body = liveBody(next);
       // Showing or hiding checkboxes switches everyone.
-      const switched = draft !== null && (draft.items !== null) !== (next.items !== null);
+      const switched = before !== null && (before.items !== null) !== (next.items !== null);
       if (body !== live.current.body.toString() || switched) {
         live.current.setBody(body, switched ? next.items !== null : undefined);
         bodyChanged.current = true;
@@ -863,6 +994,87 @@ export function NoteEditor({
     }
     timer.current = window.setTimeout(() => void saveText(next), SAVE_AFTER_MS);
   }
+
+  /** Saves pictures beside the note, one after another, and shows each at
+   * its top as it arrives. */
+  async function addPictures(files: File[]) {
+    const problems = files.map(imageProblem).filter((problem): problem is string => problem !== null);
+    const wanted = files.filter((file) => imageProblem(file) === null);
+    setError(problems.join(" "));
+    setAdding((count) => count + wanted.length);
+    for (const file of wanted) {
+      try {
+        const { line } = await addImage(id, file);
+        const now = current.current;
+        if (now) edit({ ...now, images: [...now.images, line] });
+      } catch (problem) {
+        problems.push(problemText(problem));
+        setError(problems.join(" "));
+      } finally {
+        setAdding((count) => count - 1);
+      }
+    }
+  }
+
+  /** Takes a picture out of the note. Once the note no longer shows it,
+   * its file goes to the trash, unless another note shows it. */
+  async function removePicture(line: string) {
+    const now = current.current;
+    const target = imageTarget(line);
+    if (!now || target === null) return;
+    const next = { ...now, images: now.images.filter((other) => other !== line) };
+    edit(next);
+    if (live.current) {
+      // The edit reaches the server over the live connection, which the
+      // server saves before it checks.
+      await new Promise((done) => window.setTimeout(done, 300));
+    } else {
+      await saveText(next);
+    }
+    try {
+      await removeImage(id, target);
+    } catch (problem) {
+      setError(problemText(problem));
+    }
+  }
+
+  const mayAdd = note !== null && note.access !== "viewer" && liveStatus !== "gone" && liveStatus !== "signedOut";
+  // Pictures dropped on the note or pasted into it are added to it.
+  useEffect(() => {
+    if (!mayAdd) return;
+    const over = (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes("Files")) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      setDropping(true);
+    };
+    const leave = (event: DragEvent) => {
+      if (event.relatedTarget === null) setDropping(false);
+    };
+    const drop = (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes("Files")) return;
+      event.preventDefault();
+      setDropping(false);
+      const files = picturesIn(event.dataTransfer);
+      if (files.length > 0) void addPictures(files);
+    };
+    const paste = (event: ClipboardEvent) => {
+      const files = picturesIn(event.clipboardData);
+      if (files.length === 0) return;
+      event.preventDefault();
+      void addPictures(files);
+    };
+    window.addEventListener("dragover", over);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("drop", drop);
+    window.addEventListener("paste", paste);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("drop", drop);
+      window.removeEventListener("paste", paste);
+    };
+  }, [mayAdd]);
 
   async function close() {
     if (draft) await saveText(draft);
@@ -883,7 +1095,9 @@ export function NoteEditor({
     const note = live.current;
     if (!note) return;
     if (!caret || caret.item === undefined) {
-      note.setCaret(caret);
+      // The text box holds what's below the pictures.
+      const offset = restOffset(note.body.toString());
+      note.setCaret(caret && { start: caret.start + offset, end: caret.end + offset });
       return;
     }
     const text = taskTexts(note.body.toString())[caret.item];
@@ -894,10 +1108,11 @@ export function NoteEditor({
   const carets: FieldCaret[] = [];
   if (live.current && draft && visitors.length > 0) {
     const texts = draft.items ? taskTexts(live.current.body.toString()) : null;
+    const offset = restOffset(live.current.body.toString());
     for (const caret of live.current.carets()) {
       const shown = { key: caret.client, name: caret.name, color: caret.color };
       if (!texts) {
-        carets.push({ ...shown, at: caret.at });
+        if (caret.at >= offset) carets.push({ ...shown, at: caret.at - offset });
         continue;
       }
       const item = texts.findIndex((text) => caret.at >= text.start && caret.at <= text.end);
@@ -933,6 +1148,12 @@ export function NoteEditor({
           {liveStatus === "connecting" ? (
             <p class="loading">{t("shell.loading")}</p>
           ) : (
+            <>
+              {draft.images.length > 0 && (
+                <NoteImages note={note.id} lines={draft.images} onRemove={mayAdd ? (line) => void removePicture(line) : undefined} />
+              )}
+              {adding > 0 && <p class="hint note-adding" role="status">{t("notes.addingImages")}</p>}
+              {dropping && <p class="note-drop-hint">{t("notes.dropImages")}</p>}
             <NoteFields
               draft={draft}
               onDraft={edit}
@@ -940,6 +1161,7 @@ export function NoteEditor({
               carets={carets}
               onCaret={live.current ? sendCaret : undefined}
             />
+            </>
           )}
           {note.tags.length > 0 && (
             <ul class="note-tags" aria-label={t("notes.labels")}>
@@ -989,6 +1211,7 @@ export function NoteEditor({
             >
               <ReminderIcon />
             </button>
+            {mayAdd && <ImageButton onFiles={(files) => void addPictures(files)} />}
             {!readOnly && (
               <button
                 type="button"

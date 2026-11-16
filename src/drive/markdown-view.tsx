@@ -1,16 +1,32 @@
 // Shows Markdown as a page: the tree from markdown.ts, as elements. Text
 // goes in as text, so nothing in the file runs.
 
-import { useMemo } from "preact/hooks";
+import { createContext } from "preact";
+import { useContext, useMemo } from "preact/hooks";
 
 import { t } from "../i18n.ts";
 import { languageOfFence } from "./highlight.ts";
 import { Highlighted } from "./highlight-view.tsx";
 import { type Block, type Inline, parseMarkdown } from "./markdown.ts";
 
-export function MarkdownView({ source }: { source: string }) {
+/** Where a picture in the text is shown from, for a picture beside the
+ * file, such as a note's, or null to show a link instead. */
+type Pictures = (target: string) => string | null;
+
+const PicturesContext = createContext<Pictures | null>(null);
+
+export function MarkdownView({ source, pictures }: { source: string; pictures?: Pictures }) {
   const blocks = useMemo(() => parseMarkdown(source), [source]);
-  return <div class="markdown">{blocks.map((block, index) => <BlockView key={index} block={block} />)}</div>;
+  return (
+    <PicturesContext.Provider value={pictures ?? null}>
+      <div class="markdown">{blocks.map((block, index) => <BlockView key={index} block={block} />)}</div>
+    </PicturesContext.Provider>
+  );
+}
+
+/** A picture beside the file, as a picture. */
+function Picture({ src, alt }: { src: string; alt: string }) {
+  return <img class="markdown-image" src={src} alt={alt} loading="lazy" />;
 }
 
 function BlockView({ block }: { block: Block }) {
@@ -117,6 +133,7 @@ function Inlines({ nodes }: { nodes: Inline[] }) {
 }
 
 function InlineView({ node }: { node: Inline }) {
+  const pictures = useContext(PicturesContext);
   switch (node.type) {
     case "text":
       return <>{node.text}</>;
@@ -151,6 +168,8 @@ function InlineView({ node }: { node: Inline }) {
         <Inlines nodes={node.children} />
       );
     case "image": {
+      const beside = !node.href && pictures ? pictures(node.target) : null;
+      if (beside) return <Picture src={beside} alt={node.alt} />;
       // A link rather than the picture, which would load from another
       // server each time the file is opened.
       const name = node.alt ? t("markdown.picture", { name: node.alt }) : t("markdown.pictureUnnamed");

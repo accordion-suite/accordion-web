@@ -48,8 +48,10 @@ test("links only to web pages and email addresses", () => {
     text("."),
   ]);
   assert.deepEqual(inlines("![A cat](https://example.com/cat.jpg)"), [
-    { type: "image", href: "https://example.com/cat.jpg", alt: "A cat" },
+    { type: "image", href: "https://example.com/cat.jpg", alt: "A cat", target: "https://example.com/cat.jpg" },
   ]);
+  // A picture beside the file has no address to follow, but keeps its own.
+  assert.deepEqual(inlines("![](Garden/a%20b.jpg)"), [{ type: "image", href: null, alt: "", target: "Garden/a%20b.jpg" }]);
   assert.equal(safeHref(" JavaScript:alert(1)"), null);
   assert.equal(safeHref("data:text/html,hi"), null);
 });

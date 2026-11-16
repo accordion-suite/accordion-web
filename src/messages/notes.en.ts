@@ -166,4 +166,12 @@ export const notesEn = {
   "notes.reminderFinished": "Reminder done",
   "notes.reminderRemoved": "Reminder removed",
   "notes.quickAt": "{choice}, {when}",
+  "notes.addImage": "Add image",
+  "notes.removeImage": "Remove image",
+  "notes.image": "Image {number}",
+  "notes.imageMissing": "Image not found",
+  "notes.addingImages": "Adding images…",
+  "notes.dropImages": "Drop images to add them to this note",
+  "notes.imageNotPicture": "Notes takes JPEG, PNG, GIF, WebP, AVIF, and HEIC pictures. “{name}” isn't one of those.",
+  "notes.imageTooBig": "“{name}” is larger than 50 MB. Choose a smaller picture.",
 } as const;
