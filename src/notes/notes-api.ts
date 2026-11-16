@@ -202,6 +202,15 @@ export function addImage(id: string, file: File): Promise<{ path: string; line: 
   });
 }
 
+/** Saves a voice memo recorded in Notes beside the note, and gives the
+ * line that plays it, for the top of the note. */
+export function addMemo(id: string, memo: Blob, extension: string): Promise<{ path: string; line: string }> {
+  return send("POST", `/api/notes/notes/${id}/memos?name=memo.${extension}`, {
+    headers: { "Content-Type": "application/octet-stream" },
+    body: memo,
+  });
+}
+
 /** After a picture was taken out of a note, moves its file to the trash,
  * unless a note still shows it. */
 export function removeImage(id: string, target: string): Promise<void> {

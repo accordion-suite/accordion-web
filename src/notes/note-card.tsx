@@ -8,10 +8,10 @@ import { holdDrag } from "../drive/move.ts";
 import { t } from "../i18n.ts";
 import { isChecklist, readChecklist } from "./checklist.ts";
 import { useListSettings } from "./preferences.ts";
-import { ArchiveIcon, LabelIcon, PaletteIcon, PinIcon, ReminderIcon } from "./icons.tsx";
-import { MoveIcon, PeopleIcon, TrashIcon } from "../drive/icons.tsx";
+import { ArchiveIcon, LabelIcon, MicIcon, PaletteIcon, PinIcon, ReminderIcon } from "./icons.tsx";
+import { MoreIcon, MoveIcon, PeopleIcon, TrashIcon } from "../drive/icons.tsx";
 import type { Note } from "./notes-api.ts";
-import { decodeTarget, imageTarget, imageUrl, splitImages } from "./note-images.ts";
+import { decodeTarget, imageTarget, imageUrl, isImageName, isSoundName, splitImages } from "./note-images.ts";
 import { ReminderChip } from "./reminder-menu.tsx";
 
 /** How many items a card shows. */
@@ -30,12 +30,16 @@ export function NoteCard({
   onShare,
   onReminder,
   onMenu,
+  onMore,
   onDrag,
   menuOpen = false,
 }: {
   note: Note;
   /** Opens the note's menu, for a right-click or the context menu key. */
   onMenu?: (event: MouseEvent) => void;
+  /** Opens the note's menu under `button`, which a card too narrow for all
+   * its buttons shows instead of some of them. */
+  onMore?: (button: HTMLElement) => void;
   /** Starts or ends a drag of the note, with null at the end. */
   onDrag?: (dragging: Note | null) => void;
   /** Whether its menu is open, which marks the card. */
@@ -59,7 +63,9 @@ export function NoteCard({
 }) {
   const label = note.titled ? note.title : note.title || t("notes.untitled");
   const own = note.access === "owner";
-  const cover = splitImages(note.body).lines.map(imageTarget)[0];
+  const shown = splitImages(note.body).lines.map((line) => imageTarget(line) ?? "");
+  const cover = shown.find(isImageName);
+  const memos = shown.filter(isSoundName).length;
   const ownerName = note.owner?.name ?? t("notes.someone");
   return (
     <article
@@ -91,6 +97,12 @@ export function NoteCard({
       {cover && <Cover src={imageUrl(note.id, cover, "small")} />}
       {note.titled && <h3 class="note-title">{note.title}</h3>}
       <NoteBody body={note.body} note={note.id} onToggle={onToggle} />
+      {memos > 0 && (
+        <p class="note-memo-count hint">
+          <MicIcon />
+          {t("notes.memos", { count: memos })}
+        </p>
+      )}
       {note.tags.length > 0 && (
         <ul class="note-tags" aria-label={t("notes.labels")}>
           {note.tags.map((tag) => (
@@ -158,7 +170,7 @@ export function NoteCard({
         )}
         <button
           type="button"
-          class="icon-button"
+          class="icon-button note-action-extra"
           title={t(note.tags.length > 0 ? "notes.changeLabels" : "notes.addLabel")}
           aria-label={t(note.tags.length > 0 ? "notes.changeLabels" : "notes.addLabel")}
           onClick={(event) => {
@@ -171,7 +183,7 @@ export function NoteCard({
         {own && onShare && (
           <button
             type="button"
-            class="icon-button"
+            class="icon-button note-action-extra"
             title={t("notes.share")}
             aria-label={t("notes.share")}
             onClick={(event) => {
@@ -185,7 +197,7 @@ export function NoteCard({
         {own && (
           <button
             type="button"
-            class="icon-button"
+            class="icon-button note-action-extra"
             title={t("notes.moveToFolder")}
             aria-label={t("notes.moveToFolder")}
             onClick={(event) => {
@@ -211,7 +223,7 @@ export function NoteCard({
         {own && (
           <button
             type="button"
-            class="icon-button"
+            class="icon-button note-action-extra"
             title={t("notes.toTrash")}
             aria-label={t("notes.toTrash")}
             onClick={(event) => {
@@ -220,6 +232,21 @@ export function NoteCard({
             }}
           >
             <TrashIcon />
+          </button>
+        )}
+        {onMore && (
+          <button
+            type="button"
+            class="icon-button note-action-more"
+            title={t("notes.more")}
+            aria-label={t("drive.moreActions", { name: label })}
+            aria-haspopup="menu"
+            onClick={(event) => {
+              event.stopPropagation();
+              onMore(event.currentTarget);
+            }}
+          >
+            <MoreIcon />
           </button>
         )}
       </div>

@@ -90,3 +90,10 @@ export const ImageIcon = () => (
     <path d="m20.5 16-4.5-4.5-7.5 8" {...line} />
   </Icon>
 );
+
+export const MicIcon = () => (
+  <Icon>
+    <rect x="9" y="3.5" width="6" height="11" rx="3" {...line} />
+    <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5" {...line} />
+  </Icon>
+);

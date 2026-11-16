@@ -3966,6 +3966,96 @@ dialog.shortcuts kbd {
   margin: 0 0 8px;
 }
 
+/* Voice memos at the top of an open note, below its pictures: one row
+   each, with a player and a button to take it out. */
+.note-memos {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.note-memos li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.note-memos li > svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.note-memos audio {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+}
+
+.note-memos .note-image-missing {
+  flex: 1;
+  padding: 8px 0;
+  text-align: left;
+}
+
+/* The bar shown while a memo records. */
+.note-recording {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-recording .spacer {
+  flex: 1;
+}
+
+.note-recording-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: note-recording-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes note-recording-blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-recording-dot {
+    animation: none;
+  }
+}
+
+/* In an open note, the pin sits at the top right, so the recording bar and
+   memo rows leave room for it. */
+dialog.note-editor .note-memos,
+dialog.note-editor .note-recording {
+  margin-right: 36px;
+}
+
+/* How many memos a note has, on its card. */
+.note-memo-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0 0;
+}
+
+.note-memo-count svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* The Folders heading in Notes' sidebar, with its New folder button at
    the end. */
 .notes-folders-heading {
@@ -4168,11 +4258,32 @@ label.choice.folder-choice {
   gap: 2px;
 }
 
-/* Five buttons don't fit a half-width card on a phone at full size, so
-   they shrink, but not below a size that's still easy to hit. */
+/* Buttons shrink to fit a card, but not below a size that's still easy to
+   hit. */
 .note-actions .icon-button {
   flex: 0 1 40px;
   min-width: 30px;
+}
+
+/* All seven buttons don't fit a half-width card on a phone, so a narrow
+   card shows the most used ones and a More button, whose menu has the
+   rest. */
+.note-card {
+  container-type: inline-size;
+}
+
+.note-actions .note-action-more {
+  display: none;
+}
+
+@container (max-width: 209px) {
+  .note-actions .note-action-extra {
+    display: none;
+  }
+
+  .note-actions .note-action-more {
+    display: inline-block;
+  }
 }
 
 .note-card .note-pin:not([aria-pressed="true"]),
@@ -4290,6 +4401,7 @@ input.note-title-field {
 
 .note-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   margin-top: 8px;

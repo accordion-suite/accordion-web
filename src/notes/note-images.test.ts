@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { imageTarget, imageUrl, isImageName, joinImages, restOffset, splitImages } from "./note-images.ts";
+import { imageTarget, imageUrl, isImageName, isSoundName, joinImages, restOffset, splitImages } from "./note-images.ts";
 
 test("reads the picture a line shows", () => {
   assert.equal(imageTarget("![](Garden/Groceries%201.jpg)"), "Garden/Groceries 1.jpg");
@@ -36,4 +36,16 @@ test("a note of only pictures keeps one line ending", () => {
 
 test("asks Notes for a picture by its link", () => {
   assert.equal(imageUrl("n1", "Garden/a b.jpg", "small"), "/api/notes/notes/n1/image?path=Garden%2Fa%20b.jpg&size=small");
+});
+
+test("knows the sounds Notes plays", () => {
+  assert.equal(isSoundName("Trip 1.webm"), true);
+  assert.equal(isSoundName("memo.M4A"), true);
+  assert.equal(isSoundName("a.jpg"), false);
+  assert.equal(isSoundName("webm"), false);
+});
+
+test("memos at the top go with the pictures", () => {
+  const body = "![](a.jpg)\n![](Trip%201.webm)\n\nBags\n";
+  assert.deepEqual(splitImages(body), { lines: ["![](a.jpg)", "![](Trip%201.webm)"], rest: "Bags\n" });
 });

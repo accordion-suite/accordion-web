@@ -16,20 +16,22 @@ import { type ChecklistItem, fromChecklist, isChecklist, readChecklist, taskText
 import { type LiveStatus, LiveNote, type Visitor } from "./live.ts";
 import { shiftCaret } from "./text-change.ts";
 import { useListSettings } from "./preferences.ts";
-import { ArchiveIcon, ChecklistIcon, ImageIcon, LabelIcon, NoColorIcon, PaletteIcon, PinIcon, ReminderIcon } from "./icons.tsx";
+import { ArchiveIcon, ChecklistIcon, ImageIcon, LabelIcon, MicIcon, NoColorIcon, PaletteIcon, PinIcon, ReminderIcon } from "./icons.tsx";
+import { MAX_MEMO_MS, Recording, RecordingError } from "./memo-recorder.ts";
 import { TrashIcon } from "../drive/icons.tsx";
-import { addImage, changeNote, createNote, NOTE_COLORS, type Note, type NoteChange, type NoteColor, openNote, removeImage } from "./notes-api.ts";
-import { IMAGE_TYPES, imageTarget, imageUrl, isImageName, joinImages, MAX_IMAGE_BYTES, restOffset, splitImages } from "./note-images.ts";
+import { addImage, addMemo, changeNote, createNote, NOTE_COLORS, type Note, type NoteChange, type NoteColor, openNote, removeImage } from "./notes-api.ts";
+import { IMAGE_TYPES, imageTarget, imageUrl, isImageName, isSoundName, joinImages, MAX_IMAGE_BYTES, restOffset, splitImages } from "./note-images.ts";
 import { applyReminder, type ReminderAction, ReminderChip, ReminderDialog, ReminderMenu } from "./reminder-menu.tsx";
 
 /** How long typing has to stop before the note saves. */
 const SAVE_AFTER_MS = 1000;
 
-/** What's being written: a title, its pictures, and plain text or a
+/** What's being written: a title, its pictures and memos, and plain text or a
  * checklist. */
 interface Draft {
   title: string;
-  /** The lines at the top of the text that show pictures, as written. */
+  /** The lines at the top of the text that show pictures or play memos,
+   * as written. */
   images: string[];
   text: string;
   /** The checklist's items, when it shows checkboxes. */
@@ -455,6 +457,7 @@ export function Composer({
   onStarted,
   onCreated,
   onImages,
+  onRecord,
 }: {
   label: string | null;
   /** Every label, to choose from. */
@@ -470,6 +473,9 @@ export function Composer({
   /** Opens a note taken here with pictures to add to it, chosen in the
    * box, which takes the note first. */
   onImages?: (note: Note, files: File[]) => void;
+  /** Opens a note taken here to record a voice memo in it, which takes
+   * the note first. */
+  onRecord?: (note: Note) => void;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   useEffect(() => {
@@ -515,7 +521,13 @@ export function Composer({
   }
 
   /** Takes the note as it is so far, then opens it to add the pictures. */
-  async function withImages(files: File[]) {
+  function withImages(files: File[]) {
+    return takeThen((note) => onImages?.(note, files));
+  }
+
+  /** Takes the note as it is so far, then hands it on, such as to open it
+   * for pictures or a memo. */
+  async function takeThen(then: (note: Note) => void) {
     if (saving.current) return;
     const { draft, color, pinned, chosenTags } = latest.current;
     const now = draft ?? emptyDraft(false);
@@ -524,7 +536,7 @@ export function Composer({
       const note = await createNote({ title: now.title, body: bodyOf(now), color, pinned, tags: chosenTags, folder });
       reset();
       onCreated(note);
-      onImages?.(note, files);
+      then(note);
     } catch (problem) {
       setError(problemText(problem));
     } finally {
@@ -569,6 +581,7 @@ export function Composer({
           <ChecklistIcon />
         </button>
         {onImages && <ImageButton onFiles={(files) => void withImages(files)} />}
+        {onRecord && <RecordButton onRecord={() => void takeThen(onRecord)} />}
       </div>
     );
   }
@@ -629,6 +642,7 @@ export function Composer({
         </button>
         <CheckboxToggle draft={draft} onDraft={setDraft} />
         {onImages && <ImageButton onFiles={(files) => void withImages(files)} />}
+        {onRecord && <RecordButton onRecord={() => void takeThen(onRecord)} />}
         <span class="spacer" />
         <button type="button" class="secondary" onClick={() => void close()}>
           {t("notes.close")}
@@ -725,15 +739,66 @@ function ImageButton({ onFiles, disabled = false }: { onFiles: (files: File[]) =
   );
 }
 
-/** The pictures at the top of a note, each with a button to take it out. */
-function NoteImages({ note, lines, onRemove }: { note: string; lines: readonly string[]; onRemove?: (line: string) => void }) {
+/** A button that records a voice memo. */
+function RecordButton({ onRecord }: { onRecord: () => void }) {
   return (
-    <ul class={lines.length === 1 ? "note-images single" : "note-images"}>
-      {lines.map((line, index) => (
-        <NoteImage key={line} note={note} line={line} number={index + 1} onRemove={onRemove} />
-      ))}
-    </ul>
+    <button type="button" class="icon-button" title={t("notes.record")} aria-label={t("notes.record")} onClick={onRecord}>
+      <MicIcon />
+    </button>
   );
+}
+
+/** The pictures and memos at the top of a note, each with a button to take
+ * it out. */
+function NoteImages({ note, lines, onRemove }: { note: string; lines: readonly string[]; onRemove?: (line: string) => void }) {
+  const memos = lines.filter((line) => isSoundName(imageTarget(line) ?? ""));
+  const pictures = lines.filter((line) => !memos.includes(line));
+  return (
+    <>
+      {pictures.length > 0 && (
+        <ul class={pictures.length === 1 ? "note-images single" : "note-images"}>
+          {pictures.map((line, index) => (
+            <NoteImage key={line} note={note} line={line} number={index + 1} onRemove={onRemove} />
+          ))}
+        </ul>
+      )}
+      {memos.length > 0 && (
+        <ul class="note-memos">
+          {memos.map((line, index) => (
+            <NoteMemo key={line} note={note} line={line} number={index + 1} onRemove={onRemove} />
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** A voice memo, with a player. */
+function NoteMemo({ note, line, number, onRemove }: { note: string; line: string; number: number; onRemove?: (line: string) => void }) {
+  const [missing, setMissing] = useState(false);
+  const target = imageTarget(line) ?? "";
+  const name = t("notes.memo", { number });
+  return (
+    <li>
+      <MicIcon />
+      {missing ? (
+        <p class="note-image-missing hint">{t("notes.memoMissing")}</p>
+      ) : (
+        <audio controls preload="metadata" src={imageUrl(note, target, "large")} aria-label={name} title={name} onError={() => setMissing(true)} />
+      )}
+      {onRemove && (
+        <button type="button" class="icon-button" title={t("notes.removeMemo")} aria-label={t("notes.removeMemo")} onClick={() => onRemove(line)}>
+          <TrashIcon />
+        </button>
+      )}
+    </li>
+  );
+}
+
+/** Minutes and seconds, such as 2:05. */
+function clock(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 function NoteImage({ note, line, number, onRemove }: { note: string; line: string; number: number; onRemove?: (line: string) => void }) {
@@ -781,6 +846,7 @@ export function NoteEditor({
   me,
   labels,
   images: firstImages = [],
+  record = false,
   onChanged,
   onTrash,
   onMove,
@@ -794,6 +860,9 @@ export function NoteEditor({
   /** Pictures to add once the note opens, such as ones chosen while
    * taking it. */
   images?: readonly File[];
+  /** Starts recording a voice memo once the note opens, such as when one
+   * was asked for while taking it. */
+  record?: boolean;
   /** Chooses a folder for the note. */
   onMove: (note: Note) => void;
   /** Shares the note with people. */
@@ -833,6 +902,12 @@ export function NoteEditor({
   /** How many pictures are on their way. */
   const [adding, setAdding] = useState(0);
   const [dropping, setDropping] = useState(false);
+  /** The memo being recorded, if one is. */
+  const [recording, setRecording] = useState<Recording | null>(null);
+  const recordingNow = useRef<Recording | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  /** How many memos are on their way. */
+  const [savingMemos, setSavingMemos] = useState(0);
 
   useEffect(() => {
     openNote(id).then(
@@ -845,11 +920,16 @@ export function NoteEditor({
         saved.current = { title: first.title, body: opened.body };
         if (opened.shared) startLive(opened);
         if (firstImages.length > 0 && opened.access !== "viewer") void addPictures([...firstImages]);
+        if (record && opened.access !== "viewer") void startRecording();
       },
       (problem) => setError(problemText(problem)),
     );
     return () => {
       window.clearTimeout(timer.current);
+      // Closing without the Close button, such as when the note goes to
+      // the trash, lets go of the microphone.
+      recordingNow.current?.cancel();
+      recordingNow.current = null;
       live.current?.close();
       live.current = null;
     };
@@ -1016,7 +1096,60 @@ export function NoteEditor({
     }
   }
 
-  /** Takes a picture out of the note. Once the note no longer shows it,
+  /** Asks for the microphone and starts recording a memo. */
+  async function startRecording() {
+    if (recordingNow.current) return;
+    setError("");
+    try {
+      const started = await Recording.start();
+      recordingNow.current = started;
+      setRecording(started);
+      setElapsed(0);
+    } catch (problem) {
+      setError(problem instanceof RecordingError ? t(problem.problem) : problemText(problem));
+    }
+  }
+
+  /** Stops recording, saves the memo beside the note, and shows it at the
+   * top. */
+  async function finishRecording() {
+    const finished = recordingNow.current;
+    if (!finished) return;
+    recordingNow.current = null;
+    setRecording(null);
+    setSavingMemos((count) => count + 1);
+    try {
+      const memo = await finished.finish();
+      const { line } = await addMemo(id, memo.blob, memo.extension);
+      const now = current.current;
+      if (now) edit({ ...now, images: [...now.images, line] });
+    } catch (problem) {
+      setError(problemText(problem));
+    } finally {
+      setSavingMemos((count) => count - 1);
+    }
+  }
+
+  function discardRecording() {
+    recordingNow.current?.cancel();
+    recordingNow.current = null;
+    setRecording(null);
+  }
+
+  // The clock while recording, which stops at the longest a memo can be.
+  useEffect(() => {
+    if (!recording) return;
+    const tick = window.setInterval(() => {
+      const now = recording.elapsed();
+      setElapsed(now);
+      if (now >= MAX_MEMO_MS) {
+        void finishRecording().then(() => setError(t("notes.memoLimit")));
+      }
+    }, 250);
+    return () => window.clearInterval(tick);
+  }, [recording]);
+
+  /** Takes a picture or memo out of the note. Once the note no longer shows it,
    * its file goes to the trash, unless another note shows it. */
   async function removePicture(line: string) {
     const now = current.current;
@@ -1077,6 +1210,13 @@ export function NoteEditor({
   }, [mayAdd]);
 
   async function close() {
+    // A memo being recorded is kept, as if Stop and save were selected.
+    if (recordingNow.current) {
+      await finishRecording();
+      // The memo's line reaches the server over the live connection.
+      if (live.current) await new Promise((done) => window.setTimeout(done, 300));
+    }
+    const draft = current.current;
     if (draft) await saveText(draft);
     if (live.current) {
       live.current.close();
@@ -1153,6 +1293,20 @@ export function NoteEditor({
                 <NoteImages note={note.id} lines={draft.images} onRemove={mayAdd ? (line) => void removePicture(line) : undefined} />
               )}
               {adding > 0 && <p class="hint note-adding" role="status">{t("notes.addingImages")}</p>}
+              {savingMemos > 0 && <p class="hint note-adding" role="status">{t("notes.savingMemo")}</p>}
+              {recording && (
+                <div class="note-recording" role="status">
+                  <span class="note-recording-dot" aria-hidden="true" />
+                  <span>{t("notes.recording", { time: clock(elapsed) })}</span>
+                  <span class="spacer" />
+                  <button type="button" class="secondary" onClick={discardRecording}>
+                    {t("notes.discardRecording")}
+                  </button>
+                  <button type="button" onClick={() => void finishRecording()}>
+                    {t("notes.stopRecording")}
+                  </button>
+                </div>
+              )}
               {dropping && <p class="note-drop-hint">{t("notes.dropImages")}</p>}
             <NoteFields
               draft={draft}
@@ -1212,6 +1366,7 @@ export function NoteEditor({
               <ReminderIcon />
             </button>
             {mayAdd && <ImageButton onFiles={(files) => void addPictures(files)} />}
+            {mayAdd && !recording && <RecordButton onRecord={() => void startRecording()} />}
             {!readOnly && (
               <button
                 type="button"

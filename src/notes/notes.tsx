@@ -160,8 +160,9 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
   const [top, setTop] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
-  /** Pictures to add to the note being opened, chosen while taking it. */
-  const [adding, setAdding] = useState<{ id: string; files: File[] } | null>(null);
+  /** Pictures to add to the note being opened, chosen while taking it, or
+   * a memo to record in it. */
+  const [adding, setAdding] = useState<{ id: string; files: File[]; record?: boolean } | null>(null);
   const [editingLabels, setEditingLabels] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [colors, setColors] = useState<{ note: Note; place: MenuPlace } | null>(null);
@@ -458,6 +459,10 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
             const entries = noteEntries(note, menuAt(event, card).place);
             openMenu(event, card, note.id, t("notes.actionsFor", { name: noteName(note) }), entries);
           }}
+          onMore={(button) => {
+            const place = { under: button };
+            setMenu({ label: t("notes.actionsFor", { name: noteName(note) }), entries: noteEntries(note, place), on: note.id, place, byKeyboard: false });
+          }}
           onDrag={note.access === "owner" ? (dragging) => drag(dragging && { kind: "note", note: dragging }) : undefined}
         />
       ))}
@@ -540,6 +545,10 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
             }}
             onImages={(note, files) => {
               setAdding({ id: note.id, files });
+              setEditing(note.id);
+            }}
+            onRecord={(note) => {
+              setAdding({ id: note.id, files: [], record: true });
               setEditing(note.id);
             }}
           />
@@ -860,6 +869,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
           me={session.user.display_name}
           labels={labels}
           images={adding?.id === editing ? adding.files : undefined}
+          record={adding?.id === editing && adding.record === true}
           onShare={(note) => {
             setEditing(null);
             void share(note);
