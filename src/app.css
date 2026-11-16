@@ -4282,7 +4282,7 @@ label.choice.folder-choice {
   }
 
   .note-actions .note-action-more {
-    display: inline-block;
+    display: inline-flex;
   }
 }
 
