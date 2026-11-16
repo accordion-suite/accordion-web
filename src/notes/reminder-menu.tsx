@@ -34,7 +34,7 @@ export type ReminderAction =
 
 /** Asks once whether reminders may show as the device's own notifications.
  * Browsers only ask while someone is acting, so this runs as they set one. */
-function askToNotify() {
+export function askToNotify() {
   if (typeof Notification !== "undefined" && Notification.permission === "default") {
     void Notification.requestPermission().catch(() => undefined);
   }
@@ -78,7 +78,7 @@ function quickLabel(quick: Quick, at: Date, now: Date): string {
 
 /** The reminder menu's choices for `note`. */
 export function reminderEntries(
-  note: Note,
+  note: Pick<Note, "reminder">,
   now: Date,
   onAction: (action: ReminderAction) => void,
   onPick: () => void,
@@ -104,7 +104,9 @@ export function ReminderMenu({
   onPick,
   onClose,
 }: {
-  note: Note;
+  /** The note, or just its reminder, such as one held for a note not taken
+   * yet. */
+  note: Pick<Note, "reminder">;
   place: MenuPlace;
   onAction: (action: ReminderAction) => void;
   /** Opens the dialog for any date and time. */

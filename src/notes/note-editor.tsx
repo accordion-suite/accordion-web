@@ -21,7 +21,8 @@ import { MAX_MEMO_MS, Recording, RecordingError } from "./memo-recorder.ts";
 import { TrashIcon } from "../drive/icons.tsx";
 import { addImage, addMemo, changeNote, createNote, NOTE_COLORS, type Note, type NoteChange, type NoteColor, openNote, removeImage } from "./notes-api.ts";
 import { IMAGE_TYPES, imageTarget, imageUrl, isImageName, isSoundName, joinImages, MAX_IMAGE_BYTES, restOffset, splitImages } from "./note-images.ts";
-import { applyReminder, type ReminderAction, ReminderChip, ReminderDialog, ReminderMenu } from "./reminder-menu.tsx";
+import { applyReminder, askToNotify, type ReminderAction, ReminderChip, ReminderDialog, ReminderMenu } from "./reminder-menu.tsx";
+import { deviceZone, localText, type Reminder, type Repeat } from "./reminders.ts";
 
 /** How long typing has to stop before the note saves. */
 const SAVE_AFTER_MS = 1000;
@@ -458,6 +459,7 @@ export function Composer({
   onCreated,
   onImages,
   onRecord,
+  onShare,
 }: {
   label: string | null;
   /** Every label, to choose from. */
@@ -476,6 +478,8 @@ export function Composer({
   /** Opens a note taken here to record a voice memo in it, which takes
    * the note first. */
   onRecord?: (note: Note) => void;
+  /** Shares a note taken here, which takes the note first. */
+  onShare?: (note: Note) => void;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   useEffect(() => {
@@ -491,28 +495,78 @@ export function Composer({
   /** The labels chosen, or null for the open label's, if any. */
   const [tags, setTags] = useState<string[] | null>(null);
   const [picking, setPicking] = useState(false);
+  /** A reminder to set once the note is taken, since a reminder needs a
+   * note. */
+  const [reminder, setReminder] = useState<{ local: string; repeat: Repeat | null } | null>(null);
+  const [reminding, setReminding] = useState<MenuPlace | null>(null);
+  const [pickingTime, setPickingTime] = useState(false);
   const chosenTags = tags ?? (label ? [label] : []);
   const [error, setError] = useState("");
   const box = useRef<HTMLDivElement>(null);
   const saving = useRef(false);
   /** The newest of everything, for a close that a click outside starts
    * before the page has drawn the last keystroke. */
-  const latest = useRef({ draft, color, pinned, colors, chosenTags, picking });
-  latest.current = { draft, color, pinned, colors, chosenTags, picking };
+  const latest = useRef({ draft, color, pinned, colors, chosenTags, picking, reminder, reminding, pickingTime });
+  latest.current = { draft, color, pinned, colors, chosenTags, picking, reminder, reminding, pickingTime };
+
+  /** The held reminder as a card shows one. */
+  const held: Reminder | null = reminder && {
+    ...reminder,
+    zone: deviceZone(),
+    due_at: new Date(reminder.local).toISOString(),
+    rang: false,
+  };
+
+  /** Holds what a choice in the reminder menu asks for. */
+  function holdReminder(action: ReminderAction) {
+    switch (action.kind) {
+      // Browsers ask about notifications only while someone acts, which
+      // taking the note later may be too late for.
+      case "set":
+        askToNotify();
+        setReminder({ local: action.local, repeat: action.repeat });
+        break;
+      // A held reminder that passed while the box was open can be snoozed.
+      case "snooze":
+        setReminder({ local: localText(action.until), repeat: null });
+        break;
+      case "done":
+      case "remove":
+        setReminder(null);
+        break;
+    }
+  }
 
   async function close() {
-    const { draft, color, pinned, chosenTags } = latest.current;
+    const { draft, reminder } = latest.current;
     if (!draft || saving.current) return;
     const body = bodyOf(draft);
-    if (!draft.title.trim() && !body.trim()) {
+    if (!draft.title.trim() && !body.trim() && !reminder) {
       reset();
       return;
     }
+    await take(draft);
+  }
+
+  /** Takes the note, sets its held reminder, and hands it on. A reminder
+   * that can't be set leaves the note taken, and says so. */
+  async function take(now: Draft, then?: (note: Note) => void) {
+    const { color, pinned, chosenTags, reminder } = latest.current;
     saving.current = true;
     try {
-      const note = await createNote({ title: draft.title, body, color, pinned, tags: chosenTags, folder });
+      let note = await createNote({ title: now.title, body: bodyOf(now), color, pinned, tags: chosenTags, folder });
+      let problem: unknown = null;
+      if (reminder) {
+        try {
+          note = { ...note, reminder: (await applyReminder(note.id, { kind: "set", ...reminder })).reminder };
+        } catch (failed) {
+          problem = failed;
+        }
+      }
       reset();
       onCreated(note);
+      if (problem) setError(problemText(problem));
+      then?.(note);
     } catch (problem) {
       setError(problemText(problem));
     } finally {
@@ -526,22 +580,10 @@ export function Composer({
   }
 
   /** Takes the note as it is so far, then hands it on, such as to open it
-   * for pictures or a memo. */
+   * for pictures or a memo, or to share it. */
   async function takeThen(then: (note: Note) => void) {
     if (saving.current) return;
-    const { draft, color, pinned, chosenTags } = latest.current;
-    const now = draft ?? emptyDraft(false);
-    saving.current = true;
-    try {
-      const note = await createNote({ title: now.title, body: bodyOf(now), color, pinned, tags: chosenTags, folder });
-      reset();
-      onCreated(note);
-      then(note);
-    } catch (problem) {
-      setError(problemText(problem));
-    } finally {
-      saving.current = false;
-    }
+    await take(latest.current.draft ?? emptyDraft(false), then);
   }
 
   function reset() {
@@ -549,6 +591,7 @@ export function Composer({
     setColor(null);
     setPinned(false);
     setTags(null);
+    setReminder(null);
     setError("");
   }
 
@@ -557,8 +600,9 @@ export function Composer({
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {
-      // The colors and the label picker are outside the box.
-      if (latest.current.colors || latest.current.picking) return;
+      // The menus and dialogs are outside the box.
+      const { colors, picking, reminding, pickingTime } = latest.current;
+      if (colors || picking || reminding || pickingTime) return;
       if (box.current && !box.current.contains(event.target as Node)) void close();
     };
     document.addEventListener("pointerdown", outside);
@@ -582,6 +626,11 @@ export function Composer({
         </button>
         {onImages && <ImageButton onFiles={(files) => void withImages(files)} />}
         {onRecord && <RecordButton onRecord={() => void takeThen(onRecord)} />}
+        {error && (
+          <p class="error" role="alert">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
@@ -597,7 +646,18 @@ export function Composer({
         }
       }}
     >
+      <button
+        type="button"
+        class="icon-button note-pin"
+        title={t(pinned ? "notes.unpin" : "notes.pin")}
+        aria-label={t(pinned ? "notes.unpin" : "notes.pin")}
+        aria-pressed={pinned}
+        onClick={() => setPinned(!pinned)}
+      >
+        <PinIcon filled={pinned} />
+      </button>
       <NoteFields draft={draft} onDraft={setDraft} autofocusBody />
+      {held && <ReminderChip reminder={held} onOpen={(button) => setReminding({ under: button })} />}
       {chosenTags.length > 0 && (
         <ul class="note-tags" aria-label={t("notes.labels")}>
           {chosenTags.map((tag) => (
@@ -614,12 +674,12 @@ export function Composer({
         <button
           type="button"
           class="icon-button"
-          title={t(pinned ? "notes.unpin" : "notes.pin")}
-          aria-label={t(pinned ? "notes.unpin" : "notes.pin")}
-          aria-pressed={pinned}
-          onClick={() => setPinned(!pinned)}
+          title={t(reminder ? "notes.changeReminder" : "notes.remindMe")}
+          aria-label={t(reminder ? "notes.changeReminder" : "notes.remindMe")}
+          aria-haspopup="menu"
+          onClick={(event) => setReminding({ under: event.currentTarget })}
         >
-          <PinIcon filled={pinned} />
+          <ReminderIcon />
         </button>
         <button
           type="button"
@@ -640,6 +700,11 @@ export function Composer({
         >
           <LabelIcon />
         </button>
+        {onShare && (
+          <button type="button" class="icon-button" title={t("notes.share")} aria-label={t("notes.share")} onClick={() => void takeThen(onShare)}>
+            <PeopleIcon />
+          </button>
+        )}
         <CheckboxToggle draft={draft} onDraft={setDraft} />
         {onImages && <ImageButton onFiles={(files) => void withImages(files)} />}
         {onRecord && <RecordButton onRecord={() => void takeThen(onRecord)} />}
@@ -661,6 +726,32 @@ export function Composer({
       )}
       {picking && (
         <LabelPicker labels={labels} chosen={chosenTags} onChoose={setTags} onClose={() => setPicking(false)} />
+      )}
+      {reminding && (
+        <ReminderMenu
+          note={{ reminder: held }}
+          place={reminding}
+          onAction={(action) => {
+            setReminding(null);
+            holdReminder(action);
+          }}
+          onPick={() => {
+            setReminding(null);
+            setPickingTime(true);
+          }}
+          onClose={() => setReminding(null)}
+        />
+      )}
+      {pickingTime && (
+        <ReminderDialog
+          reminder={held}
+          onSave={async (local, repeat) => {
+            askToNotify();
+            setReminder({ local, repeat });
+            setPickingTime(false);
+          }}
+          onClose={() => setPickingTime(false)}
+        />
       )}
     </div>
   );
@@ -1268,7 +1359,8 @@ export function NoteEditor({
       title={t("notes.title")}
       class={note?.color ? `note-editor note-${note.color}` : "note-editor"}
       closeOutside
-      onClose={() => void close()}>
+      onClose={() => void close()}
+    >
       {!shown ? (
         error ? (
           <p class="error" role="alert">
@@ -1359,7 +1451,7 @@ export function NoteEditor({
             </p>
           )}
           <div class="note-toolbar">
-            <button
+                        <button
               type="button"
               class="icon-button"
               title={t(note.reminder ? "notes.changeReminder" : "notes.remindMe")}
@@ -1369,8 +1461,6 @@ export function NoteEditor({
             >
               <ReminderIcon />
             </button>
-            {mayAdd && <ImageButton onFiles={(files) => void addPictures(files)} />}
-            {mayAdd && !recording && <RecordButton onRecord={() => void startRecording()} />}
             {!readOnly && (
               <button
                 type="button"
@@ -1400,6 +1490,9 @@ export function NoteEditor({
                 <PeopleIcon />
               </button>
             )}
+            {!readOnly && <CheckboxToggle draft={draft} onDraft={edit} />}
+            {mayAdd && <ImageButton onFiles={(files) => void addPictures(files)} />}
+            {mayAdd && !recording && <RecordButton onRecord={() => void startRecording()} />}
             {own && (
               <button
                 type="button"
@@ -1414,7 +1507,6 @@ export function NoteEditor({
                 <MoveIcon />
               </button>
             )}
-            {!readOnly && <CheckboxToggle draft={draft} onDraft={edit} />}
             <button
               type="button"
               class="icon-button"

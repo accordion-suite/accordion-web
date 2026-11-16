@@ -551,6 +551,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
               setAdding({ id: note.id, files: [], record: true });
               setEditing(note.id);
             }}
+            onShare={(note) => void share(note)}
           />
         )}
         {error ? (

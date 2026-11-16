@@ -4443,6 +4443,22 @@ dialog.note-editor .note-title-field {
   padding-right: 40px;
 }
 
+/* The pin sits at the top right of the take-a-note box too, as in an open
+   note. */
+.note-composer:not(.collapsed) {
+  position: relative;
+}
+
+.note-composer .note-pin {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.note-composer .note-title-field {
+  padding-right: 40px;
+}
+
 .note-edited {
   margin: 8px 0 0;
   font-size: 0.8125rem;
