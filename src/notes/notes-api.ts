@@ -1,6 +1,7 @@
 // Notes' calls to the server, at /api/notes (decision 31).
 
 import { api } from "../api.ts";
+import type { Reminder, Repeat } from "./reminders.ts";
 
 /** The colors a note can have, as the server names them. */
 export const NOTE_COLORS = [
@@ -44,6 +45,8 @@ export interface Note {
   /** What the reader may do. Others' pins, archive, and labels are their
    * own, and only an editor or the owner changes the note itself. */
   access: "owner" | "editor" | "viewer";
+  /** The reader's own reminder on it. Nobody else's shows. */
+  reminder: Reminder | null;
 }
 
 export interface TrashedNote {
@@ -156,4 +159,25 @@ export function trashFolder(id: string): Promise<unknown> {
 
 export function restoreFolder(id: string): Promise<unknown> {
   return api("POST", `/api/drive/items/${id}/restore`);
+}
+
+/** Sets the reader's own reminder on a note, for a clock time in this
+ * device's time zone. */
+export function setReminder(id: string, local: string, zone: string, repeat: Repeat | null): Promise<Reminder> {
+  return api("PUT", `/api/notes/notes/${id}/reminder`, { local, zone, repeat: repeat ?? undefined });
+}
+
+export function removeReminder(id: string): Promise<void> {
+  return api("DELETE", `/api/notes/notes/${id}/reminder`);
+}
+
+/** Rings the reader's reminder again at `until`. */
+export function snoozeReminder(id: string, until: Date): Promise<Reminder> {
+  return api("POST", `/api/notes/notes/${id}/reminder/snooze`, { until: until.toISOString() });
+}
+
+/** Finishes the reader's reminder. One that repeats waits for its next
+ * time, and comes back; one that doesn't is gone, which comes back null. */
+export function finishReminder(id: string): Promise<Reminder | null> {
+  return api("POST", `/api/notes/notes/${id}/reminder/done`);
 }

@@ -42,9 +42,11 @@ import {
   placeName,
   treeOrder,
 } from "./folders.tsx";
-import { ArchiveIcon, ChecklistIcon, EditIcon, LabelIcon, NoteIcon } from "./icons.tsx";
+import { ArchiveIcon, ChecklistIcon, EditIcon, LabelIcon, NoteIcon, ReminderIcon } from "./icons.tsx";
 import { NoteBody, NoteCard } from "./note-card.tsx";
 import { ColorMenu, Composer, LabelPicker, NoteEditor } from "./note-editor.tsx";
+import { applyReminder, type ReminderAction, ReminderDialog, ReminderMenu } from "./reminder-menu.tsx";
+import { byDue } from "./reminders.ts";
 import {
   addLabel,
   changeNote,
@@ -69,6 +71,7 @@ import {
 
 type View =
   | { kind: "notes" }
+  | { kind: "reminders" }
   | { kind: "archive" }
   | { kind: "trash" }
   | { kind: "label"; label: string }
@@ -78,6 +81,7 @@ type View =
 function viewOf(path: string, q: string | null): View | null {
   const trimmed = path.replace(/\/$/, "");
   if (trimmed === "/notes") return { kind: "notes" };
+  if (trimmed === "/notes/reminders") return { kind: "reminders" };
   if (trimmed === "/notes/archive") return { kind: "archive" };
   if (trimmed === "/notes/trash") return { kind: "trash" };
   if (trimmed === "/notes/search") return { kind: "search", q: q ?? "" };
@@ -127,6 +131,7 @@ function menuAt(event: MouseEvent, holder: Element): { place: MenuPlace; byKeybo
 type Open =
   | { kind: "move"; things: Movable[] }
   | { kind: "labels"; note: Note }
+  | { kind: "reminder"; note: Note }
   | { kind: "share"; item: Item }
   | { kind: "newFolder"; parent: string }
   | { kind: "renameFolder"; folder: NoteFolder }
@@ -158,6 +163,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
   const [editingLabels, setEditingLabels] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [colors, setColors] = useState<{ note: Note; place: MenuPlace } | null>(null);
+  const [reminding, setReminding] = useState<{ note: Note; place: MenuPlace } | null>(null);
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
   const [start, setStart] = useState<{ kind: "note" | "list"; at: number } | null>(null);
@@ -189,7 +195,16 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
     if (ids === null || notesRef.current?.some((note) => note.owner && ids.includes(note.id))) void load();
   });
   useLive("drive.shared", () => void load());
+  // A reminder rang, or the reader changed one in another tab.
+  useLive("notes.reminders", () => void load());
   useEffect(() => setSidebarOpen(false), [path]);
+  // The bell links to a note with ?note=, which opens it here.
+  const opening = useQuery("note");
+  useEffect(() => {
+    if (!opening) return;
+    setEditing(opening);
+    navigate(path, { replace: true });
+  }, [opening]);
 
   /** Shows a change to one note at once, before the list loads again. */
   function replace(note: Note) {
@@ -214,6 +229,12 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
       undo: () => changeNote(note.id, { archived: note.archived }),
     });
   const pin = (note: Note) => act(() => changeNote(note.id, { pinned: !note.pinned }).then(replace));
+  const remind = (note: Note, action: ReminderAction) =>
+    act(async () => {
+      const { reminder, text } = await applyReminder(note.id, action);
+      replace({ ...note, reminder });
+      setNotice({ text });
+    });
   // The card has only the start of the text, so the note is opened first,
   // and the whole of it is saved. A shared note may be saved by someone
   // typing in it in between, so that's tried once more.
@@ -292,6 +313,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
     const entries: MenuEntry[] = [
       { label: t("notes.open"), onSelect: () => setEditing(note.id) },
       { label: t(note.pinned ? "notes.unpin" : "notes.pin"), onSelect: () => void pin(note) },
+      { label: t(note.reminder ? "notes.changeReminder" : "notes.remindMe"), onSelect: () => setReminding({ note, place }) },
       SEPARATOR,
     ];
     if (note.access !== "viewer") entries.push({ label: t("notes.color"), onSelect: () => setColors({ note, place }) });
@@ -428,6 +450,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
           onTrash={() => void trash(note)}
           onToggle={note.access === "viewer" ? undefined : (index) => void toggle(note, index)}
           onShare={() => void share(note)}
+          onReminder={(button) => setReminding({ note, place: { under: button } })}
           onMenu={(event) => {
             const card = event.currentTarget as Element;
             const entries = noteEntries(note, menuAt(event, card).place);
@@ -455,7 +478,9 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
     const title =
       view.kind === "notes"
         ? t("notes.title")
-        : view.kind === "archive"
+        : view.kind === "reminders"
+          ? t("notes.reminders")
+          : view.kind === "archive"
           ? t("notes.archive")
           : view.kind === "label"
             ? view.label
@@ -466,6 +491,8 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
       switch (view.kind) {
         case "notes":
           return !note.archived;
+        case "reminders":
+          return note.reminder !== null;
         case "archive":
           return note.archived;
         case "label":
@@ -476,12 +503,17 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
           return true;
       }
     });
-    const pinned = view.kind === "archive" || view.kind === "search" ? [] : shown.filter((note) => note.pinned);
+    // Reminders show soonest first, and pins don't move them.
+    if (view.kind === "reminders") shown.sort(byDue);
+    const pinned =
+      view.kind === "archive" || view.kind === "search" || view.kind === "reminders" ? [] : shown.filter((note) => note.pinned);
     const others = shown.filter((note) => !pinned.includes(note));
     const empty =
       view.kind === "notes"
         ? "notes.emptyAll"
-        : view.kind === "archive"
+        : view.kind === "reminders"
+          ? "notes.emptyReminders"
+          : view.kind === "archive"
           ? "notes.emptyArchive"
           : view.kind === "label"
             ? "notes.emptyLabel"
@@ -570,6 +602,20 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
         labels={labels}
         chosen={note.tags}
         onChoose={(tags) => void act(() => changeNote(note.id, { tags }).then(replace))}
+        onClose={close}
+      />
+    );
+  } else if (open?.kind === "reminder") {
+    const note = open.note;
+    dialog = (
+      <ReminderDialog
+        reminder={note.reminder}
+        onSave={async (local, repeat) => {
+          const { reminder, text } = await applyReminder(note.id, { kind: "set", local, repeat });
+          close();
+          replace({ ...note, reminder });
+          setNotice({ text });
+        }}
         onClose={close}
       />
     );
@@ -692,6 +738,9 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
             onMenu={(event) => openMenu(event, event.currentTarget, top ?? "notes", t("notes.notes"), newEntries(null))}
           >
             {t("notes.notes")}
+          </Place>
+          <Place href="/notes/reminders" current={view?.kind === "reminders"} icon={<ReminderIcon />}>
+            {t("notes.reminders")}
           </Place>
           {labels.map((label) => (
             <Place
@@ -835,6 +884,15 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
             void act(() => changeNote(note.id, { color: color ?? "" }).then(replace));
           }}
           onClose={() => setColors(null)}
+        />
+      )}
+      {reminding && (
+        <ReminderMenu
+          note={reminding.note}
+          place={reminding.place}
+          onAction={(action) => void remind(reminding.note, action)}
+          onPick={() => setOpen({ kind: "reminder", note: reminding.note })}
+          onClose={() => setReminding(null)}
         />
       )}
       {menu && (

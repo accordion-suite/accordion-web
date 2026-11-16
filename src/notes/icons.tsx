@@ -75,3 +75,10 @@ export const DragIcon = () => (
     <circle cx="15" cy="17" r="1.3" fill="currentColor" />
   </Icon>
 );
+
+export const ReminderIcon = () => (
+  <Icon>
+    <path d="M12 4a5.5 5.5 0 0 0-5.5 5.5v4.2L5 16.5h14l-1.5-2.8V9.5A5.5 5.5 0 0 0 12 4Z" {...line} />
+    <path d="M10 19.5a2.2 2.2 0 0 0 4 0" {...line} />
+  </Icon>
+);

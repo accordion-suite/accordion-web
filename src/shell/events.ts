@@ -125,14 +125,24 @@ const SENTENCES: Record<string, MessageKey> = {
   version_restored: "notify.versionRestored",
   description_changed: "notify.descriptionChanged",
   link_opened: "notify.linkOpened",
+  reminder_due: "notify.reminder",
 };
+
+/** A note's title from its file's name, "Groceries" for "Groceries.md". */
+export function noteName(name: string): string {
+  return name.replace(/\.md$/i, "");
+}
 
 /** What a notification says, such as "Sam Rivera added 12 items to
  * Holiday". */
 export function notificationText(notification: Notification, me: string): string {
   return t(SENTENCES[notification.action] ?? "notify.changed", {
     who: who(notification.actor, me),
-    name: notification.item ? itemName(notification.item) : "",
+    name: !notification.item
+      ? ""
+      : notification.action === "reminder_due"
+        ? noteName(notification.item.name)
+        : itemName(notification.item),
     folder: notification.folder ? itemName(notification.folder) : t("drive.myDrive"),
     count: notification.count,
   });
@@ -142,6 +152,7 @@ export function notificationText(notification: Notification, me: string): string
  * changes. */
 export function notificationLink(notification: Notification): string {
   const { item, folder } = notification;
+  if (notification.action === "reminder_due") return item ? `/notes/?note=${item.id}` : "/notes/reminders";
   if (notification.action === "shared" || notification.action === "share_changed") {
     if (!item) return "/drive/shared";
     return item.folder ? `/drive/folder/${item.id}` : `/drive/shared?file=${item.id}`;

@@ -16,9 +16,10 @@ import { type ChecklistItem, fromChecklist, isChecklist, readChecklist, taskText
 import { type LiveStatus, LiveNote, type Visitor } from "./live.ts";
 import { shiftCaret } from "./text-change.ts";
 import { useListSettings } from "./preferences.ts";
-import { ArchiveIcon, ChecklistIcon, LabelIcon, NoColorIcon, PaletteIcon, PinIcon } from "./icons.tsx";
+import { ArchiveIcon, ChecklistIcon, LabelIcon, NoColorIcon, PaletteIcon, PinIcon, ReminderIcon } from "./icons.tsx";
 import { TrashIcon } from "../drive/icons.tsx";
 import { changeNote, createNote, NOTE_COLORS, type Note, type NoteChange, type NoteColor, openNote } from "./notes-api.ts";
+import { applyReminder, type ReminderAction, ReminderChip, ReminderDialog, ReminderMenu } from "./reminder-menu.tsx";
 
 /** How long typing has to stop before the note saves. */
 const SAVE_AFTER_MS = 1000;
@@ -688,6 +689,8 @@ export function NoteEditor({
   const [error, setError] = useState("");
   const [colors, setColors] = useState<MenuPlace | null>(null);
   const [picking, setPicking] = useState(false);
+  const [reminding, setReminding] = useState<MenuPlace | null>(null);
+  const [pickingTime, setPickingTime] = useState(false);
   /** The newest note from the server, whose hash the next save sends. */
   const latest = useRef<Note | null>(null);
   /** Saves run one after another, so each sends the hash of the one
@@ -779,6 +782,23 @@ export function NoteEditor({
       follow(transaction);
     });
     note.awareness.on("change", () => setVisitors(note.visitors()));
+  }
+
+  /** Changes the reader's own reminder. It isn't part of the note's text,
+   * so it doesn't wait for saving. From the dialog, a failure shows there. */
+  async function remind(action: ReminderAction, fromDialog = false) {
+    try {
+      const { reminder } = await applyReminder(id, action);
+      if (latest.current) {
+        latest.current = { ...latest.current, reminder };
+        onChanged(latest.current);
+      }
+      setNote((current) => current && { ...current, reminder });
+      setError("");
+    } catch (problem) {
+      if (fromDialog) throw problem;
+      setError(problemText(problem));
+    }
   }
 
   function run(change: () => NoteChange | null) {
@@ -928,6 +948,7 @@ export function NoteEditor({
               ))}
             </ul>
           )}
+          {note.reminder && <ReminderChip reminder={note.reminder} onOpen={(button) => setReminding({ under: button })} />}
           {error && (
             <p class="error" role="alert">
               {error}
@@ -958,6 +979,16 @@ export function NoteEditor({
             </p>
           )}
           <div class="note-toolbar">
+            <button
+              type="button"
+              class="icon-button"
+              title={t(note.reminder ? "notes.changeReminder" : "notes.remindMe")}
+              aria-label={t(note.reminder ? "notes.changeReminder" : "notes.remindMe")}
+              aria-haspopup="menu"
+              onClick={(event) => setReminding({ under: event.currentTarget })}
+            >
+              <ReminderIcon />
+            </button>
             {!readOnly && (
               <button
                 type="button"
@@ -1047,6 +1078,25 @@ export function NoteEditor({
               chosen={note.tags}
               onChoose={(tags) => void run(() => ({ tags }))}
               onClose={() => setPicking(false)}
+            />
+          )}
+          {reminding && (
+            <ReminderMenu
+              note={note}
+              place={reminding}
+              onAction={(action) => void remind(action)}
+              onPick={() => setPickingTime(true)}
+              onClose={() => setReminding(null)}
+            />
+          )}
+          {pickingTime && (
+            <ReminderDialog
+              reminder={note.reminder}
+              onSave={async (local, repeat) => {
+                await remind({ kind: "set", local, repeat }, true);
+                setPickingTime(false);
+              }}
+              onClose={() => setPickingTime(false)}
             />
           )}
         </>

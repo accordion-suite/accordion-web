@@ -1,5 +1,5 @@
 // A note as a card in the list, as in Google Keep: its title if someone gave
-// it one, its text or checklist, and its labels. Its buttons show on hover
+// it one, its text or checklist, its labels, and the reader's reminder. Its buttons show on hover
 // and on keyboard focus. Selecting the card opens the note, right-clicking
 // it opens its menu, and it can be dragged onto a folder in the sidebar.
 
@@ -8,9 +8,10 @@ import { holdDrag } from "../drive/move.ts";
 import { t } from "../i18n.ts";
 import { isChecklist, readChecklist } from "./checklist.ts";
 import { useListSettings } from "./preferences.ts";
-import { ArchiveIcon, LabelIcon, PaletteIcon, PinIcon } from "./icons.tsx";
+import { ArchiveIcon, LabelIcon, PaletteIcon, PinIcon, ReminderIcon } from "./icons.tsx";
 import { MoveIcon, PeopleIcon, TrashIcon } from "../drive/icons.tsx";
 import type { Note } from "./notes-api.ts";
+import { ReminderChip } from "./reminder-menu.tsx";
 
 /** How many items a card shows. */
 const CARD_ITEMS = 8;
@@ -26,6 +27,7 @@ export function NoteCard({
   onTrash,
   onToggle,
   onShare,
+  onReminder,
   onMenu,
   onDrag,
   menuOpen = false,
@@ -51,6 +53,8 @@ export function NoteCard({
   onToggle?: (index: number) => void;
   /** Shares the note, which only its owner can. */
   onShare?: () => void;
+  /** Opens the reader's own reminder menu, under `button`. */
+  onReminder?: (button: HTMLElement) => void;
 }) {
   const label = note.titled ? note.title : note.title || t("notes.untitled");
   const own = note.access === "owner";
@@ -91,6 +95,7 @@ export function NoteCard({
           ))}
         </ul>
       )}
+      {note.reminder && onReminder && <ReminderChip reminder={note.reminder} onOpen={onReminder} />}
       {(note.owner || note.shared) && (
         <p class="note-sharing">
           {note.owner ? (
@@ -118,6 +123,21 @@ export function NoteCard({
         <PinIcon filled={note.pinned} />
       </button>
       <div class="note-actions">
+        {onReminder && (
+          <button
+            type="button"
+            class="icon-button"
+            title={t(note.reminder ? "notes.changeReminder" : "notes.remindMe")}
+            aria-label={t(note.reminder ? "notes.changeReminder" : "notes.remindMe")}
+            aria-haspopup="menu"
+            onClick={(event) => {
+              event.stopPropagation();
+              onReminder(event.currentTarget);
+            }}
+          >
+            <ReminderIcon />
+          </button>
+        )}
         {note.access !== "viewer" && (
           <button
             type="button"

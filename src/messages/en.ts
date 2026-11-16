@@ -721,5 +721,10 @@ export const en = {
     other: "{who} changed {count} descriptions in {folder}",
   },
   "notify.linkOpened": "Someone opened your link to {name}",
+  "notify.reminder": "Reminder: {name}",
+  "notify.snoozeHour": "Snooze an hour",
+  "notify.snoozeHourFor": "Snooze {name} an hour",
+  "notify.reminderDone": "Done",
+  "notify.reminderDoneFor": "Mark {name} done",
   "notify.changed": { one: "{who} changed {name}", other: "{who} changed {count} items in {folder}" },
 } as const;

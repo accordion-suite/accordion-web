@@ -4,7 +4,8 @@
 // notifications changed (decision 19), and when the page comes back into
 // view. Opening it clears the count, and each notification stays
 // highlighted until it's selected. Each can be removed, or all of them at
-// once.
+// once. A reminder from Notes can be snoozed or finished from here, and
+// shows as the device's own notification too, once the person allows it.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
@@ -13,14 +14,43 @@ import { CloseIcon, Icon } from "../drive/icons.tsx";
 import { t } from "../i18n.ts";
 import {
   detail,
+  noteName,
   type Notification,
   notificationLink,
   notificationText,
   type Notifications,
   when,
 } from "./events.ts";
+import { finishReminder, snoozeReminder } from "../notes/notes-api.ts";
 import { useLive } from "./live.ts";
-import { followLink } from "./router.ts";
+import { followLink, navigate } from "./router.ts";
+
+/** Reminders this tab already showed as the device's notifications. */
+const announced = new Set<number>();
+
+/** How recently a reminder must have rung to show as the device's
+ * notification, so opening the app later doesn't bring up old ones. */
+const ANNOUNCE_WITHIN_MS = 10 * 60 * 1000;
+
+/** Shows reminders that just rang as the device's own notifications, if
+ * the person allowed them. Every open tab tries, and the shared tag means
+ * the device shows each once. */
+function announce(notifications: Notification[], me: string) {
+  if (typeof window.Notification === "undefined" || window.Notification.permission !== "granted") return;
+  for (const notification of notifications) {
+    if (notification.action !== "reminder_due" || notification.seen || announced.has(notification.id)) continue;
+    announced.add(notification.id);
+    if (Date.now() - Date.parse(notification.at) > ANNOUNCE_WITHIN_MS) continue;
+    const shown = new window.Notification(notificationText(notification, me), {
+      tag: `accordion-reminder-${notification.id}`,
+    });
+    shown.onclick = () => {
+      window.focus();
+      navigate(notificationLink(notification));
+      shown.close();
+    };
+  }
+}
 
 const BellIcon = () => (
   <Icon>
@@ -45,6 +75,7 @@ export function NotificationsButton({ me }: { me: string }) {
     try {
       const loaded = await api<Notifications>("GET", "/api/drive/notifications");
       setData(loaded);
+      announce(loaded.notifications, me);
       setError("");
       return loaded;
     } catch (problem) {
@@ -123,6 +154,20 @@ export function NotificationsButton({ me }: { me: string }) {
     }
   }
 
+  /** Snoozes or finishes a reminder, then takes its notification away,
+   * since it rings again when it's due. */
+  async function remind(chosen: Notification, action: "snooze" | "done") {
+    const id = chosen.item?.id;
+    if (!id) return;
+    try {
+      if (action === "snooze") await snoozeReminder(id, new Date(Date.now() + 60 * 60 * 1000));
+      else await finishReminder(id);
+      await remove(chosen);
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : t("error.problem"));
+    }
+  }
+
   async function clearAll() {
     const newest = data?.notifications[0];
     if (!data || !newest) return;
@@ -182,6 +227,8 @@ export function NotificationsButton({ me }: { me: string }) {
             <ul>
               {data.notifications.map((notification) => {
                 const level = detail(notification, "level");
+                const name = notification.item ? noteName(notification.item.name) : "";
+                const reminder = notification.action === "reminder_due" && notification.item !== null;
                 return (
                   <li key={notification.id} class={notification.read ? undefined : "unread"}>
                     <a
@@ -197,6 +244,26 @@ export function NotificationsButton({ me }: { me: string }) {
                         {level && ` · ${t(level === "editor" ? "notify.youCanEdit" : "notify.youCanView")}`}
                       </span>
                     </a>
+                    {reminder && (
+                      <div class="notification-actions">
+                        <button
+                          type="button"
+                          class="link"
+                          aria-label={t("notify.snoozeHourFor", { name })}
+                          onClick={() => void remind(notification, "snooze")}
+                        >
+                          {t("notify.snoozeHour")}
+                        </button>
+                        <button
+                          type="button"
+                          class="link"
+                          aria-label={t("notify.reminderDoneFor", { name })}
+                          onClick={() => void remind(notification, "done")}
+                        >
+                          {t("notify.reminderDone")}
+                        </button>
+                      </div>
+                    )}
                     <button
                       type="button"
                       class="icon-button"

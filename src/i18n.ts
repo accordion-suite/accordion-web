@@ -124,3 +124,18 @@ export function formatHour(hour: number): string {
 export function formatList(items: readonly string[]): string {
   return new Intl.ListFormat(locale, { type: "conjunction" }).format(items);
 }
+
+/** A time of day, such as "8:00 AM", in the reader's time zone. */
+export function formatTime(when: Date): string {
+  return new Intl.DateTimeFormat(locale, { timeStyle: "short" }).format(when);
+}
+
+/** A short date, such as "Mon, Nov 23", with the year when it's not this
+ * year, such as "Nov 23, 2027". */
+export function formatShortDay(when: Date, now: Date): string {
+  const options: Intl.DateTimeFormatOptions =
+    when.getFullYear() === now.getFullYear()
+      ? { weekday: "short", month: "short", day: "numeric" }
+      : { month: "short", day: "numeric", year: "numeric" };
+  return new Intl.DateTimeFormat(locale, options).format(when);
+}
