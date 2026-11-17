@@ -13,7 +13,7 @@
     "build": "esbuild --bundle --platform=node --format=esm --packages=external --log-level=warning --outfile=.build/build.js scripts/build.ts && node .build/build.js"
   },
   "dependencies": {
-    "lib0": "0.2.119",
+    "lib0": "0.2.120",
     "preact": "11.2.0",
     "y-protocols": "1.0.7",
     "yjs": "13.6.33"
