@@ -162,7 +162,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
   const [editing, setEditing] = useState<string | null>(null);
   /** Pictures to add to the note being opened, chosen while taking it, or
    * a memo to record in it. */
-  const [adding, setAdding] = useState<{ id: string; files: File[]; record?: boolean } | null>(null);
+  const [adding, setAdding] = useState<{ id: string; files: File[]; record?: "memo" | "transcribed" } | null>(null);
   const [editingLabels, setEditingLabels] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [colors, setColors] = useState<{ note: Note; place: MenuPlace } | null>(null);
@@ -200,6 +200,8 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
   useLive("drive.shared", () => void load());
   // A reminder rang, or the reader changed one in another tab.
   useLive("notes.reminders", () => void load());
+  // A memo stopped waiting for its transcript without changing the note.
+  useLive("notes.transcripts", () => void load());
   useEffect(() => setSidebarOpen(false), [path]);
   // The bell links to a note with ?note=, which opens it here.
   const opening = useQuery("note");
@@ -547,8 +549,8 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
               setAdding({ id: note.id, files });
               setEditing(note.id);
             }}
-            onRecord={(note) => {
-              setAdding({ id: note.id, files: [], record: true });
+            onRecord={(note, transcribe) => {
+              setAdding({ id: note.id, files: [], record: transcribe ? "transcribed" : "memo" });
               setEditing(note.id);
             }}
             onShare={(note) => void share(note)}
@@ -870,7 +872,7 @@ export function Notes({ session, onSignOut }: { session: Session; onSignOut: () 
           me={session.user.display_name}
           labels={labels}
           images={adding?.id === editing ? adding.files : undefined}
-          record={adding?.id === editing && adding.record === true}
+          record={(adding?.id === editing && adding.record) || false}
           onShare={(note) => {
             setEditing(null);
             void share(note);

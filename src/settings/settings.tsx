@@ -17,6 +17,7 @@ import { ModulesPage } from "./modules-page.tsx";
 import { SECTIONS, SettingsLayout, SettingsPage } from "./layout.tsx";
 import { NetworkPage } from "./network-page.tsx";
 import { NotesPage } from "./notes-page.tsx";
+import { TranscriptsPage } from "./transcripts-page.tsx";
 import { PeoplePage } from "./people-page.tsx";
 import { RemotePage } from "./remote-page.tsx";
 import { PreviewsPage } from "./previews-page.tsx";
@@ -51,7 +52,7 @@ function sectionPage(path: string, session: Session, onSessionChanged: () => Pro
   const id = /^\/settings\/([a-z]+)\/?$/.exec(path)?.[1];
   const section = SECTIONS.find((each) => each.id === id);
   if (!section) return null;
-  if (section.group === "server" && !session.admin_pages) {
+  if ((section.group === "server" || section.admin) && !session.admin_pages) {
     return (
       <SettingsPage key={id} title={t(section.label)}>
         <p>{t(session.user.role === "owner" || session.user.role === "admin" ? "settings.notHere" : "settings.adminsOnly")}</p>
@@ -67,6 +68,8 @@ function sectionPage(path: string, session: Session, onSessionChanged: () => Pro
       return <DrivePage key={id} />;
     case "notes":
       return <NotesPage key={id} />;
+    case "transcripts":
+      return <TranscriptsPage key={id} />;
     case "devices":
       return (
         <DevicesPage key={id} username={session.user.username} admin={(session.user.role === "owner" || session.user.role === "admin") && session.admin_pages} />

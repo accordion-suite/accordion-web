@@ -49,7 +49,8 @@ export interface Note {
   reminder: Reminder | null;
   /** The pictures one of the reader's own notes shows. Empty for others'
    * notes. */
-  images: NoteImage[];
+  images: NoteImage[];  /** The names of its voice memos waiting for transcripts. */
+  transcribing: string[];
 }
 
 /** A picture one of the reader's own notes shows. */
@@ -204,8 +205,8 @@ export function addImage(id: string, file: File): Promise<{ path: string; line: 
 
 /** Saves a voice memo recorded in Notes beside the note, and gives the
  * line that plays it, for the top of the note. */
-export function addMemo(id: string, memo: Blob, extension: string): Promise<{ path: string; line: string }> {
-  return send("POST", `/api/notes/notes/${id}/memos?name=memo.${extension}`, {
+export function addMemo(id: string, memo: Blob, extension: string, transcribe: boolean): Promise<{ path: string; line: string }> {
+  return send("POST", `/api/notes/notes/${id}/memos?name=memo.${extension}&transcribe=${transcribe}`, {
     headers: { "Content-Type": "application/octet-stream" },
     body: memo,
   });
@@ -215,4 +216,11 @@ export function addMemo(id: string, memo: Blob, extension: string): Promise<{ pa
  * unless a note still shows it. */
 export function removeImage(id: string, target: string): Promise<void> {
   return api("DELETE", `/api/notes/notes/${id}/image?path=${encodeURIComponent(target)}`);
+}
+
+/** Whether this server transcribes voice memos, so recording one offers a
+ * transcript. */
+export async function transcriptsOn(): Promise<boolean> {
+  const { on } = await api<{ on: boolean }>("GET", "/api/notes/transcripts/on");
+  return on;
 }

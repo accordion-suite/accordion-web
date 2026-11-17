@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { shiftCaret, textChange } from "./text-change.ts";
+import { shiftCaret, textChange, withAddedAtEnd } from "./text-change.ts";
 
 test("finds the one change between two texts", () => {
   assert.equal(textChange("Milk", "Milk"), null);
@@ -25,4 +25,14 @@ test("keeps the caret with the words around it", () => {
   assert.equal(shiftCaret("Eggs", "Eggs, jam", 2), 2);
   // Or replaces the words it was in.
   assert.equal(shiftCaret("Buy bread now", "Buy rolls now", 6), 9);
+});
+
+test("keeps the reader's change with what was added to the end meanwhile", () => {
+  // A transcript arrived while the reader typed.
+  assert.equal(withAddedAtEnd("Eggs\n", "Eggs and milk\n", "Eggs\n\nBuy bread.\n"), "Eggs and milk\n\nBuy bread.\n");
+  assert.equal(withAddedAtEnd("", "Eggs", "Buy bread.\n"), "Eggs\n\nBuy bread.\n");
+  assert.equal(withAddedAtEnd("Eggs\n", "", "Eggs\n\nBuy bread.\n"), "Buy bread.\n");
+  // Anything else someone changed isn't merged.
+  assert.equal(withAddedAtEnd("Eggs\n", "Eggs and milk\n", "Ham\n"), null);
+  assert.equal(withAddedAtEnd("Eggs\n", "Eggs and milk\n", "Eggs\n"), null);
 });

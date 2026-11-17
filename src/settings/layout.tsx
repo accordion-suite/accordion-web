@@ -10,7 +10,7 @@ import { useEffect, useState } from "preact/hooks";
 import { modulesOn, type Session } from "../api.ts";
 import { DriveIcon, TrashIcon } from "../drive/icons.tsx";
 import { t, type MessageKey } from "../i18n.ts";
-import { NoteIcon } from "../notes/icons.tsx";
+import { MicIcon, NoteIcon } from "../notes/icons.tsx";
 import { lastAppPage } from "../shell/last-app.ts";
 import { PageTitle } from "../shell/page.tsx";
 import { followLink, usePath } from "../shell/router.ts";
@@ -38,6 +38,8 @@ export interface Section {
   label: MessageKey;
   icon: FunctionComponent;
   group: Group;
+  /** An app's section only admins see, such as Notes' transcripts. */
+  admin?: boolean;
 }
 
 /** The reader's own settings, an app's, or the server's, which are for
@@ -58,6 +60,7 @@ export const SECTIONS: readonly Section[] = [
   { id: "activity", label: "settings.activity", icon: ActivityIcon, group: "you" },
   { id: "drive", label: "settings.driveGeneral", icon: DriveIcon, group: "drive" },
   { id: "notes", label: "settings.notesLists", icon: NoteIcon, group: "notes" },
+  { id: "transcripts", label: "settings.notesTranscripts", icon: MicIcon, group: "notes", admin: true },
   { id: "people", label: "settings.people", icon: PeopleIcon, group: "server" },
   { id: "modules", label: "settings.modules", icon: AppsIcon, group: "server" },
   { id: "health", label: "settings.health", icon: HealthIcon, group: "server" },
@@ -112,7 +115,7 @@ export function SettingsLayout({
           <GroupLinks
             key={group}
             title={t(title)}
-            sections={SECTIONS.filter((section) => section.group === group)}
+            sections={SECTIONS.filter((section) => section.group === group && (!section.admin || session.admin_pages))}
             path={path}
           />
         ))}

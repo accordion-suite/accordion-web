@@ -97,3 +97,11 @@ export const MicIcon = () => (
     <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5" {...line} />
   </Icon>
 );
+
+/** A microphone beside lines of text: a memo with its words written out. */
+export const TranscribeIcon = () => (
+  <Icon>
+    <rect x="5" y="3.5" width="4.5" height="8" rx="2.25" {...line} />
+    <path d="M3 9.5a4.25 4.25 0 0 0 8.5 0M7.25 13.75v1.75M14 6h6.5M14 10h6.5M14 14h6.5M3.5 19h17" {...line} />
+  </Icon>
+);

@@ -115,6 +115,8 @@ export interface NetworkStatus {
     record_last: Last | null;
     certificate_last: Last | null;
   } | null;
+  /** The speech model's download, while transcripts are on. */
+  models?: { host: string; model: string; ready: boolean; problem: string | null } | null;
 }
 
 /** One connection the server makes: why, where, how often, the last time,
@@ -264,5 +266,19 @@ export function connections(status: NetworkStatus): Connection[] {
       },
     });
   }
+  const models = status.models;
+  if (models) {
+    all.push({
+      title: t("network.modelsTitle"),
+      purpose: t("network.modelsPurpose"),
+      where: models.host === "github.com" ? t("network.updatesWhereGithub") : t("network.connectsTo", { host: models.host }),
+      often: t("network.modelsOften"),
+      last: models.problem
+        ? t("network.modelsFailed", { problem: models.problem })
+        : t(models.ready ? "network.modelsReady" : "network.modelsDownloading"),
+      fixed: t("network.modelsFixed"),
+    });
+  }
+
   return all;
 }

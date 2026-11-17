@@ -13,6 +13,7 @@ export const settingsEn = {
   "settings.driveTitle": "General",
   "settings.notesGroup": "Notes",
   "settings.notesLists": "Lists",
+  "settings.notesTranscripts": "Transcripts",
   // The browser tab's title, which shell.tabTitle ends with "- Accordion".
   "settings.tabTitle": "{page} - Settings",
   "settings.devices": "Apps and devices",
@@ -423,6 +424,14 @@ export const settingsEn = {
   "network.linksCertificatePurpose": "Gets and renews the certificate that lets link pages open securely in any browser.",
   "network.linksCertificateWhere":
     "Connects to Let's Encrypt and {host}, your DNS provider, to prove the name is yours.",
+  "network.modelsTitle": "Speech model for transcripts",
+  "network.modelsPurpose":
+    "Downloads the speech model that writes down what's said in voice memos. Memos and their words never leave the server.",
+  "network.modelsOften": "When transcripts are turned on, when the model changes, and when an update moves to a newer model.",
+  "network.modelsReady": "The model is downloaded and checked.",
+  "network.modelsDownloading": "The model is downloading.",
+  "network.modelsFailed": "The last download didn't work: {problem}",
+  "network.modelsFixed": "Turn off transcripts in Settings, under Notes, to stop this.",
   "network.notCoveredTitle": "What this doesn't cover",
   "network.notCoveredSystem":
     "Connections the server's operating system makes on its own, such as system updates and setting the clock.",
@@ -448,6 +457,24 @@ export const settingsEn = {
   "notesSettings.checkedTitle": "Move checked items to the bottom",
   "notesSettings.checkedHint":
     "Checked items go under \"checked items\" at the end of the list. When this is off, they stay where they are.",
+  "transcripts.intro":
+    "Notes can write down what's said in voice memos recorded in Notes, and add the words to the end of the note. Memos and their words never leave this server.",
+  "transcripts.switchTitle": "Transcribe voice memos",
+  "transcripts.switchHint":
+    "For everyone on this server. Accordion downloads a speech model of about {size} from Accordion's release on GitHub. Turning this off removes the model, and transcripts already in notes stay.",
+  "transcripts.unavailable": "Voice memos won't get transcripts on this server, because {reason}",
+  "transcripts.checking": "Checking the speech model…",
+  "transcripts.downloading": "Downloading the speech model: {done} of {total}",
+  "transcripts.ready": "Ready. Voice memos recorded from now on get transcripts.",
+  "transcripts.failed": "Accordion couldn't download the speech model: {problem}",
+  "transcripts.tryAgain": "Try again",
+  "transcripts.modelTitle": "Speech model",
+  "transcripts.modelHint": "Changing the model downloads the new one before the old one is removed.",
+  "transcripts.faster": "Faster",
+  "transcripts.fasterHint": "Transcribes sooner, with more words wrong. Downloads {size}.",
+  "transcripts.accurate": "More accurate",
+  "transcripts.accurateHint": "Takes longer, with fewer words wrong. Downloads {size}.",
+  "transcripts.labelRecommended": "{label}, recommended for this server",
   "driveSettings.startTitle": "Start page",
   "driveSettings.startIntro": "What Drive opens on when you go to Accordion's address.",
   "driveSettings.home": "Home",

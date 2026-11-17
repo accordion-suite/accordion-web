@@ -39,6 +39,7 @@ export function Menu({
   byKeyboard,
   heading,
   align = "start",
+  side = "below",
   onClose,
 }: {
   label: string;
@@ -49,6 +50,10 @@ export function Menu({
   /** Under an element, whether the menu lines up with its left edge or its
    * right edge, for a button at the right of the screen. */
   align?: "start" | "end";
+  /** Under an element, whether the menu opens below it or above it, for a
+   * button near the bottom of what it belongs to. Above goes below if
+   * there's no room. */
+  side?: "below" | "above";
   /** Whether a key opened the menu, which starts it on its first item. */
   byKeyboard: boolean;
   onClose: () => void;
@@ -64,7 +69,7 @@ export function Menu({
     if ("under" in place) {
       const under = place.under.getBoundingClientRect();
       x = align === "end" ? under.right - own.width : under.left;
-      y = under.bottom + 4;
+      y = side === "above" && under.top - 4 - own.height >= MARGIN ? under.top - 4 - own.height : under.bottom + 4;
     }
     const left = Math.max(MARGIN, Math.min(x, innerWidth - own.width - MARGIN));
     const top = Math.max(MARGIN, Math.min(y, innerHeight - own.height - MARGIN));

@@ -3993,6 +3993,18 @@ dialog.shortcuts kbd {
   height: 40px;
 }
 
+/* Waiting for its transcript (decision 33), beside the player. */
+.note-memos .note-memo-transcribing {
+  flex: none;
+  white-space: nowrap;
+}
+
+.transcripts-progress progress {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+}
+
 .note-memos .note-image-missing {
   flex: 1;
   padding: 8px 0;

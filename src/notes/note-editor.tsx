@@ -14,12 +14,12 @@ import { Dialog, problemText } from "../shell/dialog.tsx";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
 import { type ChecklistItem, fromChecklist, isChecklist, readChecklist, taskTexts, toChecklist, writeChecklist } from "./checklist.ts";
 import { type LiveStatus, LiveNote, type Visitor } from "./live.ts";
-import { shiftCaret } from "./text-change.ts";
+import { shiftCaret, withAddedAtEnd } from "./text-change.ts";
 import { useListSettings } from "./preferences.ts";
-import { ArchiveIcon, ChecklistIcon, ImageIcon, LabelIcon, MicIcon, NoColorIcon, PaletteIcon, PinIcon, ReminderIcon } from "./icons.tsx";
+import { ArchiveIcon, ChecklistIcon, ImageIcon, LabelIcon, MicIcon, NoColorIcon, PaletteIcon, PinIcon, ReminderIcon, TranscribeIcon } from "./icons.tsx";
 import { MAX_MEMO_MS, Recording, RecordingError } from "./memo-recorder.ts";
 import { TrashIcon } from "../drive/icons.tsx";
-import { addImage, addMemo, changeNote, createNote, NOTE_COLORS, type Note, type NoteChange, type NoteColor, openNote, removeImage } from "./notes-api.ts";
+import { addImage, addMemo, changeNote, createNote, NOTE_COLORS, type Note, type NoteChange, type NoteColor, openNote, removeImage, transcriptsOn } from "./notes-api.ts";
 import { IMAGE_TYPES, imageTarget, imageUrl, isImageName, isSoundName, joinImages, MAX_IMAGE_BYTES, restOffset, splitImages } from "./note-images.ts";
 import { applyReminder, askToNotify, type ReminderAction, ReminderChip, ReminderDialog, ReminderMenu } from "./reminder-menu.tsx";
 import { deviceZone, localText, type Reminder, type Repeat } from "./reminders.ts";
@@ -476,8 +476,8 @@ export function Composer({
    * box, which takes the note first. */
   onImages?: (note: Note, files: File[]) => void;
   /** Opens a note taken here to record a voice memo in it, which takes
-   * the note first. */
-  onRecord?: (note: Note) => void;
+   * the note first. `transcribe` is whether the memo gets a transcript. */
+  onRecord?: (note: Note, transcribe: boolean) => void;
   /** Shares a note taken here, which takes the note first. */
   onShare?: (note: Note) => void;
 }) {
@@ -625,7 +625,7 @@ export function Composer({
           <ChecklistIcon />
         </button>
         {onImages && <ImageButton onFiles={(files) => void withImages(files)} />}
-        {onRecord && <RecordButton onRecord={() => void takeThen(onRecord)} />}
+        {onRecord && <RecordButton onRecord={(transcribe) => void takeThen((note) => onRecord(note, transcribe))} />}
         {error && (
           <p class="error" role="alert">
             {error}
@@ -707,7 +707,7 @@ export function Composer({
         )}
         <CheckboxToggle draft={draft} onDraft={setDraft} />
         {onImages && <ImageButton onFiles={(files) => void withImages(files)} />}
-        {onRecord && <RecordButton onRecord={() => void takeThen(onRecord)} />}
+        {onRecord && <RecordButton onRecord={(transcribe) => void takeThen((note) => onRecord(note, transcribe))} />}
         <span class="spacer" />
         <button type="button" class="secondary" onClick={() => void close()}>
           {t("notes.close")}
@@ -830,18 +830,63 @@ function ImageButton({ onFiles, disabled = false }: { onFiles: (files: File[]) =
   );
 }
 
-/** A button that records a voice memo. */
-function RecordButton({ onRecord }: { onRecord: () => void }) {
+/** A button that records a voice memo. While the server transcribes
+ * memos, it opens a menu above it first: a plain memo, or one with a
+ * transcript, so turning transcripts on doesn't make every memo get one. */
+function RecordButton({ onRecord }: { onRecord: (transcribe: boolean) => void }) {
+  const [menu, setMenu] = useState<{ under: Element; byKeyboard: boolean } | null>(null);
   return (
-    <button type="button" class="icon-button" title={t("notes.record")} aria-label={t("notes.record")} onClick={onRecord}>
-      <MicIcon />
-    </button>
+    <>
+      <button
+        type="button"
+        class="icon-button"
+        title={t("notes.record")}
+        aria-label={t("notes.record")}
+        aria-haspopup="menu"
+        aria-expanded={menu !== null}
+        onClick={async (event) => {
+          const button = event.currentTarget;
+          // A key's click has no presses to count.
+          const byKeyboard = event.detail === 0;
+          // Asked each time, so the menu follows an admin's change.
+          const on = await transcriptsOn().catch(() => false);
+          if (on) setMenu({ under: button, byKeyboard });
+          else onRecord(false);
+        }}
+      >
+        <MicIcon />
+      </button>
+      {menu && (
+        <Menu
+          label={t("notes.record")}
+          entries={[
+            { label: t("notes.recordMemo"), icon: <MicIcon />, onSelect: () => onRecord(false) },
+            { label: t("notes.recordTranscribed"), icon: <TranscribeIcon />, onSelect: () => onRecord(true) },
+          ]}
+          place={{ under: menu.under }}
+          side="above"
+          byKeyboard={menu.byKeyboard}
+          onClose={() => setMenu(null)}
+        />
+      )}
+    </>
   );
 }
 
 /** The pictures and memos at the top of a note, each with a button to take
  * it out. */
-function NoteImages({ note, lines, onRemove }: { note: string; lines: readonly string[]; onRemove?: (line: string) => void }) {
+function NoteImages({
+  note,
+  lines,
+  transcribing = [],
+  onRemove,
+}: {
+  note: string;
+  lines: readonly string[];
+  /** The names of memos waiting for their transcripts. */
+  transcribing?: readonly string[];
+  onRemove?: (line: string) => void;
+}) {
   const memos = lines.filter((line) => isSoundName(imageTarget(line) ?? ""));
   const pictures = lines.filter((line) => !memos.includes(line));
   return (
@@ -856,7 +901,14 @@ function NoteImages({ note, lines, onRemove }: { note: string; lines: readonly s
       {memos.length > 0 && (
         <ul class="note-memos">
           {memos.map((line, index) => (
-            <NoteMemo key={line} note={note} line={line} number={index + 1} onRemove={onRemove} />
+            <NoteMemo
+              key={line}
+              note={note}
+              line={line}
+              number={index + 1}
+              transcribing={transcribing.includes(fileName(imageTarget(line) ?? ""))}
+              onRemove={onRemove}
+            />
           ))}
         </ul>
       )}
@@ -865,7 +917,20 @@ function NoteImages({ note, lines, onRemove }: { note: string; lines: readonly s
 }
 
 /** A voice memo, with a player. */
-function NoteMemo({ note, line, number, onRemove }: { note: string; line: string; number: number; onRemove?: (line: string) => void }) {
+function NoteMemo({
+  note,
+  line,
+  number,
+  transcribing,
+  onRemove,
+}: {
+  note: string;
+  line: string;
+  number: number;
+  /** Whether its transcript is on its way. */
+  transcribing: boolean;
+  onRemove?: (line: string) => void;
+}) {
   const [missing, setMissing] = useState(false);
   const target = imageTarget(line) ?? "";
   const name = t("notes.memo", { number });
@@ -877,6 +942,11 @@ function NoteMemo({ note, line, number, onRemove }: { note: string; line: string
       ) : (
         <audio controls preload="metadata" src={imageUrl(note, target, "large")} aria-label={name} title={name} onError={() => setMissing(true)} />
       )}
+      {transcribing && !missing && (
+        <span class="note-memo-transcribing hint" role="status">
+          {t("notes.transcribing")}
+        </span>
+      )}
       {onRemove && (
         <button type="button" class="icon-button" title={t("notes.removeMemo")} aria-label={t("notes.removeMemo")} onClick={() => onRemove(line)}>
           <TrashIcon />
@@ -884,6 +954,11 @@ function NoteMemo({ note, line, number, onRemove }: { note: string; line: string
       )}
     </li>
   );
+}
+
+/** The last part of a link's path, a file's name. */
+function fileName(target: string): string {
+  return target.slice(target.lastIndexOf("/") + 1);
 }
 
 /** Minutes and seconds, such as 2:05. */
@@ -952,8 +1027,8 @@ export function NoteEditor({
    * taking it. */
   images?: readonly File[];
   /** Starts recording a voice memo once the note opens, such as when one
-   * was asked for while taking it. */
-  record?: boolean;
+   * was asked for while taking it, and whether it gets a transcript. */
+  record?: false | "memo" | "transcribed";
   /** Chooses a folder for the note. */
   onMove: (note: Note) => void;
   /** Shares the note with people. */
@@ -990,12 +1065,13 @@ export function NoteEditor({
    * last drew. */
   const current = useRef<Draft | null>(null);
   current.current = draft;
+  const currentDraft = current;
   /** How many pictures are on their way. */
   const [adding, setAdding] = useState(0);
   const [dropping, setDropping] = useState(false);
   /** The memo being recorded, if one is. */
-  const [recording, setRecording] = useState<Recording | null>(null);
-  const recordingNow = useRef<Recording | null>(null);
+  const [recording, setRecording] = useState<{ memo: Recording; transcribe: boolean } | null>(null);
+  const recordingNow = useRef<{ memo: Recording; transcribe: boolean } | null>(null);
   const [elapsed, setElapsed] = useState(0);
   /** How many memos are on their way. */
   const [savingMemos, setSavingMemos] = useState(0);
@@ -1011,7 +1087,7 @@ export function NoteEditor({
         saved.current = { title: first.title, body: opened.body };
         if (opened.shared) startLive(opened);
         if (firstImages.length > 0 && opened.access !== "viewer") void addPictures([...firstImages]);
-        if (record && opened.access !== "viewer") void startRecording();
+        if (record && opened.access !== "viewer") void startRecording(record === "transcribed");
       },
       (problem) => setError(problemText(problem)),
     );
@@ -1019,7 +1095,7 @@ export function NoteEditor({
       window.clearTimeout(timer.current);
       // Closing without the Close button, such as when the note goes to
       // the trash, lets go of the microphone.
-      recordingNow.current?.cancel();
+      recordingNow.current?.memo.cancel();
       recordingNow.current = null;
       live.current?.close();
       live.current = null;
@@ -1031,7 +1107,55 @@ export function NoteEditor({
   // through the live document.
   useLive("drive.activity", (ids) => {
     if (live.current && (ids === null || ids.includes(id))) void refresh();
+    if (ids === null || ids.includes(id)) followOutside();
   });
+  // A voice memo's transcript reaches the end of the note, or the memo
+  // stopped waiting without one.
+  useLive("drive.items", () => followOutside());
+  useLive("notes.transcripts", () => followOutside());
+
+  /** While a memo waits for its transcript, shows the note as it changes
+   * elsewhere, keeping what the reader typed. A shared note follows its
+   * live document instead. */
+  function followOutside() {
+    if (live.current || !latest.current?.transcribing.length) return;
+    queue.current = queue.current.then(async () => {
+      const current = latest.current;
+      if (!current) return;
+      let fresh: Note;
+      try {
+        fresh = await openNote(id);
+      } catch {
+        return;
+      }
+      if (fresh.hash === current.hash) {
+        latest.current = { ...current, transcribing: fresh.transcribing };
+        setNote(latest.current);
+        return;
+      }
+      // Otherwise the reader's next save says it changed elsewhere.
+      adoptAddedAtEnd(current, fresh);
+    });
+  }
+
+  /** Takes in what Notes added to the end of the note since `current`,
+   * such as a transcript, keeping the reader's own changes, and saves them
+   * if there are any. Returns whether it could. */
+  function adoptAddedAtEnd(current: Note, fresh: Note): boolean {
+    const typed = currentDraft.current;
+    const mine = typed ? bodyOf(typed) : current.body;
+    const merged = withAddedAtEnd(current.body, mine, fresh.body);
+    if (merged === null) return false;
+    latest.current = fresh;
+    setNote(fresh);
+    const next = { ...draftOf({ ...fresh, body: merged }), title: typed?.title ?? draftOf(fresh).title };
+    currentDraft.current = next;
+    setDraft(next);
+    saved.current = { title: saved.current?.title ?? next.title, body: fresh.body };
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => void saveText(next), SAVE_AFTER_MS);
+    return true;
+  }
 
   async function refresh() {
     let fresh: Note;
@@ -1116,9 +1240,12 @@ export function NoteEditor({
       } catch (problem) {
         setStatus("");
         if (problem instanceof ApiError && problem.status === 412) {
-          // Someone else saved first. Their version shows, and the reader
-          // is told their last change didn't save.
+          // Someone else saved first. If Notes only added to the end, such
+          // as a memo's transcript, the reader's change keeps it.
+          // Otherwise their version shows, and the reader is told their
+          // last change didn't save.
           const fresh = await openNote(current.id);
+          if (wanted.body !== undefined && adoptAddedAtEnd(current, fresh)) return;
           latest.current = fresh;
           setNote(fresh);
           const reloaded = draftOf(fresh);
@@ -1187,12 +1314,13 @@ export function NoteEditor({
     }
   }
 
-  /** Asks for the microphone and starts recording a memo. */
-  async function startRecording() {
+  /** Asks for the microphone and starts recording a memo, and whether it
+   * gets a transcript. */
+  async function startRecording(transcribe: boolean) {
     if (recordingNow.current) return;
     setError("");
     try {
-      const started = await Recording.start();
+      const started = { memo: await Recording.start(), transcribe };
       recordingNow.current = started;
       setRecording(started);
       setElapsed(0);
@@ -1210,8 +1338,8 @@ export function NoteEditor({
     setRecording(null);
     setSavingMemos((count) => count + 1);
     try {
-      const memo = await finished.finish();
-      const { line } = await addMemo(id, memo.blob, memo.extension);
+      const memo = await finished.memo.finish();
+      const { line } = await addMemo(id, memo.blob, memo.extension, finished.transcribe);
       const now = current.current;
       if (now) edit({ ...now, images: [...now.images, line] });
     } catch (problem) {
@@ -1222,7 +1350,7 @@ export function NoteEditor({
   }
 
   function discardRecording() {
-    recordingNow.current?.cancel();
+    recordingNow.current?.memo.cancel();
     recordingNow.current = null;
     setRecording(null);
   }
@@ -1231,7 +1359,7 @@ export function NoteEditor({
   useEffect(() => {
     if (!recording) return;
     const tick = window.setInterval(() => {
-      const now = recording.elapsed();
+      const now = recording.memo.elapsed();
       setElapsed(now);
       if (now >= MAX_MEMO_MS) {
         void finishRecording().then(() => setError(t("notes.memoLimit")));
@@ -1386,14 +1514,19 @@ export function NoteEditor({
           ) : (
             <>
               {draft.images.length > 0 && (
-                <NoteImages note={note.id} lines={draft.images} onRemove={mayAdd ? (line) => void removePicture(line) : undefined} />
+                <NoteImages
+                  note={note.id}
+                  lines={draft.images}
+                  transcribing={note.transcribing}
+                  onRemove={mayAdd ? (line) => void removePicture(line) : undefined}
+                />
               )}
               {adding > 0 && <p class="hint note-adding" role="status">{t("notes.addingImages")}</p>}
               {savingMemos > 0 && <p class="hint note-adding" role="status">{t("notes.savingMemo")}</p>}
               {recording && (
                 <div class="note-recording" role="status">
                   <span class="note-recording-dot" aria-hidden="true" />
-                  <span>{t("notes.recording", { time: clock(elapsed) })}</span>
+                  <span>{t(recording.transcribe ? "notes.recordingTranscribed" : "notes.recording", { time: clock(elapsed) })}</span>
                   <span class="spacer" />
                   <button type="button" class="secondary" onClick={discardRecording}>
                     {t("notes.discardRecording")}
@@ -1492,7 +1625,7 @@ export function NoteEditor({
             )}
             {!readOnly && <CheckboxToggle draft={draft} onDraft={edit} />}
             {mayAdd && <ImageButton onFiles={(files) => void addPictures(files)} />}
-            {mayAdd && !recording && <RecordButton onRecord={() => void startRecording()} />}
+            {mayAdd && !recording && <RecordButton onRecord={(transcribe) => void startRecording(transcribe)} />}
             {own && (
               <button
                 type="button"

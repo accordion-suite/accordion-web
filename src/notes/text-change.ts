@@ -48,3 +48,15 @@ function isHighSurrogate(code: number): boolean {
 function isLowSurrogate(code: number): boolean {
   return code >= 0xdc00 && code <= 0xdfff;
 }
+
+/** The reader's text `mine` with what someone else added to the end of
+ * `base` meanwhile, as `theirs` has it, such as a voice memo's transcript,
+ * which Notes adds to the end of a note. Null if `theirs` changed more
+ * than its end, so the reader's change can't keep both. */
+export function withAddedAtEnd(base: string, mine: string, theirs: string): string | null {
+  if (theirs === base || !theirs.startsWith(base)) return null;
+  const added = theirs.slice(base.length).replace(/^\n+/, "");
+  if (added.trim() === "") return mine;
+  const kept = mine.replace(/\n+$/, "");
+  return kept === "" ? added : `${kept}\n\n${added}`;
+}
