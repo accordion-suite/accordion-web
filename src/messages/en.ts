@@ -253,6 +253,7 @@ export const en = {
   "viewer.failed":
     "Accordion couldn't show {name}. It may be damaged, or not the kind of file its name says. Download it to open it on your device.",
   "viewer.edit": "Edit",
+  "viewer.openInNotes": "Open in Notes",
   "viewer.fontSample": "The quick brown fox jumps over the lazy dog",
   "viewer.fontTry": "Type to try the font",
   "viewer.fontSize": "{size} px",

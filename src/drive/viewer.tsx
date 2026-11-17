@@ -8,12 +8,15 @@
 // show sample text, which the browser draws in the font itself. The
 // viewer shows text files as a page of text, which people who can change them
 // can edit. Other files show their thumbnail or icon and offer the download.
+// A note offers to open in Notes, where its pictures, checklist, and color
+// show as they do there.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { formatList, t } from "../i18n.ts";
 import { useTabTitle } from "../shell/page.tsx";
+import { followLink } from "../shell/router.ts";
 import { ConfirmDialog, Dialog } from "../shell/dialog.tsx";
 import { ItemIcon } from "./icons.tsx";
 import { type Item, thumbnailAddress } from "./item.ts";
@@ -37,6 +40,29 @@ function useMedia(query: string): boolean {
   return matches;
 }
 
+/** Whether Notes reads a file as a note, by its name, as Notes does. */
+const NOTE_NAME = /^[^.].*\.(?:md|markdown)$/i;
+
+/** Whether the reader can open a file in Notes: one of their notes, or a
+ * note shared with them. Only Notes knows, and says so by opening it. A
+ * server with Notes off says no, the same way. */
+function useOpensInNotes(file: Item): boolean {
+  const [opens, setOpens] = useState(false);
+  useEffect(() => {
+    setOpens(false);
+    if (file.trashed_at || !NOTE_NAME.test(file.name)) return;
+    let current = true;
+    api("GET", `/api/notes/notes/${file.id}`).then(
+      () => current && setOpens(true),
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, [file.id, file.name, file.trashed_at]);
+  return opens;
+}
+
 /** `files` are the folder's files, in the folder's order, and `file` is one
  * of them. `onShow` moves to another. */
 export function Viewer({
@@ -57,6 +83,7 @@ export function Viewer({
   // A new text file opens ready to edit.
   const [editAsked, setEditing] = useState(() => (history.state as { edit?: boolean } | null)?.edit === true);
   const editing = editAsked && canEditText(file);
+  const inNotes = useOpensInNotes(file);
   const dirty = useRef(false);
   /** What to do once the reader agrees to lose their changes. */
   const [discarding, setDiscarding] = useState<(() => void) | null>(null);
@@ -105,6 +132,11 @@ export function Viewer({
               {t("viewer.next")}
             </button>
           </>
+        )}
+        {!editing && inNotes && (
+          <a class="button secondary" href={`/notes/?note=${file.id}`} onClick={followLink}>
+            {t("viewer.openInNotes")}
+          </a>
         )}
         {!editing && canEditText(file) && (
           <button type="button" class="secondary" onClick={() => setEditing(true)}>
