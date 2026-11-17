@@ -152,6 +152,7 @@ function SignedIn({
   const modules = modulesOn(session);
   const page = modules.includes("drive") ? drivePage(path) : null;
   const notesOn = modules.includes("notes");
+  const docsOn = modules.includes("docs");
   return (
     <>
       {page ? (
@@ -162,6 +163,8 @@ function SignedIn({
         modules.includes("drive") ? <StartPage /> : notesOn ? <Redirect to="/notes/" /> : <NoModules session={session} onSignOut={signOut} />
       ) : notesOn && (path === "/notes" || path.startsWith("/notes/")) ? (
         <LazyNotes session={session} onSignOut={signOut} />
+      ) : docsOn && (path === "/docs" || path.startsWith("/docs/")) ? (
+        <LazyDocs session={session} onSignOut={signOut} />
       ) : path === "/oauth/authorize" ? (
         <OAuthPage session={session} onSignOut={signOut} />
       ) : path === "/oauth/done" ? (
@@ -244,6 +247,42 @@ function LazyNotes(props: Parameters<NotesModule["Notes"]>[0]) {
   }
   if (!loaded) return <p class="loading">{t("shell.loading")}</p>;
   return <loaded.Notes {...props} />;
+}
+
+type DocsModule = typeof import("../docs/docs.tsx");
+
+/** Docs, whose code loads the first time it opens, with its editor. */
+let docsModule: DocsModule | null = null;
+
+function LazyDocs(props: Parameters<DocsModule["Docs"]>[0]) {
+  const [loaded, setLoaded] = useState(docsModule);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (loaded) return;
+    import("../docs/docs.tsx").then(
+      (module) => {
+        docsModule = module;
+        setLoaded(module);
+      },
+      () => {
+        setFailed(true);
+        void checkForUpdate();
+      },
+    );
+  }, []);
+
+  if (failed) {
+    return (
+      <main class="narrow">
+        <p class="error" role="alert">
+          {t("apps.docsLoadFailed")}
+        </p>
+      </main>
+    );
+  }
+  if (!loaded) return <p class="loading">{t("shell.loading")}</p>;
+  return <loaded.Docs {...props} />;
 }
 
 /** What someone sees when an admin turned every app off. */

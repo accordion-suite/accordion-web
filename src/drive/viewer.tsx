@@ -43,17 +43,28 @@ function useMedia(query: string): boolean {
 /** Whether Notes reads a file as a note, by its name, as Notes does. */
 const NOTE_NAME = /^[^.].*\.(?:md|markdown)$/i;
 
-/** Whether the reader can open a file in Notes: one of their notes, or a
- * note shared with them. Only Notes knows, and says so by opening it. A
- * server with Notes off says no, the same way. */
-function useOpensInNotes(file: Item): boolean {
-  const [opens, setOpens] = useState(false);
+/** Documents are HTML files that Docs recognizes by how they start. */
+const DOC_NAME = /^[^.].*\.html$/i;
+
+/** The app that opens `file`, if one does: Notes for one of the reader's
+ * notes or a note shared with them, Docs for a document. Only the app
+ * knows, and says so by opening it, since a Markdown file outside the
+ * Notes place isn't a note and an HTML file can be a plain web page. A
+ * server with the app off says no, the same way. */
+function useOpensIn(file: Item): { href: string; label: "viewer.openInNotes" | "viewer.openInDocs" } | null {
+  const [opens, setOpens] = useState<{ href: string; label: "viewer.openInNotes" | "viewer.openInDocs" } | null>(null);
   useEffect(() => {
-    setOpens(false);
-    if (file.trashed_at || !NOTE_NAME.test(file.name)) return;
+    setOpens(null);
+    if (file.trashed_at) return;
+    const ask = NOTE_NAME.test(file.name)
+      ? { check: `/api/notes/notes/${file.id}`, href: `/notes/?note=${file.id}`, label: "viewer.openInNotes" as const }
+      : DOC_NAME.test(file.name)
+        ? { check: `/api/docs/documents/${file.id}`, href: `/docs/d/${file.id}`, label: "viewer.openInDocs" as const }
+        : null;
+    if (!ask) return;
     let current = true;
-    api("GET", `/api/notes/notes/${file.id}`).then(
-      () => current && setOpens(true),
+    api("GET", ask.check).then(
+      () => current && setOpens({ href: ask.href, label: ask.label }),
       () => undefined,
     );
     return () => {
@@ -83,7 +94,7 @@ export function Viewer({
   // A new text file opens ready to edit.
   const [editAsked, setEditing] = useState(() => (history.state as { edit?: boolean } | null)?.edit === true);
   const editing = editAsked && canEditText(file);
-  const inNotes = useOpensInNotes(file);
+  const opensIn = useOpensIn(file);
   const dirty = useRef(false);
   /** What to do once the reader agrees to lose their changes. */
   const [discarding, setDiscarding] = useState<(() => void) | null>(null);
@@ -133,9 +144,9 @@ export function Viewer({
             </button>
           </>
         )}
-        {!editing && inNotes && (
-          <a class="button secondary" href={`/notes/?note=${file.id}`} onClick={followLink}>
-            {t("viewer.openInNotes")}
+        {!editing && opensIn && (
+          <a class="button secondary" href={opensIn.href} onClick={followLink}>
+            {t(opensIn.label)}
           </a>
         )}
         {!editing && canEditText(file) && (

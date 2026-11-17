@@ -31,6 +31,8 @@ export const en = {
   "shell.noModulesBody": "An admin turned off every app on this server. Ask them to turn one back on in Settings, under Modules.",
   "apps.notes": "Notes",
   "apps.notesLoadFailed": "Accordion couldn't load Notes. Reload the page, then try again.",
+  "apps.docs": "Docs",
+  "apps.docsLoadFailed": "Accordion couldn't load Docs. Reload the page, then try again.",
 
   "update.ready": "Accordion was updated.",
   "update.reload": "Reload",
@@ -254,6 +256,7 @@ export const en = {
     "Accordion couldn't show {name}. It may be damaged, or not the kind of file its name says. Download it to open it on your device.",
   "viewer.edit": "Edit",
   "viewer.openInNotes": "Open in Notes",
+  "viewer.openInDocs": "Open in Docs",
   "viewer.fontSample": "The quick brown fox jumps over the lazy dog",
   "viewer.fontTry": "Type to try the font",
   "viewer.fontSize": "{size} px",

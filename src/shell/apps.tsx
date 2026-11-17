@@ -7,6 +7,7 @@ import { useState } from "preact/hooks";
 
 import { DriveIcon, Icon } from "../drive/icons.tsx";
 import { t, type MessageKey } from "../i18n.ts";
+import { DocIcon } from "../docs/icons.tsx";
 import { NoteIcon } from "../notes/icons.tsx";
 import { Menu, type MenuPlace } from "./menu.tsx";
 import { navigate } from "./router.ts";
@@ -16,6 +17,7 @@ import { navigate } from "./router.ts";
 const APPS: readonly { id: string; name: MessageKey; home: string; icon: FunctionComponent }[] = [
   { id: "drive", name: "drive.title", home: "/drive/start", icon: DriveIcon },
   { id: "notes", name: "apps.notes", home: "/notes/", icon: NoteIcon },
+  { id: "docs", name: "apps.docs", home: "/docs/", icon: DocIcon },
 ];
 
 export const AppsIcon = () => (

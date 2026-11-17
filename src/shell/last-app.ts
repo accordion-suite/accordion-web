@@ -1,7 +1,7 @@
 // The app page the reader was last on, such as a Drive folder or a Notes
 // label, so Settings can lead back to it.
 
-export type App = "drive" | "notes";
+export type App = "drive" | "notes" | "docs";
 
 let last: { app: App; href: string } | null = null;
 

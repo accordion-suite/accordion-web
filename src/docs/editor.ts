@@ -1,0 +1,456 @@
+// The document editor (decision 30): ProseMirror bound to the document's
+// Yjs fragment with y-prosemirror, so everyone's edits merge, with the
+// commands the toolbar and keys use.
+
+import { baseKeymap, chainCommands, exitCode, lift, setBlockType, toggleMark, wrapIn } from "prosemirror-commands";
+import { dropCursor } from "prosemirror-dropcursor";
+import { gapCursor } from "prosemirror-gapcursor";
+import { InputRule, inputRules, textblockTypeInputRule, wrappingInputRule } from "prosemirror-inputrules";
+import { keymap } from "prosemirror-keymap";
+import type { MarkType, Node, NodeType, ResolvedPos } from "prosemirror-model";
+import { liftListItem, sinkListItem, splitListItem, wrapInList } from "prosemirror-schema-list";
+import { type Command, EditorState, Selection, TextSelection, type Transaction } from "prosemirror-state";
+import {
+  addColumnAfter,
+  addColumnBefore,
+  addRowAfter,
+  addRowBefore,
+  columnResizing,
+  deleteColumn,
+  deleteRow,
+  deleteTable,
+  goToNextCell,
+  isInTable,
+  tableEditing,
+  toggleHeaderRow,
+} from "prosemirror-tables";
+import { Decoration, EditorView, type NodeView } from "prosemirror-view";
+import { redo, undo, yCursorPlugin, ySyncPlugin, yUndoPlugin } from "y-prosemirror";
+import type * as Y from "yjs";
+
+import { CARET_COLORS, type LiveDocument } from "../shell/coedit.ts";
+import { t } from "../i18n.ts";
+import { schema } from "./schema.ts";
+
+const nodes = schema.nodes as Record<string, NodeType>;
+const marks = schema.marks as Record<string, MarkType>;
+
+/** The fragment y-prosemirror binds the editor to, which the server reads
+ * and writes as the file (accordion-docs' `yjs::FRAGMENT`). */
+export const FRAGMENT = "prosemirror";
+
+/** Makes the editor in `mount` for `live`'s document. `onChange` runs after
+ * every change, of the text or the selection, so the toolbar can follow. */
+export function createEditor(
+  mount: HTMLElement,
+  live: LiveDocument,
+  { readOnly, onChange, onLink }: { readOnly: boolean; onChange: () => void; onLink: () => void },
+): EditorView {
+  const fragment: Y.XmlFragment = live.doc.getXmlFragment(FRAGMENT);
+  const state = EditorState.create({
+    schema,
+    plugins: [
+      ySyncPlugin(fragment),
+      yCursorPlugin(live.awareness, { cursorBuilder, selectionBuilder }),
+      yUndoPlugin(),
+      keymap(keys(onLink)),
+      keymap(baseKeymap),
+      typingShortcuts(),
+      dropCursor(),
+      gapCursor(),
+      columnResizing(),
+      tableEditing(),
+    ],
+  });
+  const view: EditorView = new EditorView(mount, {
+    state,
+    editable: () => !readOnly,
+    attributes: { class: "docs-text", spellcheck: "true" },
+    nodeViews: {
+      check_item: (node, editorView, getPos) => new CheckItemView(node, editorView, getPos),
+    },
+    // y-prosemirror dispatches while the view is still being made, so this
+    // uses the view it's called on.
+    dispatchTransaction(this: EditorView, transaction: Transaction) {
+      this.updateState(this.state.apply(transaction));
+      onChange();
+    },
+  });
+  return view;
+}
+
+/** Someone else's caret: a line in their color, with their name. Colors go
+ * through the element's style properties, since the page's security policy
+ * doesn't allow style attributes. */
+function cursorBuilder(user: { name: string; color: string }): HTMLElement {
+  const caret = document.createElement("span");
+  caret.className = "docs-caret";
+  caret.style.setProperty("--caret", user.color);
+  const name = document.createElement("span");
+  name.className = "docs-caret-name";
+  name.textContent = user.name;
+  // Joiners keep the caret from splitting a word across lines.
+  caret.append("⁠", name, "⁠");
+  return caret;
+}
+
+/** Someone else's selection, shaded in their color, by class for the same
+ * reason. */
+function selectionBuilder(user: { color: string }) {
+  const index = Math.max(0, CARET_COLORS.indexOf(user.color));
+  return { class: `docs-selection docs-color-${index}`, nodeName: "span" } as Parameters<typeof Decoration.inline>[2];
+}
+
+function keys(onLink: () => void): Record<string, Command> {
+  const splitItem = chainCommands(splitListItem(nodes["list_item"]!), splitListItem(nodes["check_item"]!, { checked: false }));
+  const sink = chainCommands(sinkListItem(nodes["list_item"]!), sinkListItem(nodes["check_item"]!));
+  const liftItem = chainCommands(liftListItem(nodes["list_item"]!), liftListItem(nodes["check_item"]!));
+  const lineBreak = chainCommands(exitCode, (state, dispatch) => {
+    dispatch?.(state.tr.replaceSelectionWith(nodes["hard_break"]!.create()).scrollIntoView());
+    return true;
+  });
+  return {
+    "Mod-z": undo,
+    "Shift-Mod-z": redo,
+    "Mod-y": redo,
+    "Mod-b": toggleMark(marks["bold"]!),
+    "Mod-i": toggleMark(marks["italic"]!),
+    "Mod-u": toggleMark(marks["underline"]!),
+    "Alt-Shift-5": toggleMark(marks["strike"]!),
+    "Mod-e": toggleMark(marks["code"]!),
+    "Mod-k": () => {
+      onLink();
+      return true;
+    },
+    "Mod-Alt-0": setBlockType(nodes["paragraph"]!),
+    "Mod-Alt-1": setBlockType(nodes["heading"]!, { level: 1 }),
+    "Mod-Alt-2": setBlockType(nodes["heading"]!, { level: 2 }),
+    "Mod-Alt-3": setBlockType(nodes["heading"]!, { level: 3 }),
+    Enter: splitItem,
+    "Shift-Enter": lineBreak,
+    "Mod-Enter": lineBreak,
+    Tab: chainCommands(goToNextCell(1), tabInLastCell, sink),
+    "Shift-Tab": chainCommands(goToNextCell(-1), liftItem),
+    "Mod-]": sink,
+    "Mod-[": liftItem,
+  };
+}
+
+/** Markdown-style shortcuts at the start of a line: `# ` for a heading,
+ * `- ` for a list, `[] ` for a checklist, and so on. */
+function typingShortcuts() {
+  return inputRules({
+    rules: [
+      textblockTypeInputRule(/^(#{1,3})\s$/, nodes["heading"]!, (match) => ({ level: match[1]!.length })),
+      wrappingInputRule(/^\s*>\s$/, nodes["blockquote"]!),
+      wrappingInputRule(/^\s*([-+*])\s$/, nodes["bullet_list"]!),
+      wrappingInputRule(
+        /^(\d+)\.\s$/,
+        nodes["ordered_list"]!,
+        (match) => ({ order: Number(match[1]) }),
+        (match, node) => node.childCount + (node.attrs["order"] as number) === Number(match[1]),
+      ),
+      wrappingInputRule(/^\s*\[\s?\]\s$/, nodes["check_list"]!),
+      textblockTypeInputRule(/^```$/, nodes["code_block"]!),
+      new InputRule(/^---$/, (state, _match, start, end) => {
+        const $start = state.doc.resolve(start);
+        if ($start.parent.type !== nodes["paragraph"] || $start.depth < 1) return null;
+        const before = $start.before();
+        return state.tr
+          .delete(start, end)
+          .insert(before, nodes["horizontal_rule"]!.create())
+          .scrollIntoView();
+      }),
+    ],
+  });
+}
+
+/** A checklist item with a checkbox people can select, even while others
+ * type in the item. */
+class CheckItemView implements NodeView {
+  dom: HTMLLIElement;
+  contentDOM: HTMLElement;
+  private box: HTMLInputElement;
+
+  constructor(
+    private node: Node,
+    view: EditorView,
+    getPos: () => number | undefined,
+  ) {
+    this.dom = document.createElement("li");
+    this.dom.className = "docs-check-item";
+    const label = document.createElement("span");
+    label.className = "docs-check";
+    label.contentEditable = "false";
+    this.box = document.createElement("input");
+    this.box.type = "checkbox";
+    this.box.setAttribute("aria-label", t("docs.checkItem"));
+    this.box.addEventListener("mousedown", (event) => event.preventDefault());
+    this.box.addEventListener("change", () => {
+      const pos = getPos();
+      if (!view.editable || pos === undefined) {
+        this.box.checked = this.node.attrs["checked"] as boolean;
+        return;
+      }
+      view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...this.node.attrs, checked: this.box.checked }));
+    });
+    label.append(this.box);
+    this.contentDOM = document.createElement("div");
+    this.contentDOM.className = "docs-check-text";
+    this.dom.append(label, this.contentDOM);
+    this.show(node);
+  }
+
+  private show(node: Node) {
+    const checked = node.attrs["checked"] as boolean;
+    this.box.checked = checked;
+    this.dom.dataset["checked"] = String(checked);
+  }
+
+  update(node: Node): boolean {
+    if (node.type !== this.node.type) return false;
+    this.node = node;
+    this.show(node);
+    return true;
+  }
+
+  stopEvent(event: Event): boolean {
+    return event.target === this.box;
+  }
+
+  ignoreMutation(mutation: MutationRecord | { type: "selection"; target: globalThis.Node }): boolean {
+    return mutation.type !== "selection" && !this.contentDOM.contains(mutation.target);
+  }
+}
+
+/** What the toolbar shows for where the selection is. */
+export interface Formatting {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strike: boolean;
+  code: boolean;
+  link: string | null;
+  /** "paragraph", "heading-1" to "heading-3", or "code". */
+  style: string;
+  list: "bullets" | "numbers" | "checks" | null;
+  quote: boolean;
+  table: boolean;
+}
+
+export function formatting(state: EditorState): Formatting {
+  const { from, to, empty, $from } = state.selection;
+  const has = (type: MarkType) =>
+    empty ? !!type.isInSet(state.storedMarks ?? $from.marks()) : state.doc.rangeHasMark(from, to, type);
+  const linkMark = (empty ? $from.marks() : state.doc.resolve(from + 1 > to ? from : from + 1).marks()).find(
+    (mark) => mark.type === marks["link"],
+  );
+  const parent = $from.parent;
+  const style =
+    parent.type === nodes["heading"]
+      ? `heading-${Math.min(parent.attrs["level"] as number, 3)}`
+      : parent.type === nodes["code_block"]
+        ? "code"
+        : "paragraph";
+  const list = listAround($from);
+  return {
+    bold: has(marks["bold"]!),
+    italic: has(marks["italic"]!),
+    underline: has(marks["underline"]!),
+    strike: has(marks["strike"]!),
+    code: has(marks["code"]!),
+    link: (linkMark?.attrs["href"] as string | undefined) ?? null,
+    style,
+    list:
+      list?.node.type === nodes["bullet_list"]
+        ? "bullets"
+        : list?.node.type === nodes["ordered_list"]
+          ? "numbers"
+          : list
+            ? "checks"
+            : null,
+    quote: ancestor($from, nodes["blockquote"]!) !== null,
+    table: isInTable(state),
+  };
+}
+
+const LISTS = () => [nodes["bullet_list"]!, nodes["ordered_list"]!, nodes["check_list"]!];
+
+/** The nearest list the selection is in, and where it starts. */
+function listAround($pos: ResolvedPos): { node: Node; pos: number } | null {
+  for (let depth = $pos.depth; depth > 0; depth--) {
+    const node = $pos.node(depth);
+    if (LISTS().includes(node.type)) return { node, pos: $pos.before(depth) };
+  }
+  return null;
+}
+
+function ancestor($pos: ResolvedPos, type: NodeType): Node | null {
+  for (let depth = $pos.depth; depth > 0; depth--) {
+    if ($pos.node(depth).type === type) return $pos.node(depth);
+  }
+  return null;
+}
+
+export const toggle = {
+  bold: () => toggleMark(marks["bold"]!),
+  italic: () => toggleMark(marks["italic"]!),
+  underline: () => toggleMark(marks["underline"]!),
+  strike: () => toggleMark(marks["strike"]!),
+  code: () => toggleMark(marks["code"]!),
+};
+
+export function setStyle(style: string): Command {
+  if (style === "paragraph") return setBlockType(nodes["paragraph"]!);
+  if (style === "code") return setBlockType(nodes["code_block"]!);
+  const level = Number(style.replace("heading-", ""));
+  return setBlockType(nodes["heading"]!, { level });
+}
+
+/** Turns the list `kind` on or off where the selection is. A different
+ * kind of list changes into this one. */
+export function toggleList(kind: "bullets" | "numbers" | "checks"): Command {
+  const listType = { bullets: nodes["bullet_list"]!, numbers: nodes["ordered_list"]!, checks: nodes["check_list"]! }[kind];
+  const itemType = kind === "checks" ? nodes["check_item"]! : nodes["list_item"]!;
+  return (state, dispatch, view) => {
+    const around = listAround(state.selection.$from);
+    if (around?.node.type === listType) return liftListItem(itemType)(state, dispatch, view);
+    if (around && around.node.type !== nodes["check_list"] && kind !== "checks") {
+      // Bullets and numbers have the same items, so the list just changes.
+      dispatch?.(state.tr.setNodeMarkup(around.pos, listType));
+      return true;
+    }
+    if (around) {
+      // Checklist items and list items differ: out of one list, into the
+      // other, in one transaction, so undo takes both back.
+      const otherItem = around.node.type === nodes["check_list"] ? nodes["check_item"]! : nodes["list_item"]!;
+      let lifting: Transaction | null = null;
+      liftListItem(otherItem)(state, (tr) => (lifting = tr));
+      if (!lifting) return false;
+      const lifted: Transaction = lifting;
+      let wrapping: Transaction | null = null;
+      wrapInList(listType)(state.apply(lifted), (tr) => (wrapping = tr));
+      if (!wrapping) return false;
+      const wrapped: Transaction = wrapping;
+      if (dispatch) {
+        wrapped.steps.forEach((step) => lifted.step(step));
+        lifted.setSelection(Selection.fromJSON(lifted.doc, wrapped.selection.toJSON()));
+        dispatch(lifted.scrollIntoView());
+      }
+      return true;
+    }
+    return wrapInList(listType)(state, dispatch, view);
+  };
+}
+
+export function toggleQuote(): Command {
+  return (state, dispatch, view) =>
+    ancestor(state.selection.$from, nodes["blockquote"]!) ? lift(state, dispatch, view) : wrapIn(nodes["blockquote"]!)(state, dispatch, view);
+}
+
+export const insertRule: Command = (state, dispatch) => {
+  dispatch?.(state.tr.replaceSelectionWith(nodes["horizontal_rule"]!.create()).scrollIntoView());
+  return true;
+};
+
+/** A table of three columns and three rows, the first a heading row, with
+ * the caret in its first cell. */
+export const insertTable: Command = (state, dispatch) => {
+  const cell = (type: NodeType) => type.createAndFill()!;
+  const row = (type: NodeType) => nodes["table_row"]!.create(null, [cell(type), cell(type), cell(type)]);
+  const table = nodes["table"]!.create(null, [row(nodes["table_header"]!), row(nodes["table_cell"]!), row(nodes["table_cell"]!)]);
+  const tr = state.tr.replaceSelectionWith(table);
+  // The selection ends up after the table's last cell. Its start is found
+  // from there.
+  const $end = tr.selection.$from;
+  for (let depth = $end.depth; depth > 0; depth--) {
+    if ($end.node(depth).type === nodes["table"]) {
+      tr.setSelection(TextSelection.near(tr.doc.resolve($end.before(depth) + 1)));
+      break;
+    }
+  }
+  dispatch?.(tr.scrollIntoView());
+  return true;
+};
+
+/** Tab in a table's last cell adds a row and moves to it, as in Google
+ * Docs. */
+const tabInLastCell: Command = (state, dispatch) => {
+  if (!isInTable(state)) return false;
+  let adding: Transaction | null = null;
+  addRowAfter(state, (tr) => (adding = tr));
+  if (!adding) return false;
+  const added: Transaction = adding;
+  let moving: Transaction | null = null;
+  goToNextCell(1)(state.apply(added), (tr) => (moving = tr));
+  if (!moving) return false;
+  const moved: Transaction = moving;
+  if (dispatch) {
+    added.setSelection(Selection.fromJSON(added.doc, moved.selection.toJSON()));
+    dispatch(added.scrollIntoView());
+  }
+  return true;
+};
+
+export const tableCommands = {
+  rowAbove: addRowBefore,
+  rowBelow: addRowAfter,
+  columnLeft: addColumnBefore,
+  columnRight: addColumnAfter,
+  deleteRow,
+  deleteColumn,
+  deleteTable,
+  headerRow: toggleHeaderRow,
+};
+
+export { redo, undo };
+
+/** The range of the link around the selection, or the selection itself. */
+function linkRange(state: EditorState): { from: number; to: number } {
+  const { from, to, empty, $from } = state.selection;
+  if (!empty) return { from, to };
+  const link = marks["link"]!;
+  const parent = $from.parent;
+  const start = $from.parentOffset;
+  let rangeFrom = from;
+  let rangeTo = to;
+  parent.forEach((child, offset) => {
+    const end = offset + child.nodeSize;
+    if (offset <= start && start <= end && link.isInSet(child.marks)) {
+      rangeFrom = $from.start() + offset;
+      rangeTo = $from.start() + end;
+    }
+  });
+  return { from: rangeFrom, to: rangeTo };
+}
+
+/** Links the selection, or the link around the caret, to `href`. With
+ * nothing selected and no link there, the address goes in as its own
+ * linked text. */
+export function setLink(href: string): Command {
+  return (state, dispatch) => {
+    const link = marks["link"]!.create({ href });
+    const range = linkRange(state);
+    const tr = state.tr;
+    if (range.from === range.to) {
+      tr.insertText(href, range.from).addMark(range.from, range.from + href.length, link);
+    } else {
+      tr.removeMark(range.from, range.to, marks["link"]!).addMark(range.from, range.to, link);
+    }
+    dispatch?.(tr.scrollIntoView());
+    return true;
+  };
+}
+
+export const removeLink: Command = (state, dispatch) => {
+  const range = linkRange(state);
+  if (range.from === range.to) return false;
+  dispatch?.(state.tr.removeMark(range.from, range.to, marks["link"]!));
+  return true;
+};
+
+/** The selected text, for a link's address when it looks like one. */
+export function selectedText(state: EditorState): string {
+  const { from, to } = state.selection;
+  return state.doc.textBetween(from, to, " ");
+}
