@@ -10,12 +10,13 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import { api, type Session } from "../api.ts";
 import { ShareDialog } from "../drive/dialogs.tsx";
-import type { Item } from "../drive/item.ts";
-import { formatMoment, formatList, t } from "../i18n.ts";
+import { type Item, thumbnailAddress } from "../drive/item.ts";
+import { formatDate, formatList, t } from "../i18n.ts";
 import { LiveDocument, type LiveStatus, type Visitor } from "../shell/coedit.ts";
 import { Dialog, problemText } from "../shell/dialog.tsx";
 import { rememberAppPage } from "../shell/last-app.ts";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
+import { PageThumbnail } from "../shell/page-thumbnail.tsx";
 import { PageTitle, useTabTitle } from "../shell/page.tsx";
 import { followLink, navigate, usePath } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
@@ -122,23 +123,39 @@ function DocsHome() {
         ) : documents.length === 0 ? (
           <p class="hint">{t("docs.none")}</p>
         ) : (
-          <ul class="docs-list">
+          <ul class="docs-grid">
             {documents.map((document) => (
               <li key={document.id}>
-                <a href={documentPath(document.id)} onClick={followLink}>
-                  <span class="docs-list-icon">
-                    <DocIcon />
-                  </span>
-                  <span class="docs-list-name">{document.name}</span>
-                  <span class="docs-list-owner">{document.owner ?? t("docs.ownedByMe")}</span>
-                  <span class="docs-list-date">{formatMoment(document.modified_at)}</span>
-                </a>
+                <DocumentCard document={document} />
               </li>
             ))}
           </ul>
         )}
       </section>
     </main>
+  );
+}
+
+/** A document on Docs' home: the top of its page, its name, who owns it if
+ * someone shared it, and when it last changed. The page shows the editor's icon until the
+ * server has made its thumbnail. */
+function DocumentCard({ document }: { document: DocumentInfo }) {
+  const [failed, setFailed] = useState(false);
+  const thumbnail = document.thumbnail === "page" && document.sha256 && !failed;
+  return (
+    <a class="docs-card" href={documentPath(document.id)} onClick={followLink}>
+      <span class={thumbnail ? "docs-card-page has-page" : "docs-card-page"} aria-hidden="true">
+        {thumbnail ? <PageThumbnail src={thumbnailAddress(document)} onError={() => setFailed(true)} /> : <DocIcon />}
+      </span>
+      <span class="docs-card-name">
+        <span class="docs-card-icon">
+          <DocIcon />
+        </span>
+        <span class="docs-card-title">{document.name}</span>
+      </span>
+      {document.owner && <span class="docs-card-meta">{document.owner}</span>}
+      <span class="docs-card-meta">{formatDate(document.modified_at)}</span>
+    </a>
   );
 }
 

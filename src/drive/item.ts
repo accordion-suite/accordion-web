@@ -14,9 +14,10 @@ export interface Item {
   /** For a document: whether its preview stops at its first pages, so the
    * document may go on past them. */
   preview_partial: boolean;
-  /** What thumbnail the server has of the file yet: a small picture, or a
-   * text file's first lines. */
-  thumbnail: "picture" | "text" | null;
+  /** What thumbnail the server has of the file yet: a small picture, a
+   * text file's first lines, or an HTML page's first lines with their
+   * headings and styles. */
+  thumbnail: "picture" | "text" | "page" | null;
   /** Changes each time the server makes the thumbnail again, such as a
    * better one after an update. */
   thumbnail_version?: string | null;

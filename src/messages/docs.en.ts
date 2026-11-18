@@ -7,7 +7,6 @@ export const docsEn = {
   "docs.newTitle": "Start a new document",
   "docs.recent": "Recent documents",
   "docs.none": "No documents yet. Start one above, and it'll show here.",
-  "docs.ownedByMe": "Me",
   "docs.ownedBy": "{name}",
   "docs.owner": "Owner",
   "docs.modified": "Last changed",

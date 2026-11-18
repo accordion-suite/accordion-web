@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { formatDate, formatSize, t } from "../i18n.ts";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
+import { PageThumbnail } from "../shell/page-thumbnail.tsx";
 import { followLink, navigate, useQuery } from "../shell/router.ts";
 import { clip, clippable, clipText, useClipped } from "./clipboard.ts";
 import { languageOfName } from "./highlight.ts";
@@ -1008,6 +1009,8 @@ export function CardPreview({ item, thumbnail = true }: { item: Item; thumbnail?
         />
       ) : kind === "text" ? (
         <TextPreview src={src} language={languageOfName(item.name)} onError={() => setFailed(true)} />
+      ) : kind === "page" ? (
+        <PageThumbnail src={src} onError={() => setFailed(true)} />
       ) : (
         <ItemIcon item={item} />
       )}

@@ -1958,6 +1958,188 @@ table.items .more-cell {
   user-select: none;
 }
 
+/* An HTML page's first lines, such as a Docs document's, drawn as the top
+   of a small page with headings, lists, checklists, and styles in the
+   app's colors. Like a text file's, it fades out at the card's edge and
+   lets clicks through to the card's link. */
+.card-preview.has-page {
+  background: var(--panel);
+}
+
+.page-thumbnail {
+  align-self: stretch;
+  justify-self: stretch;
+  padding: 10px 12px;
+  overflow: hidden;
+  font: 0.625rem/1.4 system-ui, sans-serif;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  pointer-events: none;
+  user-select: none;
+}
+
+.page-line {
+  margin: 0 0 0.3em;
+}
+
+.page-heading {
+  margin: 0.5em 0 0.25em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.page-line:first-child {
+  margin-top: 0;
+}
+
+.page-h1 {
+  font-size: 1.75em;
+}
+
+.page-h2 {
+  font-size: 1.4em;
+}
+
+.page-h3 {
+  font-size: 1.2em;
+}
+
+.page-item,
+.page-check {
+  display: flex;
+  gap: 0.5em;
+  margin-bottom: 0.1em;
+  padding-left: 0.6em;
+}
+
+.page-depth-1 {
+  padding-left: 2em;
+}
+
+.page-depth-2 {
+  padding-left: 3.4em;
+}
+
+.page-depth-3 {
+  padding-left: 4.8em;
+}
+
+.page-depth-4 {
+  padding-left: 6.2em;
+}
+
+.page-mark {
+  flex: none;
+  min-width: 0.8em;
+  color: var(--muted);
+}
+
+.page-runs {
+  flex: 1;
+  min-width: 0;
+}
+
+.page-box {
+  flex: none;
+  box-sizing: border-box;
+  width: 1em;
+  height: 1em;
+  margin-top: 0.2em;
+  border: 1px solid var(--muted);
+  border-radius: 2px;
+}
+
+.page-check.is-checked .page-box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.page-check.is-checked .page-runs {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.page-quote {
+  padding-left: 0.6em;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+}
+
+.page-code {
+  margin: 0;
+  padding: 0 0.5em;
+  background: var(--surface);
+  font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+.page-code + :not(.page-code) {
+  margin-top: 0.3em;
+}
+
+/* A table row: its cells side by side, with the borders between rows
+   drawn once. */
+.page-row {
+  display: flex;
+  margin: 0;
+}
+
+.page-row + :not(.page-row) {
+  margin-top: 0.3em;
+}
+
+.page-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 0.3em;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.page-cell + .page-cell {
+  border-left: none;
+}
+
+.page-row + .page-row .page-cell {
+  border-top: none;
+}
+
+.page-run-bold {
+  font-weight: 700;
+}
+
+.page-run-italic {
+  font-style: italic;
+}
+
+.page-run-underline {
+  text-decoration: underline;
+}
+
+.page-run-strike {
+  text-decoration: line-through;
+}
+
+.page-run-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.page-run-code {
+  padding: 0 0.2em;
+  background: var(--surface);
+  border-radius: 2px;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+.page-code .page-run-code {
+  padding: 0;
+  background: none;
+}
+
 /* A line of text from inside a search result, with the words it matched
    in bold. */
 .snippet {
@@ -4681,61 +4863,106 @@ button.checklist-add {
   gap: 16px;
 }
 
-.docs-list {
+/* Documents as cards, each with the top of its page, as on Google Docs'
+   home. */
+.docs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 16px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.docs-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  padding-bottom: 8px;
+  color: var(--text);
+  text-decoration: none;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
+  overflow: hidden;
 }
 
-.docs-list li + li {
-  border-top: 1px solid var(--border);
+.docs-card:hover,
+.docs-card:focus-visible {
+  border-color: var(--accent);
 }
 
-.docs-list a {
+.docs-card-page {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) minmax(0, 10rem) 9rem;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  color: var(--text);
-  text-decoration: none;
-}
-
-.docs-list a:hover,
-.docs-list a:focus-visible {
+  place-items: center;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  height: 200px;
+  margin-bottom: 4px;
+  color: var(--kind-document);
   background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
-.docs-list-icon {
+.docs-card-page > svg {
+  width: 48px;
+  height: 48px;
+  place-self: center;
+}
+
+.docs-card-page.has-page {
+  background: var(--panel);
+}
+
+.docs-card-page .page-thumbnail {
+  padding: 14px 16px;
+  font-size: 0.5625rem;
+}
+
+.docs-card-name {
   display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.docs-card-icon {
+  display: flex;
+  flex: none;
   color: var(--kind-document);
 }
 
-.docs-list-name,
-.docs-list-owner {
+.docs-card-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.docs-card-title {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.docs-list-owner,
-.docs-list-date {
+.docs-card-meta {
+  padding: 0 12px;
+  overflow: hidden;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
-  .docs-list a {
-    grid-template-columns: 24px minmax(0, 1fr);
-    row-gap: 2px;
+  .docs-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
   }
 
-  .docs-list-owner,
-  .docs-list-date {
-    grid-column: 2;
+  .docs-card-page {
+    height: 168px;
   }
 }
 
