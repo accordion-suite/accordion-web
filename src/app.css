@@ -4893,6 +4893,22 @@ button.checklist-add {
   border-color: var(--accent);
 }
 
+/* The card, with its menu button over its bottom right corner. A button
+   can't go inside the card's link. */
+.docs-card-frame {
+  position: relative;
+  height: 100%;
+}
+
+/* Small enough to sit on the date's line, clear of the name. */
+.docs-card-frame .docs-card-more {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  width: 32px;
+  height: 32px;
+}
+
 .docs-card-page {
   display: grid;
   place-items: center;
@@ -4947,7 +4963,7 @@ button.checklist-add {
 }
 
 .docs-card-meta {
-  padding: 0 12px;
+  padding: 0 40px 0 12px;
   overflow: hidden;
   color: var(--muted);
   font-size: 0.8125rem;

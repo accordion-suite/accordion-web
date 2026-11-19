@@ -10,13 +10,14 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import * as Y from "yjs";
 
 import { api, type Session } from "../api.ts";
-import { ShareDialog } from "../drive/dialogs.tsx";
+import { NameDialog, ShareDialog } from "../drive/dialogs.tsx";
+import { CloseIcon, MoreIcon } from "../drive/icons.tsx";
 import { type Item, thumbnailAddress } from "../drive/item.ts";
 import { formatDate, formatList, type MessageKey, t } from "../i18n.ts";
 import { LiveDocument, type LiveStatus, type Visitor } from "../shell/coedit.ts";
 import { Dialog, problemText } from "../shell/dialog.tsx";
 import { rememberAppPage } from "../shell/last-app.ts";
-import { Menu, type MenuPlace } from "../shell/menu.tsx";
+import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
 import { PageThumbnail } from "../shell/page-thumbnail.tsx";
 import { PageTitle, useTabTitle } from "../shell/page.tsx";
 import { followLink, navigate, usePath } from "../shell/router.ts";
@@ -124,13 +125,64 @@ export function Docs({ session, onSignOut }: { session: Session; onSignOut: () =
 function DocsHome() {
   const [documents, setDocuments] = useState<DocumentInfo[] | null>(null);
   const [error, setError] = useState("");
+  const [menu, setMenu] = useState<{ document: DocumentInfo; place: MenuPlace; byKeyboard: boolean } | null>(null);
+  const [renaming, setRenaming] = useState<DocumentInfo | null>(null);
+  const [notice, setNotice] = useState<HomeNotice | null>(null);
 
-  useEffect(() => {
+  function load() {
     listDocuments().then(
       (found) => setDocuments(found.documents),
       () => setError(t("docs.loadFailed")),
     );
-  }, []);
+  }
+
+  useEffect(load, []);
+
+  function changed(document: DocumentInfo) {
+    setDocuments((now) => now && now.map((other) => (other.id === document.id ? document : other)));
+  }
+
+  async function trash(document: DocumentInfo) {
+    try {
+      await api("DELETE", `/api/drive/items/${document.id}`);
+    } catch (problem) {
+      setNotice({ text: problemText(problem), problem: true });
+      return;
+    }
+    setDocuments((now) => now && now.filter((other) => other.id !== document.id));
+    // Someone else's document goes to its owner's trash, and only the
+    // owner can put it back, as in Drive.
+    if (document.access !== "owner") {
+      setNotice({ text: t("drive.trashedSharedOne", { name: document.name }) });
+      return;
+    }
+    setNotice({
+      text: t("drive.trashedOne", { name: document.name }),
+      async undo() {
+        try {
+          await api("POST", `/api/drive/items/${document.id}/restore`);
+          setNotice({ text: t("drive.restoredOne", { name: document.name }) });
+        } catch (problem) {
+          setNotice({ text: problemText(problem), problem: true });
+        }
+        load();
+      },
+    });
+  }
+
+  function entries(document: DocumentInfo): MenuEntry[] {
+    const entries: MenuEntry[] = [
+      { label: t("shortcuts.newTab"), onSelect: () => window.open(documentPath(document.id), "_blank", "noopener") },
+    ];
+    if (document.access !== "viewer") {
+      entries.push(
+        { label: t("drive.rename"), onSelect: () => setRenaming(document) },
+        SEPARATOR,
+        { label: t("drive.toTrash"), onSelect: () => void trash(document) },
+      );
+    }
+    return entries;
+  }
 
   return (
     <main class="page docs-home">
@@ -164,12 +216,46 @@ function DocsHome() {
           <ul class="docs-grid">
             {documents.map((document) => (
               <li key={document.id}>
-                <DocumentCard document={document} />
+                <DocumentCard
+                  document={document}
+                  menuOpen={menu?.document.id === document.id}
+                  onMenu={(place, byKeyboard) => setMenu({ document, place, byKeyboard })}
+                />
               </li>
             ))}
           </ul>
         )}
       </section>
+      {menu && (
+        <Menu
+          label={t("drive.actionsFor", { name: menu.document.name })}
+          entries={entries(menu.document)}
+          place={menu.place}
+          align="end"
+          byKeyboard={menu.byKeyboard}
+          onClose={() => setMenu(null)}
+        />
+      )}
+      {renaming && (
+        <NameDialog
+          title={t("drive.renameNamed", { name: renaming.name })}
+          submit={t("drive.rename")}
+          initial={renaming.name}
+          file
+          onSubmit={async (name) => {
+            const named = await renameDocument(renaming.id, name);
+            changed({ ...renaming, name: named });
+            setRenaming(null);
+            setNotice({ text: t("drive.renamed", { name: named }) });
+          }}
+          onClose={() => setRenaming(null)}
+        />
+      )}
+      {notice && (
+        <div class="notice-area" role="status">
+          <HomeNoticeView notice={notice} onClose={() => setNotice(null)} />
+        </div>
+      )}
     </main>
   );
 }
@@ -177,23 +263,90 @@ function DocsHome() {
 /** A document on Docs' home: the top of its page, its name, who owns it if
  * someone shared it, and when it last changed. The page shows the editor's icon until the
  * server has made its thumbnail. */
-function DocumentCard({ document }: { document: DocumentInfo }) {
+function DocumentCard({
+  document,
+  menuOpen,
+  onMenu,
+}: {
+  document: DocumentInfo;
+  menuOpen: boolean;
+  /** Opens the document's menu, from its button or a right-click. */
+  onMenu: (place: MenuPlace, byKeyboard: boolean) => void;
+}) {
   const [failed, setFailed] = useState(false);
   const thumbnail = document.thumbnail === "page" && document.sha256 && !failed;
   return (
-    <a class="docs-card" href={documentPath(document.id)} onClick={followLink}>
-      <span class={thumbnail ? "docs-card-page has-page" : "docs-card-page"} aria-hidden="true">
-        {thumbnail ? <PageThumbnail src={thumbnailAddress(document)} onError={() => setFailed(true)} /> : <DocIcon />}
-      </span>
-      <span class="docs-card-name">
-        <span class="docs-card-icon">
-          <DocIcon />
+    <div class="docs-card-frame">
+      <a
+        class="docs-card"
+        href={documentPath(document.id)}
+        onClick={followLink}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onMenu({ x: event.clientX, y: event.clientY }, false);
+        }}
+      >
+        <span class={thumbnail ? "docs-card-page has-page" : "docs-card-page"} aria-hidden="true">
+          {thumbnail ? <PageThumbnail src={thumbnailAddress(document)} onError={() => setFailed(true)} /> : <DocIcon />}
         </span>
-        <span class="docs-card-title">{document.name}</span>
-      </span>
-      {document.owner && <span class="docs-card-meta">{document.owner}</span>}
-      <span class="docs-card-meta">{formatDate(document.modified_at)}</span>
-    </a>
+        <span class="docs-card-name">
+          <span class="docs-card-icon">
+            <DocIcon />
+          </span>
+          <span class="docs-card-title">{document.name}</span>
+        </span>
+        {document.owner && <span class="docs-card-meta">{document.owner}</span>}
+        <span class="docs-card-meta">{formatDate(document.modified_at)}</span>
+      </a>
+      <button
+        type="button"
+        class="icon-button docs-card-more"
+        title={t("docs.more")}
+        aria-label={t("drive.moreActions", { name: document.name })}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={(event) => onMenu({ under: event.currentTarget }, event.detail === 0)}
+      >
+        <MoreIcon />
+      </button>
+    </div>
+  );
+}
+
+/** Something that just happened on Docs' home, such as a document moved to
+ * the trash, with a way to undo it. */
+interface HomeNotice {
+  text: string;
+  problem?: boolean;
+  undo?: () => Promise<void>;
+}
+
+function HomeNoticeView({ notice, onClose }: { notice: HomeNotice; onClose: () => void }) {
+  // Notices go after a while, as Drive's do.
+  useEffect(() => {
+    const timer = window.setTimeout(onClose, 8000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+  return (
+    <div class={notice.problem ? "notice problem" : "notice"}>
+      <span>{notice.text}</span>
+      {notice.undo && (
+        <button
+          type="button"
+          class="link notice-undo"
+          onClick={() => {
+            const undo = notice.undo!;
+            onClose();
+            void undo();
+          }}
+        >
+          {t("drive.undo")}
+        </button>
+      )}
+      <button type="button" class="icon-button" aria-label={t("dialog.close")} onClick={onClose}>
+        <CloseIcon />
+      </button>
+    </div>
   );
 }
 

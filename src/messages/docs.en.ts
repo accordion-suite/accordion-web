@@ -14,6 +14,7 @@ export const docsEn = {
   "docs.loadFailed": "Accordion couldn't load your documents. Check your connection, then reload the page.",
   "docs.name": "Document name",
   "docs.untitled": "Untitled document",
+  "docs.more": "More",
   "docs.makeFailed": "Accordion couldn't save this document. {problem}",
   "docs.renameFailed": "Accordion couldn't rename this document. {problem}",
   "docs.share": "Share",
