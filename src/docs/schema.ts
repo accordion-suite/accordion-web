@@ -91,6 +91,38 @@ const nodes: Record<string, NodeSpec> = {
     ],
     toDOM: (node) => ["li", { "data-checked": String(node.attrs["checked"] as boolean) }, 0],
   },
+  // A picture on a line of its own. Its `src` is the hash of its contents,
+  // which the server keeps (accordion-docs' `picture.rs`), and the editor
+  // shows it from the document's pictures. Copied, it keeps the hash, so it
+  // pastes into another document. Pictures from web pages don't come in,
+  // since showing one would tell its site who's reading.
+  image: {
+    attrs: {
+      src: { validate: "string" },
+      alt: { default: "", validate: "string" },
+      width: { default: null },
+    },
+    group: "block",
+    atom: true,
+    draggable: true,
+    parseDOM: [
+      {
+        tag: "img[data-hash]",
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          const hash = element.getAttribute("data-hash") ?? "";
+          if (!isPictureHash(hash)) return false;
+          const width = Number(element.getAttribute("width"));
+          return { src: hash, alt: element.getAttribute("alt") ?? "", width: width > 0 ? Math.round(width) : null };
+        },
+      },
+    ],
+    toDOM: (node) => {
+      const attrs: Record<string, string> = { "data-hash": node.attrs["src"] as string, alt: node.attrs["alt"] as string };
+      if (node.attrs["width"]) attrs["width"] = String(node.attrs["width"] as number);
+      return ["img", attrs];
+    },
+  },
   ...tableNodes({ tableGroup: "block", cellContent: "block+", cellAttributes: {} }),
   text: { group: "inline" },
   hard_break: {
@@ -152,6 +184,11 @@ const marks: Record<string, MarkSpec> = {
 };
 
 export const schema = new Schema({ nodes, marks });
+
+/** Whether `text` is a picture's hash: SHA-256 in lowercase hex. */
+export function isPictureHash(text: string): boolean {
+  return /^[0-9a-f]{64}$/.test(text);
+}
 
 /** A link's address if it's a web page or an email address, as the server
  * allows. Anything else, such as `javascript:`, isn't a link. */

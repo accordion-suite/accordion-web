@@ -91,6 +91,15 @@ export const QuoteIcon = () => (
   </Icon>
 );
 
+/** A framed picture of a hill under the sun. */
+export const PictureIcon = () => (
+  <Icon>
+    <rect x="3.5" y="5" width="17" height="14" rx="2" {...line} />
+    <circle cx="9" cy="10" r="1.6" {...line} />
+    <path d="m4 17.5 5-4.5 3.5 3 3-2.5 4.5 4" {...line} />
+  </Icon>
+);
+
 export const RuleIcon = () => (
   <Icon>
     <path d="M4 12h16M7 7.5h10M7 16.5h10" {...line} stroke-opacity="1" />

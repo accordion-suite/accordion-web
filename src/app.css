@@ -5075,19 +5075,78 @@ button.checklist-add {
   margin: 8px 16px 0;
 }
 
+.docs-head .docs-file {
+  flex: none;
+  padding: 4px 12px;
+  font-size: 0.875rem;
+}
+
+/* The print page waits here, unseen, while the browser prints it. */
+.docs-print-frame {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  height: 0;
+  border: 0;
+}
+
+.docs-orientation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.docs-orientation legend {
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 0;
+  font-weight: 600;
+}
+
+.docs-orientation label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: normal;
+}
+
+.docs-margin-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+.docs-margin-fields label {
+  margin-top: 8px;
+  font-weight: normal;
+}
+
+.docs-setup-dialog label > input,
+.docs-setup-dialog label > select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+
 .docs-canvas {
   flex: 1;
   padding: 16px 16px 48px;
 }
 
 /* The page is white in both themes, as paper, like the file itself in a
-   browser's light mode. */
+   browser's light mode. It's as wide as the document's paper, with its
+   margins, which the editor sets once it knows them. */
 .docs-page {
   box-sizing: border-box;
-  max-width: 816px;
-  min-height: 1056px;
+  max-width: var(--page-width, 816px);
+  min-height: var(--page-height, 1056px);
   margin: 0 auto;
-  padding: 72px 96px;
+  padding: var(--margin-top, 72px) var(--margin-right, 96px) var(--margin-bottom, 72px) var(--margin-left, 96px);
   color: #1f1f1f;
   background: #fff;
   border: 1px solid var(--border);
@@ -5164,6 +5223,20 @@ button.checklist-add {
 
 .docs-text hr.ProseMirror-selectednode {
   outline: 2px solid #1a5fb4;
+}
+
+/* A picture on a line of its own, never wider than the page. */
+.docs-text .docs-picture {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 0 0.6em;
+  cursor: default;
+}
+
+.docs-text .docs-picture.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .docs-text ul,

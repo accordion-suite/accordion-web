@@ -7,11 +7,12 @@ import type { ComponentChildren } from "preact";
 import type { Command } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useEffect, useRef, useState } from "preact/hooks";
+import * as Y from "yjs";
 
 import { api, type Session } from "../api.ts";
 import { ShareDialog } from "../drive/dialogs.tsx";
 import { type Item, thumbnailAddress } from "../drive/item.ts";
-import { formatDate, formatList, t } from "../i18n.ts";
+import { formatDate, formatList, type MessageKey, t } from "../i18n.ts";
 import { LiveDocument, type LiveStatus, type Visitor } from "../shell/coedit.ts";
 import { Dialog, problemText } from "../shell/dialog.tsx";
 import { rememberAppPage } from "../shell/last-app.ts";
@@ -20,14 +21,30 @@ import { PageThumbnail } from "../shell/page-thumbnail.tsx";
 import { PageTitle, useTabTitle } from "../shell/page.tsx";
 import { followLink, navigate, usePath } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
-import { createDocument, type DocumentInfo, documentPath, listDocuments, openDocument, renameDocument } from "./docs-api.ts";
+import {
+  addPicture,
+  createDocument,
+  type DocumentInfo,
+  documentPath,
+  downloadAddress,
+  NEW_DOCUMENT_PATH,
+  type DownloadFormat,
+  listDocuments,
+  openDocument,
+  pictureAddress,
+  printAddress,
+  renameDocument,
+} from "./docs-api.ts";
 import {
   createEditor,
+  FRAGMENT,
   type Formatting,
   formatting,
+  insertPicture,
   insertRule,
   insertTable,
   redo,
+  PICTURE_TYPES,
   removeLink,
   selectedText,
   setLink,
@@ -47,6 +64,7 @@ import {
   ItalicIcon,
   LinkIcon,
   NumbersIcon,
+  PictureIcon,
   QuoteIcon,
   RedoIcon,
   RuleIcon,
@@ -55,16 +73,49 @@ import {
   UnderlineIcon,
   UndoIcon,
 } from "./icons.tsx";
+import {
+  defaultPageSize,
+  fromPoints,
+  MARGIN_PRESETS,
+  type MarginPreset,
+  marginPreset,
+  newPageSetup,
+  PAGE,
+  PAGE_SIZES,
+  type PageSetup,
+  type PageSize,
+  pagePoints,
+  readPage,
+  toPoints,
+  usesInches,
+  writePage,
+} from "./page-setup.ts";
 import { linkFromTyped } from "./schema.ts";
 
 export function Docs({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
   const path = usePath();
-  const opened = /^\/docs\/d\/([^/]+)\/?$/.exec(path);
+  const opened = /^\/docs\/d\/([^/]+)\/?$/.exec(path)?.[1] ?? null;
+  // A new document gets its file, and its address, as someone starts
+  // writing, and stays the same page while the address changes.
+  const started = useRef<string | null>(null);
   useEffect(() => rememberAppPage("docs", path), [path]);
+  const editing = path === NEW_DOCUMENT_PATH || opened !== null;
   return (
     <>
       <TopBar session={session} onSignOut={onSignOut} module={t("apps.docs")} home="/docs/" />
-      {opened ? <DocumentPage key={opened[1]} id={opened[1]!} session={session} /> : <DocsHome />}
+      {editing ? (
+        <DocumentPage
+          key={opened === null || opened === started.current ? "new" : opened}
+          id={opened}
+          session={session}
+          onStarted={(id) => {
+            started.current = id;
+            navigate(documentPath(id), { replace: true });
+          }}
+        />
+      ) : (
+        <DocsHome />
+      )}
     </>
   );
 }
@@ -73,7 +124,6 @@ export function Docs({ session, onSignOut }: { session: Session; onSignOut: () =
 function DocsHome() {
   const [documents, setDocuments] = useState<DocumentInfo[] | null>(null);
   const [error, setError] = useState("");
-  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     listDocuments().then(
@@ -82,24 +132,12 @@ function DocsHome() {
     );
   }, []);
 
-  async function create() {
-    setCreating(true);
-    setError("");
-    try {
-      const made = await createDocument();
-      navigate(documentPath(made.id));
-    } catch (problem) {
-      setError(problemText(problem));
-      setCreating(false);
-    }
-  }
-
   return (
     <main class="page docs-home">
       <PageTitle bare>{t("docs.title")}</PageTitle>
       <section class="docs-start" aria-labelledby="docs-start-title">
         <h2 id="docs-start-title">{t("docs.newTitle")}</h2>
-        <button type="button" class="docs-blank" disabled={creating} onClick={() => void create()}>
+        <button type="button" class="docs-blank" onClick={() => navigate(NEW_DOCUMENT_PATH)}>
           <span class="docs-blank-page" aria-hidden="true">
             <span class="docs-blank-plus" />
           </span>
@@ -159,61 +197,211 @@ function DocumentCard({ document }: { document: DocumentInfo }) {
   );
 }
 
-/** A document open for editing, with everyone else who has it open. */
-function DocumentPage({ id, session }: { id: string; session: Session }) {
-  const [info, setInfo] = useState<DocumentInfo | null>(null);
+/** A document open for editing, with everyone else who has it open. A new
+ * document (`id` null) starts in the browser alone, and gets its file once
+ * something in it changes. */
+function DocumentPage({
+  id,
+  session,
+  onStarted,
+}: {
+  id: string | null;
+  session: Session;
+  /** A new document has its file, with this ID. */
+  onStarted: (id: string) => void;
+}) {
+  // What the page opened. A new document's address changes once it has a
+  // file, but it's the same page.
+  const [opening] = useState(id);
+  const [info, setInfo] = useState<DocumentInfo | null>(opening ? null : draftInfo);
   const [failed, setFailed] = useState(false);
-  const [status, setStatus] = useState<LiveStatus>("connecting");
+  const [status, setStatus] = useState<LiveStatus>(opening ? "connecting" : "live");
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [format, setFormat] = useState<Formatting | null>(null);
   const [linking, setLinking] = useState<{ href: string } | null>(null);
   const [sharing, setSharing] = useState<Item | null>(null);
+  const [page, setPage] = useState<PageSetup | null>(null);
+  const [settingUp, setSettingUp] = useState(false);
+  const [fileMenu, setFileMenu] = useState<{ place: MenuPlace; byKeyboard: boolean } | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const live = useRef<LiveDocument | null>(null);
+  /** The file's ID, once there is one. */
+  const fileId = useRef(opening);
+  const making = useRef<Promise<string> | null>(null);
   useTabTitle(t("shell.tabTitle", { page: info?.name ?? t("docs.title") }));
 
   useEffect(() => {
+    if (!opening) return;
     let current = true;
-    openDocument(id).then(
+    openDocument(opening).then(
       (opened) => current && setInfo(opened),
       () => current && setFailed(true),
     );
     return () => {
       current = false;
     };
-  }, [id]);
+  }, [opening]);
 
   const readOnly = info?.access === "viewer";
+  const loaded = info !== null;
 
   // The editor appears once the document has arrived from the server, so
-  // it never starts from an empty page of its own.
+  // it never starts from an empty page of its own. A new document's
+  // editor starts at once.
   useEffect(() => {
-    if (!info) return;
-    const document = new LiveDocument(`/api/docs/documents/${id}/live`, `/api/docs/documents/${id}`, { name: session.user.display_name }, (next) => {
-      setStatus(next);
-      if (next === "live" && !view.current && mount.current) {
-        view.current = createEditor(mount.current, document, {
-          readOnly,
-          onChange: () => view.current && setFormat(formatting(view.current.state)),
-          onLink: () => startLink(),
+    if (!loaded) return;
+    const id = fileId.current;
+    const me = { name: session.user.display_name };
+    const document = id
+      ? new LiveDocument(liveAddress(id), checkAddress(id), me, (next) => {
+          setStatus(next);
+          if (next === "live" && !view.current) start(document);
+        })
+      : new LiveDocument(null, "", me, (next) => {
+          // Joining the file just made isn't news: the page is already here.
+          if (next !== "connecting") setStatus(next);
         });
-        setFormat(formatting(view.current.state));
-        view.current.focus();
-      }
-    });
     live.current = document;
     const others = () => setVisitors(document.visitors());
     document.awareness.on("change", others);
+    const pageMap = document.doc.getMap<unknown>(PAGE);
+    const showPage = () => setPage(readPage(pageMap));
+    pageMap.observe(showPage);
+    let firstChange: (() => void) | null = null;
+    if (!id) {
+      // The same single empty paragraph the server's new documents have.
+      document.doc.getXmlFragment(FRAGMENT).insert(0, [new Y.XmlElement("paragraph")]);
+      start(document);
+      firstChange = () => {
+        if (fileId.current) {
+          document.doc.off("update", firstChange!);
+          return;
+        }
+        void makeFile().catch(() => undefined);
+      };
+      document.doc.on("update", firstChange);
+    }
     return () => {
+      if (firstChange) document.doc.off("update", firstChange);
+      pageMap.unobserve(showPage);
       document.awareness.off("change", others);
       view.current?.destroy();
       view.current = null;
       document.close();
       live.current = null;
     };
-  }, [info?.id, readOnly]);
+  }, [loaded, readOnly]);
+
+  function start(document: LiveDocument) {
+    if (!mount.current) return;
+    view.current = createEditor(mount.current, document, {
+      readOnly,
+      onChange: () => view.current && setFormat(formatting(view.current.state)),
+      onLink: () => startLink(),
+      pictureAddress: (hash) => pictureAddress(fileId.current ?? "", hash),
+      onPictures: (files) => void addPictures(files),
+    });
+    setFormat(formatting(view.current.state));
+    // A new document, or one from before page setup, gets the paper of the
+    // first editor to open it.
+    const pageMap = document.doc.getMap<unknown>(PAGE);
+    if (!readOnly && !readPage(pageMap)) writePage(pageMap, newPageSetup(defaultPageSize()));
+    setPage(readPage(pageMap));
+    view.current.focus();
+  }
+
+  /** The file's ID, making the file first for a new document. Its state
+   * becomes the file's, and what changes meanwhile goes in on joining. */
+  function makeFile(): Promise<string> {
+    if (fileId.current) return Promise.resolve(fileId.current);
+    making.current ??= (async () => {
+      const document = live.current;
+      if (!document) throw new Error("closed");
+      const made = await createDocument(defaultPageSize(), Y.encodeStateAsUpdate(document.doc));
+      fileId.current = made.id;
+      setInfo(made);
+      document.join(liveAddress(made.id), checkAddress(made.id));
+      onStarted(made.id);
+      return made.id;
+    })().catch((problem: unknown) => {
+      // The next change tries again.
+      making.current = null;
+      setError(t("docs.makeFailed", { problem: problemText(problem) }));
+      throw problem;
+    });
+    return making.current;
+  }
+
+  // The page on screen is as wide as the paper, with its margins.
+  useEffect(() => {
+    const element = mount.current;
+    if (!element) return;
+    const properties = ["--page-width", "--page-height", "--margin-top", "--margin-right", "--margin-bottom", "--margin-left"];
+    if (!page) {
+      properties.forEach((property) => element.style.removeProperty(property));
+      return;
+    }
+    const [width, height] = pagePoints(page);
+    [width, height, ...page.margins].forEach((points, index) => element.style.setProperty(properties[index]!, `${points}pt`));
+  }, [page, info]);
+
+  // Ctrl+P prints the document, not the editor around it.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        void print();
+      }
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, []);
+
+  async function print(note = "") {
+    setError("");
+    setNotice(note);
+    try {
+      await printDocument(await makeFile());
+    } catch {
+      setNotice("");
+      setError(t("docs.printFailed"));
+    }
+  }
+
+  async function download(format: DownloadFormat) {
+    let id: string;
+    try {
+      id = await makeFile();
+    } catch {
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = downloadAddress(id, format);
+    // The server names the file after the document, with the format's
+    // extension.
+    link.download = "";
+    link.click();
+  }
+
+  /** Adds pictures where the caret is, one after another, each once the
+   * server has checked and shrunk it. */
+  async function addPictures(files: File[]) {
+    setError("");
+    for (const file of files) {
+      setNotice(t("docs.addingPicture"));
+      try {
+        const added = await addPicture(await makeFile(), file);
+        run(insertPicture(added.hash));
+      } catch (problem) {
+        setError(problemText(problem));
+        break;
+      }
+    }
+    setNotice("");
+  }
 
   function run(command: Command) {
     const editor = view.current;
@@ -232,10 +420,15 @@ function DocumentPage({ id, session }: { id: string; session: Session }) {
 
   async function share() {
     try {
+      const id = await makeFile();
       setSharing(await api<Item>("GET", `/api/drive/items/${id}`));
     } catch (problem) {
       setError(problemText(problem));
     }
+  }
+
+  async function rename(name: string): Promise<string> {
+    return renameDocument(await makeFile(), name);
   }
 
   if (failed) {
@@ -266,6 +459,7 @@ function DocumentPage({ id, session }: { id: string; session: Session }) {
         <DocIcon />
         <DocumentName
           info={info}
+          rename={rename}
           onRenamed={(name) => setInfo({ ...info, name })}
           onError={(problem) => setError(t("docs.renameFailed", { problem }))}
         />
@@ -278,6 +472,15 @@ function DocumentPage({ id, session }: { id: string; session: Session }) {
             ))}
           </span>
         )}
+        <button
+          type="button"
+          class="secondary docs-file"
+          aria-haspopup="menu"
+          aria-expanded={fileMenu !== null}
+          onClick={(event) => setFileMenu({ place: { under: event.currentTarget }, byKeyboard: event.detail === 0 })}
+        >
+          {t("docs.file")}
+        </button>
         <button type="button" onClick={() => void share()}>
           {t("docs.share")}
         </button>
@@ -287,11 +490,12 @@ function DocumentPage({ id, session }: { id: string; session: Session }) {
           format={format}
           run={run}
           onLink={startLink}
+          onPictures={(files) => void addPictures(files)}
         />
       )}
-      {(statusText || error) && (
+      {(statusText || error || notice) && (
         <p class={status === "gone" || status === "signedOut" || error ? "error docs-status" : "hint docs-status"} role="status">
-          {error || statusText}
+          {error || statusText || notice}
         </p>
       )}
       <div class="docs-canvas">
@@ -316,22 +520,246 @@ function DocumentPage({ id, session }: { id: string; session: Session }) {
         />
       )}
       {sharing && <ShareDialog item={sharing} onClose={() => setSharing(null)} />}
+      {fileMenu && (
+        <Menu
+          label={t("docs.file")}
+          entries={[
+            ...(readOnly ? [] : [{ label: t("docs.pageSetup"), onSelect: () => setSettingUp(true) }]),
+            { label: t("docs.print"), shortcut: t("docs.printShortcut"), onSelect: () => void print() },
+            "separator",
+            { label: t("docs.downloadDocx"), onSelect: () => void download("docx") },
+            { label: t("docs.downloadOdt"), onSelect: () => void download("odt") },
+            { label: t("docs.downloadPdf"), onSelect: () => void print(t("docs.pdfHint")) },
+            { label: t("docs.downloadHtml"), onSelect: () => void download("html") },
+            { label: t("docs.downloadMd"), onSelect: () => void download("md") },
+          ]}
+          place={fileMenu.place}
+          align="end"
+          byKeyboard={fileMenu.byKeyboard}
+          onClose={() => setFileMenu(null)}
+        />
+      )}
+      {settingUp && live.current && (
+        <PageSetupDialog
+          setup={page ?? newPageSetup(defaultPageSize())}
+          onApply={(setup) => {
+            if (live.current) writePage(live.current.doc.getMap<unknown>(PAGE), setup);
+            setSettingUp(false);
+            view.current?.focus();
+          }}
+          onClose={() => {
+            setSettingUp(false);
+            view.current?.focus();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Prints the document from its print page, in a frame the reader doesn't
+ * see, so it comes out as anyone opening the file would see it, on its own
+ * paper. Browsers offer Save as PDF in the same window. */
+/** A new document, before it has a file. */
+function draftInfo(): DocumentInfo {
+  return {
+    id: "",
+    name: `${t("docs.untitled")}.html`,
+    folder: null,
+    modified_at: "",
+    access: "owner",
+    owner: null,
+    sha256: null,
+    thumbnail: null,
+    thumbnail_version: null,
+  };
+}
+
+function liveAddress(id: string): string {
+  return `/api/docs/documents/${id}/live`;
+}
+
+function checkAddress(id: string): string {
+  return `/api/docs/documents/${id}`;
+}
+
+function printDocument(id: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const frame = document.createElement("iframe");
+    frame.className = "docs-print-frame";
+    frame.setAttribute("aria-hidden", "true");
+    frame.tabIndex = -1;
+    const done = () => setTimeout(() => frame.remove(), 1000);
+    frame.addEventListener("load", () => {
+      const page = frame.contentWindow;
+      // An error page has no <main>: the document is gone or the
+      // connection failed.
+      if (!page || !frame.contentDocument?.querySelector("main")) {
+        frame.remove();
+        reject(new Error("no print page"));
+        return;
+      }
+      page.addEventListener("afterprint", done);
+      page.focus();
+      page.print();
+      resolve();
+    });
+    frame.addEventListener("error", () => {
+      frame.remove();
+      reject(new Error("no print page"));
+    });
+    frame.src = printAddress(id);
+    document.body.append(frame);
+  });
+}
+
+const SIZE_NAMES: Record<PageSize, MessageKey> = {
+  letter: "docs.sizeLetter",
+  a4: "docs.sizeA4",
+  legal: "docs.sizeLegal",
+  a5: "docs.sizeA5",
+  a3: "docs.sizeA3",
+  tabloid: "docs.sizeTabloid",
+};
+
+const PRESET_NAMES: Record<MarginPreset, MessageKey> = {
+  normal: "docs.marginsNormal",
+  narrow: "docs.marginsNarrow",
+  wide: "docs.marginsWide",
+};
+
+/** Paper size, which way up, and margins, in inches or centimeters as the
+ * reader's region measures them. */
+function PageSetupDialog({
+  setup,
+  onApply,
+  onClose,
+}: {
+  setup: PageSetup;
+  onApply: (setup: PageSetup) => void;
+  onClose: () => void;
+}) {
+  const inches = usesInches();
+  const [size, setSize] = useState(setup.size);
+  const [landscape, setLandscape] = useState(setup.landscape);
+  const [typed, setTyped] = useState(setup.margins.map((points) => String(fromPoints(points, inches))));
+  const [problem, setProblem] = useState("");
+  const typedPoints = typed.map((value) => toPoints(Number(value.replace(",", ".")), inches));
+  const preset = typed.every((value) => value.trim() !== "" && Number.isFinite(Number(value.replace(",", "."))))
+    ? marginPreset(typedPoints as PageSetup["margins"])
+    : null;
+  const unit = inches ? t("docs.unitInches") : t("docs.unitCentimeters");
+  const sides = ["docs.marginTop", "docs.marginRight", "docs.marginBottom", "docs.marginLeft"] as const;
+
+  function choosePreset(name: string) {
+    if (!(name in MARGIN_PRESETS)) return;
+    setTyped(MARGIN_PRESETS[name as MarginPreset].map((points) => String(fromPoints(points, inches))));
+  }
+
+  return (
+    <Dialog title={t("docs.pageSetupTitle")} class="docs-setup-dialog" onClose={onClose}>
+      <form
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          const margins = typedPoints as PageSetup["margins"];
+          if (typed.some((value) => value.trim() === "") || margins.some((points) => !Number.isFinite(points) || points < 0)) {
+            setProblem(t("docs.marginsInvalid"));
+            return;
+          }
+          const wanted: PageSetup = { size, landscape, margins };
+          const [width, height] = pagePoints(wanted);
+          if (margins[1] + margins[3] > width - 72 || margins[0] + margins[2] > height - 72 || margins.some((points) => points > 288)) {
+            setProblem(t("docs.marginsTooBig", { most: fromPoints(288, inches), unit }));
+            return;
+          }
+          onApply(wanted);
+        }}
+      >
+        <label>
+          {t("docs.paperSize")}
+          <select value={size} onChange={(event) => setSize(event.currentTarget.value as PageSize)}>
+            {PAGE_SIZES.map((each) => (
+              <option key={each} value={each}>
+                {t(SIZE_NAMES[each])}
+              </option>
+            ))}
+          </select>
+        </label>
+        <fieldset class="docs-orientation">
+          <legend>{t("docs.orientation")}</legend>
+          <label>
+            <input type="radio" name="orientation" checked={!landscape} onChange={() => setLandscape(false)} />
+            {t("docs.portrait")}
+          </label>
+          <label>
+            <input type="radio" name="orientation" checked={landscape} onChange={() => setLandscape(true)} />
+            {t("docs.landscape")}
+          </label>
+        </fieldset>
+        <label>
+          {t("docs.margins")}
+          <select value={preset ?? "custom"} onChange={(event) => choosePreset(event.currentTarget.value)}>
+            {(Object.keys(MARGIN_PRESETS) as MarginPreset[]).map((name) => (
+              <option key={name} value={name}>
+                {t(PRESET_NAMES[name], {
+                  side: fromPoints(MARGIN_PRESETS[name][3], inches),
+                  top: fromPoints(MARGIN_PRESETS[name][0], inches),
+                  unit,
+                })}
+              </option>
+            ))}
+            <option value="custom">{t("docs.marginsCustom")}</option>
+          </select>
+        </label>
+        <div class="docs-margin-fields">
+          {sides.map((side, index) => (
+            <label key={side}>
+              {t(side, { unit })}
+              <input
+                type="text"
+                inputMode="decimal"
+                value={typed[index]}
+                onInput={(event) => {
+                  const value = event.currentTarget.value;
+                  setTyped((now) => now.map((each, at) => (at === index ? value : each)));
+                }}
+              />
+            </label>
+          ))}
+        </div>
+        <p class="error" role="alert">
+          {problem}
+        </p>
+        <div class="dialog-buttons">
+          <button type="button" class="secondary" onClick={onClose}>
+            {t("docs.cancel")}
+          </button>
+          <button type="submit">{t("docs.pageSetupApply")}</button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 
 /** The document's name, which the owner and editors can change. */
 function DocumentName({
   info,
+  rename,
   onRenamed,
   onError,
 }: {
   info: DocumentInfo;
+  rename: (name: string) => Promise<string>;
   onRenamed: (name: string) => void;
   onError: (problem: string) => void;
 }) {
   const [value, setValue] = useState(info.name);
-  useEffect(() => setValue(info.name), [info.name]);
+  const field = useRef<HTMLInputElement>(null);
+  // A new document's file gets its name while someone may be typing one.
+  useEffect(() => {
+    if (document.activeElement !== field.current) setValue(info.name);
+  }, [info.name]);
   const readOnly = info.access === "viewer";
 
   async function save() {
@@ -341,7 +769,7 @@ function DocumentName({
       return;
     }
     try {
-      onRenamed(await renameDocument(info.id, typed));
+      onRenamed(await rename(typed));
     } catch (problem) {
       setValue(info.name);
       onError(problemText(problem));
@@ -350,6 +778,7 @@ function DocumentName({
 
   return (
     <input
+      ref={field}
       class="docs-name"
       aria-label={t("docs.name")}
       value={value}
@@ -388,8 +817,19 @@ function Initials({ visitor }: { visitor: Visitor }) {
 
 type Run = (command: Command) => void;
 
-function Toolbar({ format, run, onLink }: { format: Formatting; run: Run; onLink: () => void }) {
+function Toolbar({
+  format,
+  run,
+  onLink,
+  onPictures,
+}: {
+  format: Formatting;
+  run: Run;
+  onLink: () => void;
+  onPictures: (files: File[]) => void;
+}) {
   const [tableMenu, setTableMenu] = useState<{ place: MenuPlace; byKeyboard: boolean } | null>(null);
+  const choosePictures = useRef<HTMLInputElement>(null);
   const markButton = (on: boolean, label: string, command: Command, icon: ComponentChildren) => (
     <ToolButton label={label} pressed={on} onClick={() => run(command)}>
       {icon}
@@ -441,6 +881,21 @@ function Toolbar({ format, run, onLink }: { format: Formatting; run: Run; onLink
         <QuoteIcon />
       </ToolButton>
       <span class="docs-toolbar-gap" />
+      <ToolButton label={t("docs.picture")} onClick={() => choosePictures.current?.click()}>
+        <PictureIcon />
+      </ToolButton>
+      <input
+        ref={choosePictures}
+        type="file"
+        accept={PICTURE_TYPES.join(",")}
+        multiple
+        hidden
+        onChange={(event) => {
+          const files = [...(event.currentTarget.files ?? [])];
+          event.currentTarget.value = "";
+          if (files.length) onPictures(files);
+        }}
+      />
       <ToolButton label={t("docs.rule")} onClick={() => run(insertRule)}>
         <RuleIcon />
       </ToolButton>

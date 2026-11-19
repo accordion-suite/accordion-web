@@ -64,13 +64,14 @@ export class LiveDocument {
   private timer: number | undefined;
 
   /**
-   * @param address The WebSocket's path, such as `/api/docs/documents/{id}/live`.
+   * @param address The WebSocket's path, such as `/api/docs/documents/{id}/live`,
+   *   or null for a document that has no file yet, which joins one later.
    * @param check A path that answers 404 once the reader can't open the
    *   file, to tell a refused connection from a dropped one.
    */
   constructor(
-    private readonly address: string,
-    private readonly check: string,
+    private address: string | null,
+    private check: string,
     me: { name: string },
     private readonly onStatus: (status: LiveStatus) => void,
   ) {
@@ -90,6 +91,15 @@ export class LiveDocument {
         encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(this.awareness, changed));
       });
     });
+    this.connect();
+  }
+
+  /** Starts keeping a document made before it had a file in step with
+   * the file now made from it. What it has goes in when it connects. */
+  join(address: string, check: string): void {
+    if (this.address !== null || this.stopped) return;
+    this.address = address;
+    this.check = check;
     this.connect();
   }
 
@@ -116,7 +126,7 @@ export class LiveDocument {
   }
 
   private connect(): void {
-    if (this.stopped) return;
+    if (this.stopped || this.address === null) return;
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     const socket = new WebSocket(`${scheme}://${location.host}${this.address}`);
     socket.binaryType = "arraybuffer";

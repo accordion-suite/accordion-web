@@ -44,7 +44,21 @@ export const FRAGMENT = "prosemirror";
 export function createEditor(
   mount: HTMLElement,
   live: LiveDocument,
-  { readOnly, onChange, onLink }: { readOnly: boolean; onChange: () => void; onLink: () => void },
+  {
+    readOnly,
+    onChange,
+    onLink,
+    pictureAddress,
+    onPictures,
+  }: {
+    readOnly: boolean;
+    onChange: () => void;
+    onLink: () => void;
+    /** Where the picture with a hash is shown from. */
+    pictureAddress: (hash: string) => string;
+    /** Picture files someone pasted or dropped, to add where the caret is. */
+    onPictures: (files: File[]) => void;
+  },
 ): EditorView {
   const fragment: Y.XmlFragment = live.doc.getXmlFragment(FRAGMENT);
   const state = EditorState.create({
@@ -68,6 +82,23 @@ export function createEditor(
     attributes: { class: "docs-text", spellcheck: "true" },
     nodeViews: {
       check_item: (node, editorView, getPos) => new CheckItemView(node, editorView, getPos),
+      image: (node) => new ImageView(node, pictureAddress),
+    },
+    handlePaste(editorView, event) {
+      const files = pictureFiles(event.clipboardData);
+      if (!files.length || !editorView.editable) return false;
+      onPictures(files);
+      return true;
+    },
+    handleDrop(editorView, event) {
+      const files = pictureFiles(event.dataTransfer);
+      if (!files.length || !editorView.editable) return false;
+      event.preventDefault();
+      // The pictures go where they were dropped.
+      const at = editorView.posAtCoords({ left: event.clientX, top: event.clientY });
+      if (at) editorView.dispatch(editorView.state.tr.setSelection(Selection.near(editorView.state.doc.resolve(at.pos))));
+      onPictures(files);
+      return true;
     },
     // y-prosemirror dispatches while the view is still being made, so this
     // uses the view it's called on.
@@ -163,6 +194,68 @@ function typingShortcuts() {
       }),
     ],
   });
+}
+
+/** The kinds of picture the server takes. */
+export const PICTURE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+/** The picture files in a paste or a drop. */
+function pictureFiles(data: DataTransfer | null): File[] {
+  return [...(data?.files ?? [])].filter((file) => PICTURE_TYPES.includes(file.type));
+}
+
+/** Adds a picture by its hash where the caret is, on a line of its own,
+ * with the caret after it. Nothing after it means an empty line for the
+ * caret, so the next picture or text doesn't replace this one. */
+export function insertPicture(hash: string): Command {
+  return (state, dispatch) => {
+    const tr = state.tr.replaceSelectionWith(nodes["image"]!.create({ src: hash }));
+    if (!(tr.selection instanceof TextSelection)) {
+      const end = tr.selection.to;
+      tr.insert(end, nodes["paragraph"]!.create());
+      tr.setSelection(TextSelection.create(tr.doc, end + 1));
+    }
+    dispatch?.(tr.scrollIntoView());
+    return true;
+  };
+}
+
+/** A picture, shown from the document's pictures by its hash. Its width
+ * is an attribute, not a style, since the page's security policy doesn't
+ * allow style attributes. */
+class ImageView implements NodeView {
+  dom: HTMLImageElement;
+
+  constructor(
+    private node: Node,
+    private address: (hash: string) => string,
+  ) {
+    this.dom = document.createElement("img");
+    this.dom.className = "docs-picture";
+    this.dom.draggable = true;
+    this.show(node);
+  }
+
+  private show(node: Node) {
+    this.node = node;
+    this.dom.src = this.address(node.attrs["src"] as string);
+    this.dom.alt = node.attrs["alt"] as string;
+    const width = node.attrs["width"] as number | null;
+    if (width) this.dom.width = width;
+    else this.dom.removeAttribute("width");
+  }
+
+  update(node: Node): boolean {
+    if (node.type !== this.node.type) return false;
+    if (node.attrs["src"] !== this.node.attrs["src"] || node.attrs["alt"] !== this.node.attrs["alt"] || node.attrs["width"] !== this.node.attrs["width"]) {
+      this.show(node);
+    }
+    return true;
+  }
+
+  ignoreMutation(): boolean {
+    return true;
+  }
 }
 
 /** A checklist item with a checkbox people can select, even while others
