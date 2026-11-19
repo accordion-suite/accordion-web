@@ -11,7 +11,7 @@ import { modulesOn, type Session } from "../api.ts";
 import { DriveIcon, TrashIcon } from "../drive/icons.tsx";
 import { t, type MessageKey } from "../i18n.ts";
 import { MicIcon, NoteIcon } from "../notes/icons.tsx";
-import { lastAppPage } from "../shell/last-app.ts";
+import { type App, lastAppPage } from "../shell/last-app.ts";
 import { PageTitle } from "../shell/page.tsx";
 import { followLink, usePath } from "../shell/router.ts";
 import { AppsIcon } from "../shell/apps.tsx";
@@ -45,6 +45,21 @@ export interface Section {
 /** The reader's own settings, an app's, or the server's, which are for
  * admins. */
 type Group = "you" | "drive" | "notes" | "server";
+
+/** The back link's words for each app. */
+const BACK_TO: Record<App, MessageKey> = {
+  drive: "settings.backToDrive",
+  notes: "settings.backToNotes",
+  docs: "settings.backToDocs",
+};
+
+/** Where the back link goes for someone who came straight to Settings: the
+ * first of these apps that's on. */
+const APP_STARTS: readonly { app: App; href: string }[] = [
+  { app: "drive", href: "/drive/start" },
+  { app: "docs", href: "/docs/" },
+  { app: "notes", href: "/notes/" },
+];
 
 const GROUPS: readonly [Group, MessageKey][] = [
   ["you", "settings.you"],
@@ -92,7 +107,7 @@ export function SettingsLayout({
   // An app's group shows while the app is on. The server's are for admins.
   const shown = (group: Group) =>
     group === "server" ? session.admin_pages : group === "you" || modules.includes(group);
-  const back = lastAppPage() ?? (modules.includes("drive") ? { app: "drive", href: "/drive/start" } : { app: "notes", href: "/notes/" });
+  const back = lastAppPage() ?? APP_STARTS.find((start) => modules.includes(start.app)) ?? APP_STARTS[0]!;
 
   return (
     <div class={sidebarOpen ? "frame settings-frame sidebar-open" : "frame settings-frame"}>
@@ -105,11 +120,11 @@ export function SettingsLayout({
         onMenu={() => setSidebarOpen(!sidebarOpen)}
       />
       <nav id="sidebar" class="sidebar" aria-label={t("settings.sections")}>
-        {/* Back to the app page the reader left, or Drive's start page if
-            they came straight to Settings. */}
+        {/* Back to the app page the reader left, or the first app that's
+            on if they came straight to Settings. */}
         <a class="place back" href={back.href} onClick={followLink}>
           <BackIcon />
-          {t(back.app === "notes" ? "settings.backToNotes" : "settings.backToDrive")}
+          {t(BACK_TO[back.app])}
         </a>
         {GROUPS.filter(([group]) => shown(group)).map(([group, title]) => (
           <GroupLinks

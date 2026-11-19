@@ -4,6 +4,7 @@ export const settingsEn = {
   "settings.sections": "Settings sections",
   "settings.backToDrive": "Back to Drive",
   "settings.backToNotes": "Back to Notes",
+  "settings.backToDocs": "Back to Docs",
   "settings.you": "You",
   "settings.server": "Server",
   "settings.account": "Account",

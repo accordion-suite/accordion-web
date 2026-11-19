@@ -41,6 +41,10 @@ function useAddress<T>(read: () => T): T {
     const update = () => setValue(read);
     window.addEventListener("popstate", update);
     window.addEventListener(CHANGED, update);
+    // The address may have changed before this listened: a page's effects
+    // run before the app's, so a redirect as the first page appears, such
+    // as /settings/ to its first section, would go unseen.
+    update();
     return () => {
       window.removeEventListener("popstate", update);
       window.removeEventListener(CHANGED, update);
