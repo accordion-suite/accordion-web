@@ -167,6 +167,22 @@ export function Docs({ session, onSignOut }: { session: Session; onSignOut: () =
 }
 
 /** Docs' home: a new document, and the documents the reader has. */
+/** Makes a copy and opens it in a new tab, as Google Docs does. The tab
+ * opens at once, while the press still lets a page open one, so `id` can
+ * still be on its way, such as a draft's file being made. */
+async function copyAndOpen(id: string | Promise<string>, name: string) {
+  const tab = window.open("", "_blank");
+  if (tab) tab.opener = null;
+  try {
+    const made = await copyDocument(await id, name);
+    if (tab) tab.location.href = documentPath(made.id);
+    else navigate(documentPath(made.id));
+  } catch (problem) {
+    tab?.close();
+    throw problem;
+  }
+}
+
 function DocsHome() {
   const [documents, setDocuments] = useState<DocumentInfo[] | null>(null);
   const [error, setError] = useState("");
@@ -176,6 +192,7 @@ function DocsHome() {
     byKeyboard: boolean;
   } | null>(null);
   const [renaming, setRenaming] = useState<DocumentInfo | null>(null);
+  const [copying, setCopying] = useState<DocumentInfo | null>(null);
   const [notice, setNotice] = useState<HomeNotice | null>(null);
 
   function load() {
@@ -225,6 +242,8 @@ function DocsHome() {
         label: t("shortcuts.newTab"),
         onSelect: () => window.open(documentPath(document.id), "_blank", "noopener"),
       },
+      // Viewers can copy too: the copy is theirs, in their own Docs.
+      { label: t("docs.copyMenu"), onSelect: () => setCopying(document) },
     ];
     if (document.access !== "viewer") {
       entries.push(
@@ -301,6 +320,20 @@ function DocsHome() {
             setNotice({ text: t("drive.renamed", { name: named }) });
           }}
           onClose={() => setRenaming(null)}
+        />
+      )}
+      {copying && (
+        <NameDialog
+          title={t("docs.copyTitle")}
+          submit={t("docs.copySubmit")}
+          initial={t("docs.copyName", { name: copying.name })}
+          file
+          onSubmit={async (name) => {
+            await copyAndOpen(copying.id, name);
+            setCopying(null);
+            load();
+          }}
+          onClose={() => setCopying(null)}
         />
       )}
       {notice && (
@@ -671,20 +704,9 @@ function DocumentPage({
     }
   }
 
-  /** Makes a copy and opens it in a new tab, as Google Docs does. The tab
-   * opens at once, while the press still lets a page open one. */
   async function copy(name: string) {
-    const tab = window.open("", "_blank");
-    if (tab) tab.opener = null;
-    try {
-      const made = await copyDocument(await makeFile(), name);
-      if (tab) tab.location.href = documentPath(made.id);
-      else navigate(documentPath(made.id));
-      setCopying(false);
-    } catch (problem) {
-      tab?.close();
-      throw problem;
-    }
+    await copyAndOpen(makeFile(), name);
+    setCopying(false);
   }
 
   async function rename(name: string): Promise<string> {
