@@ -513,6 +513,9 @@ function DocumentPage({
   const choosePictures = useRef<HTMLInputElement>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const view = useRef<EditorView | null>(null);
+  const documentElement = useRef<HTMLDivElement>(null);
+  const header = useRef<HTMLDivElement>(null);
+  const tools = useRef<HTMLDivElement>(null);
   const live = useRef<LiveDocument | null>(null);
   /** The file's ID, once there is one. */
   const fileId = useRef(opening);
@@ -591,6 +594,7 @@ function DocumentPage({
       onPictures: (files) => void addPictures(files),
       onAltText: () => startAltText(),
     });
+    keepClearOfHeader();
     setFormat(formatting(view.current.state));
     // A new document, or one from before page setup, gets the paper of the
     // first editor to open it.
@@ -599,6 +603,41 @@ function DocumentPage({
     setPage(readPage(pageMap));
     view.current.focus();
   }
+
+  // The header covers the top of the window as the page scrolls. Its
+  // height goes to the style sheet, for the outline and for headings the
+  // outline scrolls to, and to the editor, so the caret never hides under
+  // it as typing or the arrow keys scroll the page.
+  const covered = useRef(0);
+  function keepClearOfHeader() {
+    const top = covered.current;
+    view.current?.setProps({
+      scrollThreshold: { top: top + 8, bottom: 0, left: 0, right: 0 },
+      scrollMargin: { top: top + 24, bottom: 24, left: 5, right: 5 },
+    });
+  }
+  useEffect(() => {
+    const whole = header.current;
+    const toolbar = tools.current;
+    const page = documentElement.current;
+    if (!whole || !toolbar || !page) return;
+    const measure = () => {
+      // On phones the header isn't a box of its own and only the toolbar
+      // stays in view.
+      covered.current = getComputedStyle(whole).display === "contents" ? toolbar.offsetHeight : whole.offsetHeight;
+      page.style.setProperty("--docs-header-height", `${covered.current}px`);
+      keepClearOfHeader();
+    };
+    measure();
+    const watcher = new ResizeObserver(measure);
+    watcher.observe(whole);
+    watcher.observe(toolbar);
+    addEventListener("resize", measure);
+    return () => {
+      watcher.disconnect();
+      removeEventListener("resize", measure);
+    };
+  }, [loaded]);
 
   /** The file's ID, making the file first for a new document. Its state
    * becomes the file's, and what changes meanwhile goes in on joining. */
@@ -1243,67 +1282,71 @@ function DocumentPage({
             : "";
 
   return (
-    <div class="docs-document">
-      {bar(
-        <div class="docs-head">
-          {/* The menus sit under the name, as in Google Docs. */}
-          <div class="docs-title">
-            <div class="docs-title-row">
-              <DocumentName
-                info={info}
-                field={nameField}
-                rename={rename}
-                onRenamed={(name) => setInfo({ ...info, name })}
-                onError={(problem) => setError(t("docs.renameFailed", { problem }))}
-              />
-              {readOnly && <span class="docs-badge">{t("docs.viewOnly")}</span>}
+    <div class="docs-document" ref={documentElement}>
+      {/* The top bar and the toolbar stay in view as the page scrolls, as in
+          Google Docs. On phones only the toolbar does, to leave room for the
+          text. */}
+      <div class="docs-header" ref={header}>
+        {bar(
+          <div class="docs-head">
+            {/* The menus sit under the name, as in Google Docs. */}
+            <div class="docs-title">
+              <div class="docs-title-row">
+                <DocumentName
+                  info={info}
+                  field={nameField}
+                  rename={rename}
+                  onRenamed={(name) => setInfo({ ...info, name })}
+                  onError={(problem) => setError(t("docs.renameFailed", { problem }))}
+                />
+                {readOnly && <span class="docs-badge">{t("docs.viewOnly")}</span>}
+              </div>
+              <div class="docs-menus">
+                <MenuBar label={t("docs.menus")} menus={menus()} />
+              </div>
             </div>
-            <div class="docs-menus">
-              <MenuBar label={t("docs.menus")} menus={menus()} />
-            </div>
-          </div>
-          <span class="spacer" />
-          {visitors.length > 0 && (
-            <span
-              class="docs-visitors"
-              title={t("docs.others", {
-                names: formatList(visitors.map((visitor) => visitor.name)),
-              })}
-            >
-              {visitors.slice(0, 4).map((visitor) => (
-                <Initials key={visitor.name} visitor={visitor} />
-              ))}
-            </span>
+            <span class="spacer" />
+            {visitors.length > 0 && (
+              <span
+                class="docs-visitors"
+                title={t("docs.others", {
+                  names: formatList(visitors.map((visitor) => visitor.name)),
+                })}
+              >
+                {visitors.slice(0, 4).map((visitor) => (
+                  <Initials key={visitor.name} visitor={visitor} />
+                ))}
+              </span>
+            )}
+            <button type="button" class="docs-share" onClick={() => void share()}>
+              {t("docs.share")}
+            </button>
+          </div>,
+        )}
+        {/* The find panel hangs under the toolbar. */}
+        <div class="docs-tools" ref={tools}>
+          {!readOnly && format && (
+            <Toolbar
+              format={format}
+              run={run}
+              onLink={startLink}
+              onChoosePictures={() => choosePictures.current?.click()}
+              onSpacing={startSpacing}
+              onRestart={startRestart}
+              onCellColor={() => setColoringCell(true)}
+            />
           )}
-          <button type="button" class="docs-share" onClick={() => void share()}>
-            {t("docs.share")}
-          </button>
-        </div>,
-      )}
-      {/* The find panel hangs under the toolbar, and both stay in view as
-          the page scrolls. */}
-      <div class="docs-tools">
-        {!readOnly && format && (
-          <Toolbar
-            format={format}
-            run={run}
-            onLink={startLink}
-            onChoosePictures={() => choosePictures.current?.click()}
-            onSpacing={startSpacing}
-            onRestart={startRestart}
-            onCellColor={() => setColoringCell(true)}
-          />
-        )}
-        {finding && view.current && (
-          <FindBar
-            state={view.current.state}
-            readOnly={readOnly}
-            initial={finding.initial}
-            focusRequest={finding.request}
-            apply={apply}
-            onClose={stopFind}
-          />
-        )}
+          {finding && view.current && (
+            <FindBar
+              state={view.current.state}
+              readOnly={readOnly}
+              initial={finding.initial}
+              focusRequest={finding.request}
+              apply={apply}
+              onClose={stopFind}
+            />
+          )}
+        </div>
       </div>
       <input
         ref={choosePictures}

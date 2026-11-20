@@ -5149,12 +5149,20 @@ button.checklist-add {
   font-weight: 600;
 }
 
-/* The toolbar and the find panel under it, which stay in view as the page
-   scrolls. */
-.docs-tools {
+/* The top bar and the toolbar, which stay in view as the page scrolls.
+   The editor sets --docs-header-height to how much of the window they
+   cover. */
+.docs-header {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 3;
+  padding-bottom: 8px;
+  background: var(--page);
+}
+
+/* The toolbar and the find panel under it. */
+.docs-tools {
+  position: relative;
 }
 
 .docs-toolbar {
@@ -5510,7 +5518,7 @@ button.checklist-add {
 .docs-canvas {
   position: relative;
   flex: 1;
-  padding: 16px 16px 48px;
+  padding: 8px 16px 48px;
 }
 
 /* The outline, or the button that shows it, at the left of the page. It
@@ -5518,7 +5526,7 @@ button.checklist-add {
    right to make room where the window isn't wide enough for both. */
 .docs-side {
   position: absolute;
-  top: 16px;
+  top: 8px;
   bottom: 0;
   left: 16px;
   pointer-events: none;
@@ -5526,7 +5534,7 @@ button.checklist-add {
 
 .docs-side > * {
   position: sticky;
-  top: 64px;
+  top: calc(var(--docs-header-height, 0px) + 8px);
   pointer-events: auto;
 }
 
@@ -5540,7 +5548,7 @@ button.checklist-add {
 
 .docs-outline-inner {
   box-sizing: border-box;
-  max-height: calc(100dvh - 80px);
+  max-height: calc(100dvh - var(--docs-header-height, 0px) - 24px);
   overflow-y: auto;
 }
 
@@ -5614,7 +5622,7 @@ button.checklist-add {
 .docs-text > h5,
 .docs-text > h6,
 .docs-text > p.title {
-  scroll-margin-top: 72px;
+  scroll-margin-top: calc(var(--docs-header-height, 0px) + 24px);
 }
 
 /* Narrower windows show the outline over the page, from the side, until a
@@ -6181,6 +6189,7 @@ button.checklist-add {
 }
 
 /* Full screen, from the View menu, leaves only the page. Esc comes back. */
+:root:fullscreen .docs-header,
 :root:fullscreen:has(.docs-document) .top-bar,
 :root:fullscreen .docs-head,
 :root:fullscreen .docs-menus,
@@ -6285,6 +6294,17 @@ dialog.docs-open-dialog {
     display: none;
   }
 
+  /* Only the toolbar stays in view, leaving room for the text. */
+  .docs-header {
+    display: contents;
+  }
+
+  .docs-tools {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+  }
+
   /* The menus get the whole width under the name and Share. */
   .docs-head {
     flex-wrap: wrap;
@@ -6301,6 +6321,7 @@ dialog.docs-open-dialog {
 }
 
 @media print {
+  .docs-header,
   .top-bar,
   .docs-head,
   .docs-menus,
