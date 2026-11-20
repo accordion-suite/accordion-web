@@ -5386,6 +5386,8 @@ button.checklist-add {
   padding: var(--margin-top, 72px) var(--margin-right, 96px) var(--margin-bottom, 72px) var(--margin-left, 96px);
   color: #1f1f1f;
   background: #fff;
+  /* Paper, so checkboxes and the caret are drawn for a light page. */
+  color-scheme: light;
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
 }
@@ -5710,21 +5712,31 @@ button.checklist-add {
   list-style: none;
 }
 
+/* The box sits on the first line's baseline, whatever the text's size or
+   spacing, centered on its capital letters. */
 .docs-check-item {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   gap: 8px;
 }
 
 .docs-check {
   flex: none;
-  padding-top: 4px;
+}
+
+/* A letter that takes no room gives the box a baseline to line up on. */
+.docs-check::after {
+  content: "\200b";
 }
 
 .docs-check input {
-  width: 16px;
-  height: 16px;
+  width: 1em;
+  height: 1em;
   margin: 0;
+  font: inherit;
+  vertical-align: -0.14em;
+  /* The light theme's blue, since the page is white in both. */
+  accent-color: #1a5fb4;
 }
 
 .docs-check-text {
