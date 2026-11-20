@@ -8,6 +8,7 @@ import { CloseIcon } from "../drive/icons.tsx";
 import { type ShortcutGroup, ShortcutsDialog } from "../drive/dialogs.tsx";
 import { formatNumber, t } from "../i18n.ts";
 import { Dialog } from "../shell/dialog.tsx";
+import { saveTyping, typing, type TypingPreferences } from "./autoformat.ts";
 import { countDocument } from "./counts.ts";
 import { findCount, findStep, replaceAll, replaceMatch, setSearch } from "./find.ts";
 import { DownIcon, UpIcon } from "./icons.tsx";
@@ -266,6 +267,52 @@ export function saveShowCount(show: boolean) {
   } catch {
     // The choice lasts until the page closes.
   }
+}
+
+/** Tools > Preferences: what changes as you type, as in Google Docs. Each
+ * choice applies at once. */
+export function PreferencesDialog({ onClose }: { onClose: () => void }) {
+  const [chosen, setChosen] = useState({ ...typing });
+  const choose = (change: Partial<TypingPreferences>) =>
+    setChosen((now) => {
+      const next = { ...now, ...change };
+      saveTyping(next);
+      return next;
+    });
+  return (
+    <Dialog title={t("docs.preferences")} class="docs-preferences" onClose={onClose}>
+      <fieldset class="choices">
+        <label class="choice">
+          <input
+            type="checkbox"
+            checked={chosen.smartQuotes}
+            onChange={(event) => choose({ smartQuotes: event.currentTarget.checked })}
+          />
+          <span class="choice-text">
+            <strong>{t("docs.smartQuotes")}</strong>
+            <span class="hint">{t("docs.smartQuotesHint")}</span>
+          </span>
+        </label>
+        <label class="choice">
+          <input
+            type="checkbox"
+            checked={chosen.autoLinks}
+            onChange={(event) => choose({ autoLinks: event.currentTarget.checked })}
+          />
+          <span class="choice-text">
+            <strong>{t("docs.autoLinks")}</strong>
+            <span class="hint">{t("docs.autoLinksHint")}</span>
+          </span>
+        </label>
+      </fieldset>
+      <p class="hint">{t("docs.preferencesHint")}</p>
+      <div class="dialog-buttons">
+        <button type="button" onClick={onClose}>
+          {t("dialog.close")}
+        </button>
+      </div>
+    </Dialog>
+  );
 }
 
 /** Docs' keyboard shortcuts, which follow Google Docs'. */

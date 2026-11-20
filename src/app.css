@@ -5479,8 +5479,149 @@ button.checklist-add {
 }
 
 .docs-canvas {
+  position: relative;
   flex: 1;
   padding: 16px 16px 48px;
+}
+
+/* The outline, or the button that shows it, at the left of the page. It
+   stays in view under the toolbar as the page scrolls, and the page moves
+   right to make room where the window isn't wide enough for both. */
+.docs-side {
+  position: absolute;
+  top: 16px;
+  bottom: 0;
+  left: 16px;
+  pointer-events: none;
+}
+
+.docs-side > * {
+  position: sticky;
+  top: 64px;
+  pointer-events: auto;
+}
+
+.docs-outline {
+  width: 220px;
+}
+
+.docs-canvas.outlined .docs-page {
+  margin-left: max(252px, calc((100% - var(--page-width, 816px)) / 2));
+}
+
+.docs-outline-inner {
+  box-sizing: border-box;
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
+}
+
+.docs-outline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 8px;
+}
+
+.docs-outline-head h2 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.docs-outline .hint {
+  padding: 0 8px;
+}
+
+.docs-outline ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.docs-outline li button {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  overflow: hidden;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.docs-outline li button:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.docs-outline li button[aria-current] {
+  color: var(--on-accent-soft);
+  font-weight: 600;
+  background: var(--accent-soft);
+}
+
+.docs-outline .level-0 button,
+.docs-outline .level-1 button {
+  color: var(--text);
+}
+
+.docs-outline .level-3 { padding-left: 12px; }
+.docs-outline .level-4 { padding-left: 24px; }
+.docs-outline .level-5 { padding-left: 36px; }
+.docs-outline .level-6 { padding-left: 48px; }
+
+/* Headings land under the toolbar when the outline scrolls to them. */
+.docs-text > h1,
+.docs-text > h2,
+.docs-text > h3,
+.docs-text > h4,
+.docs-text > h5,
+.docs-text > h6,
+.docs-text > p.title {
+  scroll-margin-top: 72px;
+}
+
+/* Narrower windows show the outline over the page, from the side, until a
+   heading is chosen. */
+@media (max-width: 1100px) {
+  .docs-canvas.outlined .docs-page {
+    margin-left: auto;
+  }
+
+  .docs-outline {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 5;
+    width: min(300px, 85vw);
+    padding: 12px 8px;
+    pointer-events: auto;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  .docs-outline > * {
+    position: static;
+  }
+
+  .docs-outline-inner {
+    max-height: 100%;
+  }
+}
+
+@media (max-width: 860px) {
+  .docs-side:not(.docs-outline) {
+    display: none;
+  }
 }
 
 /* The page is white in both themes, as paper, like the file itself in a

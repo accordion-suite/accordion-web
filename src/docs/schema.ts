@@ -162,7 +162,15 @@ const nodes: Record<string, NodeSpec> = {
       return ["img", attrs];
     },
   },
-  ...tableNodes({ tableGroup: "block", cellContent: "block+", cellAttributes: {} }),
+  ...paintedCells(
+    tableNodes({
+      tableGroup: "block",
+      cellContent: "block+",
+      // A cell's color, as Google Docs' cell background. Pasted tables
+      // keep theirs.
+      cellAttributes: { background: { default: null, getFromDOM: cellColorFromDom } },
+    }),
+  ),
   text: { group: "inline" },
   hard_break: {
     inline: true,
@@ -289,6 +297,39 @@ const marks: Record<string, MarkSpec> = {
 };
 
 export const schema = new Schema({ nodes, marks });
+
+/** The table's cells, each drawn with its color as a style property,
+ * which the page's security policy allows where a style attribute isn't. */
+function paintedCells(specs: Record<string, NodeSpec>): Record<string, NodeSpec> {
+  for (const name of ["table_cell", "table_header"]) {
+    const spec = specs[name]!;
+    const toDOM = spec.toDOM!;
+    specs[name] = {
+      ...spec,
+      toDOM(node) {
+        const [tag, attrs] = toDOM(node) as [string, Record<string, string | null | undefined>, 0];
+        const dom = document.createElement(tag);
+        for (const [name, value] of Object.entries(attrs)) if (value != null) dom.setAttribute(name, value);
+        const color = node.attrs["background"] as string | null;
+        if (color) dom.style.backgroundColor = color;
+        return { dom, contentDOM: dom };
+      },
+    };
+  }
+  return specs;
+}
+
+/** A pasted cell's color, from its style as Google Docs and Word write it,
+ * or the old `bgcolor`. White is the page's own color, which Word names on
+ * every cell, so it's none, as the server reads it. */
+function cellColorFromDom(dom: HTMLElement): string | null {
+  const shorthand = declared(dom, "background");
+  const color =
+    colorFromCss(declared(dom, "background-color") ?? "") ??
+    (shorthand ? shorthand.split(/\s+/).map(colorFromCss).find(Boolean) : null) ??
+    colorFromCss(dom.getAttribute("bgcolor") ?? "");
+  return color && color !== "#ffffff" ? color : null;
+}
 
 /** A list's start and style as attributes, with the old `type` that
  * programs without styles still show. */

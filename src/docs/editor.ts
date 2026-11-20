@@ -15,7 +15,7 @@ import {
 } from "prosemirror-commands";
 import { dropCursor } from "prosemirror-dropcursor";
 import { gapCursor } from "prosemirror-gapcursor";
-import { InputRule, inputRules, textblockTypeInputRule, wrappingInputRule } from "prosemirror-inputrules";
+import { InputRule, inputRules, textblockTypeInputRule, undoInputRule, wrappingInputRule } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
 import type { MarkType, Node, NodeType, ResolvedPos } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from "prosemirror-schema-list";
@@ -25,12 +25,17 @@ import {
   addColumnBefore,
   addRowAfter,
   addRowBefore,
+  CellSelection,
   columnResizing,
   deleteColumn,
   deleteRow,
   deleteTable,
   goToNextCell,
   isInTable,
+  mergeCells,
+  selectionCell,
+  setCellAttr,
+  splitCell,
   tableEditing,
   toggleHeaderRow,
 } from "prosemirror-tables";
@@ -54,6 +59,7 @@ import {
   setStyle,
   splitKeepingLayout,
 } from "./paragraph.ts";
+import { autoLink, autoLinkOnEnter, smartQuotes } from "./autoformat.ts";
 import { findPlugin } from "./find.ts";
 import { keepPastedStyles, schema } from "./schema.ts";
 import { clearFormatting, stepFontSize, styleMarkViews, type TextStyle, textStyle } from "./text-style.ts";
@@ -97,6 +103,7 @@ export function createEditor(
       ySyncPlugin(fragment),
       yCursorPlugin(live.awareness, { cursorBuilder, selectionBuilder }),
       yUndoPlugin(),
+      keymap({ Enter: autoLinkOnEnter, "Shift-Enter": autoLinkOnEnter }),
       keymap(keys(onLink, onAltText)),
       keymap(baseKeymap),
       typingShortcuts(),
@@ -182,7 +189,9 @@ function keys(onLink: () => void, onAltText: () => void): Record<string, Command
     return true;
   });
   return {
-    "Mod-z": undo,
+    // Right after a change made while typing, such as a curly quote or a
+    // link, Ctrl+Z takes back only that, as in Google Docs.
+    "Mod-z": chainCommands(undoInputRule, undo),
     "Shift-Mod-z": redo,
     "Mod-y": redo,
     "Mod-b": toggleMark(marks["bold"]!),
@@ -233,7 +242,8 @@ function keys(onLink: () => void, onAltText: () => void): Record<string, Command
 }
 
 /** Markdown-style shortcuts at the start of a line: `# ` for a heading,
- * `- ` for a list, `[] ` for a checklist, and so on. */
+ * `- ` for a list, `[] ` for a checklist, and so on, then curly quotes and
+ * links (autoformat.ts). */
 function typingShortcuts() {
   return inputRules({
     rules: [
@@ -259,6 +269,9 @@ function typingShortcuts() {
           .insert(before, nodes["horizontal_rule"]!.create())
           .scrollIntoView();
       }),
+      ...smartQuotes,
+      // Last, since the shortcuts above also end with a space.
+      autoLink,
     ],
   });
 }
@@ -566,6 +579,8 @@ export interface Formatting {
   numbered: boolean;
   quote: boolean;
   table: boolean;
+  /** The selected cells, in a table. */
+  cell: CellFormat | null;
   /** Font, size, colors, superscript, and subscript. */
   text: TextStyle;
 }
@@ -601,8 +616,42 @@ export function formatting(state: EditorState): Formatting {
             : null,
     quote: ancestor($from, nodes["blockquote"]!) !== null,
     table: isInTable(state),
+    cell: cellFormat(state),
     text: textStyle(state),
   };
+}
+
+export interface CellFormat {
+  /** The cells' color, or null for none or for more than one. */
+  color: string | null;
+  /** Whether the selected cells can become one. */
+  merge: boolean;
+  /** Whether the cell is merged, so it can be split again. */
+  split: boolean;
+}
+
+function cellFormat(state: EditorState): CellFormat | null {
+  if (!isInTable(state)) return null;
+  const selection = state.selection;
+  const colors = new Set<string | null>();
+  if (selection instanceof CellSelection) {
+    selection.forEachCell((cell) => colors.add(cell.attrs["background"] as string | null));
+  } else {
+    colors.add(selectionCell(state).nodeAfter?.attrs["background"] as string | null);
+  }
+  return {
+    color: colors.size === 1 ? [...colors][0]! : null,
+    merge: mergeCells(state),
+    split: splitCell(state),
+  };
+}
+
+/** The cell the selection starts in, on the page, for the cell color
+ * picker to open beside. */
+export function selectedCellElement(view: EditorView): HTMLElement | null {
+  if (!isInTable(view.state)) return null;
+  const node = view.nodeDOM(selectionCell(view.state).pos);
+  return node instanceof HTMLElement ? node : null;
 }
 
 const LISTS = () => [nodes["bullet_list"]!, nodes["ordered_list"]!, nodes["check_list"]!];
@@ -739,6 +788,10 @@ export const tableCommands = {
   deleteColumn,
   deleteTable,
   headerRow: toggleHeaderRow,
+  merge: mergeCells,
+  unmerge: splitCell,
+  /** Colors the selected cells, or takes their color off with null. */
+  cellColor: (color: string | null) => setCellAttr("background", color),
 };
 
 export { redo, undo };

@@ -40,6 +40,7 @@ import {
   renameDocument,
 } from "./docs-api.ts";
 import {
+  type CellFormat,
   createEditor,
   FRAGMENT,
   type Formatting,
@@ -52,6 +53,7 @@ import {
   PICTURE_TYPES,
   removeLink,
   type PictureAt,
+  selectedCellElement,
   selectedPicture,
   selectedText,
   selectPicture,
@@ -81,6 +83,7 @@ import {
   LinkIcon,
   MinusIcon,
   NumbersIcon,
+  OutlineIcon,
   PageBreakIcon,
   PictureIcon,
   PlusIcon,
@@ -134,9 +137,18 @@ import {
   setStyle,
   toggleSpace,
 } from "./paragraph.ts";
+import { Outline, readShowOutline, saveShowOutline } from "./outline.tsx";
 import { HEADING_LEVELS, linkFromTyped } from "./schema.ts";
 import { clearFormatting, setColor, setFont, setHighlight, setSize, stepFontSize } from "./text-style.ts";
-import { DocsShortcutsDialog, FindBar, readShowCount, saveShowCount, WordCountBadge, WordCountDialog } from "./tools.tsx";
+import {
+  DocsShortcutsDialog,
+  FindBar,
+  PreferencesDialog,
+  readShowCount,
+  saveShowCount,
+  WordCountBadge,
+  WordCountDialog,
+} from "./tools.tsx";
 
 export function Docs({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
   const path = usePath();
@@ -184,6 +196,10 @@ async function copyAndOpen(id: string | Promise<string>, name: string) {
   }
 }
 
+/** A document just moved to the trash from its own page, which Docs' home
+ * then tells of, with **Undo**. */
+let trashedFromPage: DocumentInfo | null = null;
+
 function DocsHome() {
   const [documents, setDocuments] = useState<DocumentInfo[] | null>(null);
   const [error, setError] = useState("");
@@ -209,6 +225,13 @@ function DocsHome() {
     setDocuments((now) => now && now.map((other) => (other.id === document.id ? document : other)));
   }
 
+  // A document moved to the trash from its own page says so here.
+  useEffect(() => {
+    const document = trashedFromPage;
+    trashedFromPage = null;
+    if (document) trashed(document);
+  }, []);
+
   async function trash(document: DocumentInfo) {
     try {
       await api("DELETE", `/api/drive/items/${document.id}`);
@@ -217,6 +240,10 @@ function DocsHome() {
       return;
     }
     setDocuments((now) => now && now.filter((other) => other.id !== document.id));
+    trashed(document);
+  }
+
+  function trashed(document: DocumentInfo) {
     // Someone else's document goes to its owner's trash, and only the
     // owner can put it back, as in Drive.
     if (document.access !== "owner") {
@@ -477,6 +504,9 @@ function DocumentPage({
   const [counting, setCounting] = useState(false);
   const [showCount, setShowCount] = useState(readShowCount);
   const [listingKeys, setListingKeys] = useState(false);
+  const [choosingPreferences, setChoosingPreferences] = useState(false);
+  const [outlined, setOutlined] = useState(readShowOutline);
+  const [coloringCell, setColoringCell] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const mount = useRef<HTMLDivElement>(null);
@@ -747,6 +777,31 @@ function DocumentPage({
     setCopying(false);
   }
 
+  /** Moves the document to the trash and goes back to Docs' home, which
+   * offers **Undo**, as Google Docs does. Edits not yet saved aren't lost:
+   * the server keeps them until the file is deleted for good, so they're
+   * there again if it's restored. A draft with no file only closes. */
+  async function moveToTrash() {
+    let id: string | null = fileId.current;
+    if (!id && making.current) {
+      try {
+        id = await making.current;
+      } catch {
+        id = null;
+      }
+    }
+    if (id && info) {
+      try {
+        await api("DELETE", `/api/drive/items/${id}`);
+      } catch (problem) {
+        setError(problemText(problem));
+        return;
+      }
+      trashedFromPage = { ...info, id };
+    }
+    navigate("/docs/");
+  }
+
   async function rename(name: string): Promise<string> {
     return renameDocument(await makeFile(), name);
   }
@@ -794,6 +849,12 @@ function DocumentPage({
     } catch {
       tell(t("docs.pasteKeys"));
     }
+  }
+
+  function showOutline(show: boolean) {
+    setOutlined(show);
+    saveShowOutline(show);
+    if (!show) view.current?.focus();
   }
 
   function fullScreen() {
@@ -847,6 +908,7 @@ function DocumentPage({
               label: t("docs.renameMenu"),
               onSelect: () => nameField.current?.focus(),
             },
+            { label: t("drive.toTrash"), onSelect: () => void moveToTrash() },
           ]),
       SEPARATOR,
       ...(readOnly ? [] : [{ label: t("docs.pageSetup"), onSelect: () => setSettingUp(true) }]),
@@ -922,12 +984,13 @@ function DocumentPage({
       { label: t("docs.file"), entries: () => file },
       { label: t("docs.edit"), entries: () => edit },
     ];
-    if (document.fullscreenEnabled) {
-      all.push({
-        label: t("docs.view"),
-        entries: () => [{ label: t("docs.fullScreen"), onSelect: fullScreen }],
-      });
-    }
+    all.push({
+      label: t("docs.view"),
+      entries: () => [
+        { label: t("docs.showOutline"), checked: outlined, onSelect: () => showOutline(!outlined) },
+        ...(document.fullscreenEnabled ? [{ label: t("docs.fullScreen"), onSelect: fullScreen }] : []),
+      ],
+    });
     if (editing && format) {
       all.push(
         {
@@ -963,6 +1026,8 @@ function DocumentPage({
           shortcut: t("docs.wordCountShortcut"),
           onSelect: () => setCounting(true),
         },
+        // What changes as you type only matters to someone who can type.
+        ...(readOnly ? [] : [SEPARATOR, { label: t("docs.preferences"), onSelect: () => setChoosingPreferences(true) }]),
         {
           label: t("docs.shortcutsMenu"),
           shortcut: t("docs.shortcutsShortcut"),
@@ -1092,7 +1157,9 @@ function DocumentPage({
         ],
       },
       { label: t("docs.quote"), onSelect: () => run(toggleQuote()) },
-      ...(format.table ? [{ label: t("docs.tableMenu"), submenu: tableEntries(run) }] : []),
+      ...(format.table
+        ? [{ label: t("docs.tableMenu"), submenu: tableEntries(run, format.cell, () => setColoringCell(true)) }]
+        : []),
       ...(picture
         ? [
             {
@@ -1214,6 +1281,7 @@ function DocumentPage({
             onChoosePictures={() => choosePictures.current?.click()}
             onSpacing={startSpacing}
             onRestart={startRestart}
+            onCellColor={() => setColoringCell(true)}
           />
         )}
         {finding && view.current && (
@@ -1244,7 +1312,21 @@ function DocumentPage({
           {error || statusText || notice}
         </p>
       )}
-      <div class="docs-canvas">
+      <div class={outlined ? "docs-canvas outlined" : "docs-canvas"}>
+        {outlined && view.current && format && <Outline view={view.current} onClose={() => showOutline(false)} />}
+        {!outlined && format && (
+          <div class="docs-side">
+            <button
+              type="button"
+              class="icon-button docs-outline-open"
+              aria-label={t("docs.showOutline")}
+              title={t("docs.showOutline")}
+              onClick={() => showOutline(true)}
+            >
+              <OutlineIcon />
+            </button>
+          </div>
+        )}
         <div class="docs-page" ref={mount} />
       </div>
       {showCount && format && view.current && (
@@ -1260,6 +1342,28 @@ function DocumentPage({
           }}
           onClose={() => {
             setCounting(false);
+            view.current?.focus();
+          }}
+        />
+      )}
+      {coloringCell && view.current && format?.cell && (
+        <ColorMenu
+          label={t("docs.cellColorTitle")}
+          noneLabel={t("docs.colorNone")}
+          color={format.cell.color}
+          under={selectedCellElement(view.current) ?? view.current.dom}
+          byKeyboard
+          onPick={(picked) => run(tableCommands.cellColor(picked))}
+          onClose={() => {
+            setColoringCell(false);
+            view.current?.focus();
+          }}
+        />
+      )}
+      {choosingPreferences && (
+        <PreferencesDialog
+          onClose={() => {
+            setChoosingPreferences(false);
             view.current?.focus();
           }}
         />
@@ -1836,8 +1940,17 @@ function spacingEntries(layout: Layout, run: Run, onSpacing: () => void): MenuEn
   ];
 }
 
-function tableEntries(run: Run): MenuEntry[] {
+/** The table menu's actions. Merging shows once more than one cell is
+ * selected, by dragging across them or Shift and the arrow keys, and
+ * unmerging on a merged cell. */
+function tableEntries(run: Run, cell: CellFormat | null, onCellColor: () => void): MenuEntry[] {
+  const merging: MenuEntry[] = [
+    ...(cell?.merge ? [{ label: t("docs.mergeCells"), onSelect: () => run(tableCommands.merge) }] : []),
+    ...(cell?.split ? [{ label: t("docs.unmergeCells"), onSelect: () => run(tableCommands.unmerge) }] : []),
+  ];
   return [
+    ...merging,
+    ...(merging.length ? [SEPARATOR] : []),
     { label: t("docs.rowAbove"), onSelect: () => run(tableCommands.rowAbove) },
     { label: t("docs.rowBelow"), onSelect: () => run(tableCommands.rowBelow) },
     {
@@ -1853,6 +1966,7 @@ function tableEntries(run: Run): MenuEntry[] {
       label: t("docs.headerRow"),
       onSelect: () => run(tableCommands.headerRow),
     },
+    { label: t("docs.cellColor"), onSelect: onCellColor },
     SEPARATOR,
     {
       label: t("docs.deleteRow"),
@@ -1891,6 +2005,7 @@ function Toolbar({
   onChoosePictures,
   onSpacing,
   onRestart,
+  onCellColor,
 }: {
   format: Formatting;
   run: Run;
@@ -1898,6 +2013,7 @@ function Toolbar({
   onChoosePictures: () => void;
   onSpacing: () => void;
   onRestart: () => void;
+  onCellColor: () => void;
 }) {
   const [tableMenu, setTableMenu] = useState<{
     place: MenuPlace;
@@ -2036,7 +2152,7 @@ function Toolbar({
       {tableMenu && (
         <Menu
           label={t("docs.tableMenu")}
-          entries={tableEntries(run)}
+          entries={tableEntries(run, format.cell, onCellColor)}
           place={tableMenu.place}
           byKeyboard={tableMenu.byKeyboard}
           onClose={() => setTableMenu(null)}

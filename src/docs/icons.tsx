@@ -200,3 +200,10 @@ export const DownIcon = () => (
     <path d="m7 9.5 5 5 5-5" {...line} />
   </Icon>
 );
+
+/** Lines indented under one another: the document's outline. */
+export const OutlineIcon = () => (
+  <Icon>
+    <path d="M4.5 6.5h15M8 12h11.5M11.5 17.5h8" {...line} />
+  </Icon>
+);
