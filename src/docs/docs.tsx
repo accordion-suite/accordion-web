@@ -274,11 +274,10 @@ function DocsHome() {
       { label: t("docs.copyMenu"), onSelect: () => setCopying(document) },
     ];
     if (document.access !== "viewer") {
-      entries.push(
-        { label: t("drive.rename"), onSelect: () => setRenaming(document) },
-        SEPARATOR,
-        { label: t("drive.toTrash"), onSelect: () => void trash(document) },
-      );
+      entries.push({ label: t("drive.rename"), onSelect: () => setRenaming(document) }, SEPARATOR, {
+        label: t("drive.toTrash"),
+        onSelect: () => void trash(document),
+      });
     }
     return entries;
   }
@@ -1196,7 +1195,13 @@ function DocumentPage({
       onSignOut={onSignOut}
       className="docs-top-bar"
       brand={
-        <a class="docs-home-link" href="/docs/" title={t("docs.backToDocs")} aria-label={t("docs.backToDocs")} onClick={followLink}>
+        <a
+          class="docs-home-link"
+          href="/docs/"
+          title={t("docs.backToDocs")}
+          aria-label={t("docs.backToDocs")}
+          onClick={followLink}
+        >
           <DocIcon />
         </a>
       }
@@ -1241,14 +1246,22 @@ function DocumentPage({
     <div class="docs-document">
       {bar(
         <div class="docs-head">
-          <DocumentName
-            info={info}
-            field={nameField}
-            rename={rename}
-            onRenamed={(name) => setInfo({ ...info, name })}
-            onError={(problem) => setError(t("docs.renameFailed", { problem }))}
-          />
-          {readOnly && <span class="docs-badge">{t("docs.viewOnly")}</span>}
+          {/* The menus sit under the name, as in Google Docs. */}
+          <div class="docs-title">
+            <div class="docs-title-row">
+              <DocumentName
+                info={info}
+                field={nameField}
+                rename={rename}
+                onRenamed={(name) => setInfo({ ...info, name })}
+                onError={(problem) => setError(t("docs.renameFailed", { problem }))}
+              />
+              {readOnly && <span class="docs-badge">{t("docs.viewOnly")}</span>}
+            </div>
+            <div class="docs-menus">
+              <MenuBar label={t("docs.menus")} menus={menus()} />
+            </div>
+          </div>
           <span class="spacer" />
           {visitors.length > 0 && (
             <span
@@ -1267,9 +1280,6 @@ function DocumentPage({
           </button>
         </div>,
       )}
-      <div class="docs-menus">
-        <MenuBar label={t("docs.menus")} menus={menus()} />
-      </div>
       {/* The find panel hangs under the toolbar, and both stay in view as
           the page scrolls. */}
       <div class="docs-tools">
@@ -1329,9 +1339,7 @@ function DocumentPage({
         )}
         <div class="docs-page" ref={mount} />
       </div>
-      {showCount && format && view.current && (
-        <WordCountBadge state={view.current.state} onOpen={() => setCounting(true)} />
-      )}
+      {showCount && format && view.current && <WordCountBadge state={view.current.state} onOpen={() => setCounting(true)} />}
       {counting && view.current && (
         <WordCountDialog
           state={view.current.state}
@@ -1583,7 +1591,11 @@ function PageSetupDialog({
           }
           const wanted: PageSetup = { size, landscape, margins };
           const [width, height] = pagePoints(wanted);
-          if (margins[1] + margins[3] > width - 72 || margins[0] + margins[2] > height - 72 || margins.some((points) => points > 288)) {
+          if (
+            margins[1] + margins[3] > width - 72 ||
+            margins[0] + margins[2] > height - 72 ||
+            margins.some((points) => points > 288)
+          ) {
             setProblem(t("docs.marginsTooBig", { most: fromPoints(288, inches), unit }));
             return;
           }

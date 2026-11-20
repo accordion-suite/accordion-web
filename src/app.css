@@ -5063,9 +5063,32 @@ button.checklist-add {
   height: 32px;
 }
 
-/* The menus under the top bar, lined up with the icon. */
+/* The name with the menus under it, both lined up after the icon. The bar
+   grows to fit them. */
+.docs-top-bar {
+  height: auto;
+  min-height: var(--top-bar-height);
+  padding-block: 4px;
+}
+
+.docs-title {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.docs-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The first menu's word starts where the name's does. */
 .docs-menus {
-  padding: 0 12px 4px;
+  min-width: 0;
+  margin-left: 1px;
 }
 
 .docs-head .docs-share {
@@ -6129,10 +6152,6 @@ button.checklist-add {
     gap: 4px;
   }
 
-  .docs-menus {
-    padding: 0 4px 4px;
-  }
-
   .docs-head .docs-share {
     padding: 8px 14px;
   }
@@ -6258,6 +6277,20 @@ dialog.docs-open-dialog {
   /* The phone's Back takes its place. */
   .docs-home-link {
     display: none;
+  }
+
+  /* The menus get the whole width under the name and Share. */
+  .docs-head {
+    flex-wrap: wrap;
+  }
+
+  .docs-title {
+    display: contents;
+  }
+
+  .docs-menus {
+    order: 1;
+    flex-basis: 100%;
   }
 }
 
