@@ -187,3 +187,16 @@ export const PageBreakIcon = () => (
     <path d="M6 3.5v5h12v-5M6 20.5v-5h12v5M3.5 12h2.5M9 12h2M13 12h2M18 12h2.5" {...line} />
   </Icon>
 );
+
+/** A caret pointing up, for the match before, and down, for the next. */
+export const UpIcon = () => (
+  <Icon>
+    <path d="m7 14.5 5-5 5 5" {...line} />
+  </Icon>
+);
+
+export const DownIcon = () => (
+  <Icon>
+    <path d="m7 9.5 5 5 5-5" {...line} />
+  </Icon>
+);

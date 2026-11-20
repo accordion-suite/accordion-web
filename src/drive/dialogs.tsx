@@ -734,7 +734,13 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
 
 /** Keys pressed together, such as "Ctrl+A"; one after the other, such as
  * Alt+C then F; or either of two. */
-type Keys = string | { then: readonly [string, string] } | { or: readonly [Keys, Keys] };
+export type Keys = string | { then: readonly [string, string] } | { or: readonly [Keys, Keys] };
+
+/** A group of shortcuts with its heading, such as Docs' text formatting. */
+export interface ShortcutGroup {
+  title: string;
+  shortcuts: readonly (readonly [Keys, string])[];
+}
 
 /** Drive's keyboard shortcuts, by what they're for. They follow Google
  * Drive's, and file managers' where Drive has none. Ctrl is Cmd on a Mac,
@@ -848,20 +854,24 @@ function KeysShown({ keys }: { keys: Keys }) {
   );
 }
 
-export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
+/** Lists keyboard shortcuts: Drive's, or another app's `groups`. */
+export function ShortcutsDialog({ groups, onClose }: { groups?: readonly ShortcutGroup[]; onClose: () => void }) {
+  const shown =
+    groups ??
+    SHORTCUTS.map(([title, keys]) => ({ title: t(title), shortcuts: keys.map(([key, does]) => [key, t(does)] as const) }));
   return (
     <Dialog title={t("shortcuts.title")} class="shortcuts" onClose={onClose}>
       <p class="hint">{t("shortcuts.mac")}</p>
-      {SHORTCUTS.map(([group, keys]) => (
-        <section key={group}>
-          <h3>{t(group)}</h3>
+      {shown.map(({ title, shortcuts }) => (
+        <section key={title}>
+          <h3>{title}</h3>
           <dl>
-            {keys.map(([key, does]) => (
+            {shortcuts.map(([key, does]) => (
               <div key={does}>
                 <dt>
                   <KeysShown keys={key} />
                 </dt>
-                <dd>{t(does)}</dd>
+                <dd>{does}</dd>
               </div>
             ))}
           </dl>

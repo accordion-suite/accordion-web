@@ -136,6 +136,7 @@ import {
 } from "./paragraph.ts";
 import { HEADING_LEVELS, linkFromTyped } from "./schema.ts";
 import { clearFormatting, setColor, setFont, setHighlight, setSize, stepFontSize } from "./text-style.ts";
+import { DocsShortcutsDialog, FindBar, readShowCount, saveShowCount, WordCountBadge, WordCountDialog } from "./tools.tsx";
 
 export function Docs({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
   const path = usePath();
@@ -470,6 +471,12 @@ function DocumentPage({
   const [copying, setCopying] = useState(false);
   const [spacing, setSpacing] = useState<Layout | null>(null);
   const [restarting, setRestarting] = useState<number | null>(null);
+  // The find panel, with what it looked for first and how many times Ctrl+F
+  // has asked for it, so asking again puts focus back in it.
+  const [finding, setFinding] = useState<{ initial: string; request: number } | null>(null);
+  const [counting, setCounting] = useState(false);
+  const [showCount, setShowCount] = useState(readShowCount);
+  const [listingKeys, setListingKeys] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const mount = useRef<HTMLDivElement>(null);
@@ -599,14 +606,23 @@ function DocumentPage({
     [width, height, ...page.margins].forEach((points, index) => element.style.setProperty(properties[index]!, `${points}pt`));
   }, [page, info]);
 
-  // Ctrl+P prints the document, not the editor around it, and Ctrl+O opens
-  // another document rather than a file from the computer.
+  // Ctrl+P prints the document, not the editor around it, Ctrl+O opens
+  // another document rather than a file from the computer, and Ctrl+F finds
+  // in the document, as in Google Docs.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
       const key = event.key.toLowerCase();
-      if (key === "p") void print();
+      // A dialog that's open keeps its keys, so Ctrl+F doesn't open the
+      // find panel behind it.
+      if (document.querySelector("dialog[open]") && ["f", "h", "/"].includes(key)) return;
+      if (event.shiftKey) {
+        if (event.code === "KeyC") setCounting(true);
+        else return;
+      } else if (key === "p") void print();
       else if (key === "o") setChoosing(true);
+      else if (key === "f" || key === "h") startFind();
+      else if (key === "/") setListingKeys(true);
       else return;
       event.preventDefault();
     };
@@ -662,6 +678,28 @@ function DocumentPage({
     if (!editor) return;
     command(editor.state, editor.dispatch, editor);
     editor.focus();
+  }
+
+  /** Runs a command while focus stays where it is, such as in the find
+   * panel. */
+  function apply(command: Command) {
+    const editor = view.current;
+    if (editor) command(editor.state, editor.dispatch, editor);
+  }
+
+  /** Opens the find panel, looking for the selected words if there are
+   * some, or puts focus back in it. */
+  function startFind() {
+    const editor = view.current;
+    if (!editor) return;
+    const selected = selectedText(editor.state);
+    const initial = selected.length <= 100 && !selected.includes("\n") ? selected : "";
+    setFinding((now) => (now ? { ...now, request: now.request + 1 } : { initial, request: 0 }));
+  }
+
+  function stopFind() {
+    setFinding(null);
+    view.current?.focus();
   }
 
   function startLink() {
@@ -831,6 +869,8 @@ function DocumentPage({
             shortcut: t("docs.selectAllShortcut"),
             onSelect: () => run(selectAll),
           },
+          SEPARATOR,
+          { label: t("docs.find"), shortcut: t("docs.findShortcut"), onSelect: startFind },
         ]
       : [
           {
@@ -871,6 +911,12 @@ function DocumentPage({
             onSelect: () => run(selectAll),
           },
           { label: t("docs.delete"), onSelect: () => run(deleteSelection) },
+          SEPARATOR,
+          {
+            label: t("docs.findReplace"),
+            shortcut: t("docs.findReplaceShortcut"),
+            onSelect: startFind,
+          },
         ];
     const all: MenuBarMenu[] = [
       { label: t("docs.file"), entries: () => file },
@@ -909,6 +955,21 @@ function DocumentPage({
         { label: t("docs.format"), entries: () => formatEntries(format) },
       );
     }
+    all.push({
+      label: t("docs.tools"),
+      entries: () => [
+        {
+          label: t("docs.wordCount"),
+          shortcut: t("docs.wordCountShortcut"),
+          onSelect: () => setCounting(true),
+        },
+        {
+          label: t("docs.shortcutsMenu"),
+          shortcut: t("docs.shortcutsShortcut"),
+          onSelect: () => setListingKeys(true),
+        },
+      ],
+    });
     return all;
   }
 
@@ -1142,16 +1203,30 @@ function DocumentPage({
       <div class="docs-menus">
         <MenuBar label={t("docs.menus")} menus={menus()} />
       </div>
-      {!readOnly && format && (
-        <Toolbar
-          format={format}
-          run={run}
-          onLink={startLink}
-          onChoosePictures={() => choosePictures.current?.click()}
-          onSpacing={startSpacing}
-          onRestart={startRestart}
-        />
-      )}
+      {/* The find panel hangs under the toolbar, and both stay in view as
+          the page scrolls. */}
+      <div class="docs-tools">
+        {!readOnly && format && (
+          <Toolbar
+            format={format}
+            run={run}
+            onLink={startLink}
+            onChoosePictures={() => choosePictures.current?.click()}
+            onSpacing={startSpacing}
+            onRestart={startRestart}
+          />
+        )}
+        {finding && view.current && (
+          <FindBar
+            state={view.current.state}
+            readOnly={readOnly}
+            initial={finding.initial}
+            focusRequest={finding.request}
+            apply={apply}
+            onClose={stopFind}
+          />
+        )}
+      </div>
       <input
         ref={choosePictures}
         type="file"
@@ -1172,6 +1247,32 @@ function DocumentPage({
       <div class="docs-canvas">
         <div class="docs-page" ref={mount} />
       </div>
+      {showCount && format && view.current && (
+        <WordCountBadge state={view.current.state} onOpen={() => setCounting(true)} />
+      )}
+      {counting && view.current && (
+        <WordCountDialog
+          state={view.current.state}
+          showing={showCount}
+          onShow={(show) => {
+            setShowCount(show);
+            saveShowCount(show);
+          }}
+          onClose={() => {
+            setCounting(false);
+            view.current?.focus();
+          }}
+        />
+      )}
+      {listingKeys && (
+        <DocsShortcutsDialog
+          readOnly={readOnly}
+          onClose={() => {
+            setListingKeys(false);
+            view.current?.focus();
+          }}
+        />
+      )}
       {linking && (
         <LinkDialog
           href={linking.href}

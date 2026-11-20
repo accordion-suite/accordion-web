@@ -54,6 +54,7 @@ import {
   setStyle,
   splitKeepingLayout,
 } from "./paragraph.ts";
+import { findPlugin } from "./find.ts";
 import { keepPastedStyles, schema } from "./schema.ts";
 import { clearFormatting, stepFontSize, styleMarkViews, type TextStyle, textStyle } from "./text-style.ts";
 
@@ -100,6 +101,7 @@ export function createEditor(
       keymap(baseKeymap),
       typingShortcuts(),
       listsPlaceText(),
+      findPlugin(),
       dropCursor(),
       gapCursor(),
       columnResizing(),

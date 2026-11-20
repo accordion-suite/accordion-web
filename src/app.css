@@ -5120,10 +5120,15 @@ button.checklist-add {
   font-weight: 600;
 }
 
-.docs-toolbar {
+/* The toolbar and the find panel under it, which stay in view as the page
+   scrolls. */
+.docs-tools {
   position: sticky;
   top: 0;
   z-index: 2;
+}
+
+.docs-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -5316,6 +5321,109 @@ button.checklist-add {
 
 .docs-status {
   margin: 8px 16px 0;
+}
+
+/* Find and replace, at the top right over the page, as in Google Docs. */
+.docs-find {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 24px;
+  box-sizing: border-box;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 12px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.docs-find-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.docs-find-row .docs-find-field {
+  flex: 1;
+  min-width: 0;
+  margin-right: 6px;
+}
+
+.docs-find-count {
+  flex: none;
+  min-width: 4.5em;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.docs-find-row .icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.docs-find .docs-find-case {
+  margin: 4px 0 8px;
+}
+
+.docs-find > .docs-find-field {
+  box-sizing: border-box;
+  width: calc(100% - 8px);
+}
+
+.docs-find-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 8px 8px 0 0;
+}
+
+/* Every match is shaded, and the one you're on more strongly, on the
+   white page in both themes. */
+.docs-find-match {
+  background: rgb(251 188 4 / 0.35);
+}
+
+.docs-find-match.current {
+  background: rgb(251 140 0 / 0.6);
+}
+
+/* The word count while typing, at the bottom left, as in Google Docs. */
+.docs-count-badge {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 2;
+  padding: 6px 12px;
+  color: var(--text);
+  font-size: 0.875rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.docs-counts {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.docs-counts th,
+.docs-counts td {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.docs-counts th {
+  font-weight: normal;
+  text-align: left;
+}
+
+.docs-counts td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The print page waits here, unseen, while the browser prints it. */
@@ -5886,6 +5994,10 @@ button.checklist-add {
 
   .docs-head .docs-share {
     padding: 8px 14px;
+  }
+
+  .docs-find {
+    right: 8px;
   }
 
   /* One row that scrolls sideways, so the page stays in view. */
