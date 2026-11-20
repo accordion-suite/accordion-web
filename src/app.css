@@ -5058,9 +5058,15 @@ button.checklist-add {
   background: var(--surface);
 }
 
+/* As tall as the name and the menus together. A thinner line keeps it as
+   light as the icons around it at this size. */
 .docs-home-link svg {
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
+}
+
+.docs-home-link svg path {
+  stroke-width: 1.4;
 }
 
 /* The name with the menus under it, both lined up after the icon. The bar
