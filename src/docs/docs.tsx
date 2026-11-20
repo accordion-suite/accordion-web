@@ -26,6 +26,7 @@ import { followLink, navigate, usePath } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
 import {
   addPicture,
+  copyDocument,
   createDocument,
   type DocumentInfo,
   documentPath,
@@ -432,6 +433,8 @@ function DocumentPage({
   const [sharing, setSharing] = useState<Item | null>(null);
   const [page, setPage] = useState<PageSetup | null>(null);
   const [settingUp, setSettingUp] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [spacing, setSpacing] = useState<Layout | null>(null);
   const [restarting, setRestarting] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -563,13 +566,16 @@ function DocumentPage({
     [width, height, ...page.margins].forEach((points, index) => element.style.setProperty(properties[index]!, `${points}pt`));
   }, [page, info]);
 
-  // Ctrl+P prints the document, not the editor around it.
+  // Ctrl+P prints the document, not the editor around it, and Ctrl+O opens
+  // another document rather than a file from the computer.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "p") {
-        event.preventDefault();
-        void print();
-      }
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "p") void print();
+      else if (key === "o") setChoosing(true);
+      else return;
+      event.preventDefault();
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
@@ -665,6 +671,22 @@ function DocumentPage({
     }
   }
 
+  /** Makes a copy and opens it in a new tab, as Google Docs does. The tab
+   * opens at once, while the press still lets a page open one. */
+  async function copy(name: string) {
+    const tab = window.open("", "_blank");
+    if (tab) tab.opener = null;
+    try {
+      const made = await copyDocument(await makeFile(), name);
+      if (tab) tab.location.href = documentPath(made.id);
+      else navigate(documentPath(made.id));
+      setCopying(false);
+    } catch (problem) {
+      tab?.close();
+      throw problem;
+    }
+  }
+
   async function rename(name: string): Promise<string> {
     return renameDocument(await makeFile(), name);
   }
@@ -728,6 +750,12 @@ function DocumentPage({
         label: t("docs.newDocument"),
         onSelect: () => window.open(NEW_DOCUMENT_PATH, "_blank", "noopener"),
       },
+      {
+        label: t("docs.openMenu"),
+        shortcut: t("docs.openShortcut"),
+        onSelect: () => setChoosing(true),
+      },
+      { label: t("docs.copyMenu"), onSelect: () => setCopying(true) },
       SEPARATOR,
       { label: t("docs.shareMenu"), onSelect: () => void share() },
       {
@@ -1154,6 +1182,17 @@ function DocumentPage({
         />
       )}
       {sharing && <ShareDialog item={sharing} onClose={() => setSharing(null)} />}
+      {choosing && <OpenDialog current={fileId.current} onClose={() => setChoosing(false)} />}
+      {copying && info && (
+        <NameDialog
+          title={t("docs.copyTitle")}
+          submit={t("docs.copySubmit")}
+          initial={t("docs.copyName", { name: info.name })}
+          file
+          onSubmit={copy}
+          onClose={() => setCopying(false)}
+        />
+      )}
       {spacing && (
         <SpacingDialog
           layout={spacing}
@@ -2100,6 +2139,84 @@ function ToolButton({
 
 /** A picture's alt text: what it shows, for someone who can't see it, such
  * as a person using a screen reader. Downloads and the file keep it. */
+/** **File** > **Open**: the reader's documents and the ones shared with
+ * them, newest first, found by name. Each is a link, so it opens in a new
+ * tab too. */
+function OpenDialog({ current, onClose }: { current: string | null; onClose: () => void }) {
+  const [documents, setDocuments] = useState<DocumentInfo[] | null>(null);
+  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    listDocuments().then(
+      (found) => setDocuments(found.documents),
+      () => setError(t("docs.loadFailed")),
+    );
+  }, []);
+  const words = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const shown = documents?.filter((document) => words.every((word) => document.name.toLocaleLowerCase().includes(word)));
+  // The open document is already here.
+  const go = (document: DocumentInfo) => (document.id === current ? onClose() : navigate(documentPath(document.id)));
+
+  return (
+    <Dialog title={t("docs.openTitle")} class="docs-open-dialog" onClose={onClose}>
+      <input
+        type="search"
+        class="docs-open-search"
+        aria-label={t("docs.openSearch")}
+        placeholder={t("docs.openSearch")}
+        autoFocus
+        value={query}
+        onInput={(event) => setQuery(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          // Enter opens the first that matches.
+          if (event.key !== "Enter" || !shown?.[0]) return;
+          event.preventDefault();
+          go(shown[0]);
+        }}
+      />
+      {error ? (
+        <p class="error" role="alert">
+          {error}
+        </p>
+      ) : !shown ? (
+        <p class="loading">{t("shell.loading")}</p>
+      ) : shown.length === 0 ? (
+        <p class="hint">{documents?.length ? t("docs.openNoMatch") : t("docs.openNone")}</p>
+      ) : (
+        <ul class="docs-open-list">
+          {shown.map((document) => (
+            <li key={document.id}>
+              <a
+                href={documentPath(document.id)}
+                aria-current={document.id === current ? "page" : undefined}
+                onClick={(event) => {
+                  if (document.id !== current) return followLink(event);
+                  event.preventDefault();
+                  onClose();
+                }}
+              >
+                <span class="docs-open-icon" aria-hidden="true">
+                  <DocIcon />
+                </span>
+                <span class="docs-open-name">{document.name}</span>
+                <span class="docs-open-meta">
+                  {document.owner ? `${document.owner} · ${formatDate(document.modified_at)}` : formatDate(document.modified_at)}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div class="dialog-buttons">
+        <span class="spacer" />
+        <button type="button" class="secondary" onClick={onClose}>
+          {t("docs.cancel")}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
 function AltTextDialog({ alt, onApply, onClose }: { alt: string; onApply: (alt: string) => void; onClose: () => void }) {
   const [typed, setTyped] = useState(alt);
   return (

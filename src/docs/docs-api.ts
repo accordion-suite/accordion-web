@@ -41,6 +41,13 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(text);
 }
 
+/** Copies a document, with everyone's latest edits, beside it if the
+ * reader can add to its folder and to their own Docs if not. A name that's
+ * taken gets a number. */
+export function copyDocument(id: string, name: string): Promise<DocumentInfo> {
+  return api("POST", `/api/docs/documents/${id}/copy`, { name });
+}
+
 export function openDocument(id: string): Promise<DocumentInfo> {
   return api("GET", `/api/docs/documents/${id}`);
 }

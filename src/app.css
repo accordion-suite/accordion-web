@@ -5914,6 +5914,78 @@ button.checklist-add {
   min-height: 100dvh;
 }
 
+/* File > Open: the documents in a list that scrolls under the search box. */
+dialog.docs-open-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.docs-open-search {
+  width: 100%;
+}
+
+.docs-open-list {
+  max-height: min(420px, calc(100dvh - 260px));
+  margin: 12px -8px 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.docs-open-list a {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.docs-open-list a:hover,
+.docs-open-list a:focus-visible {
+  background: var(--surface);
+}
+
+.docs-open-list a[aria-current] {
+  font-weight: 500;
+}
+
+.docs-open-icon {
+  display: flex;
+  color: var(--kind-document);
+}
+
+.docs-open-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.docs-open-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docs-open-meta {
+  color: var(--muted);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+/* On a phone, when it changed goes under the name. */
+@media (max-width: 600px) {
+  .docs-open-list a {
+    grid-template-columns: 24px 1fr;
+    row-gap: 0;
+  }
+
+  .docs-open-meta {
+    grid-column: 2;
+  }
+}
+
 /* On a phone, the document gets a row of its own under the app picker, the
    bell, and the account. */
 @media (max-width: 600px) {
