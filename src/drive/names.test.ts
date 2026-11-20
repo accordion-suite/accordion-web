@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { freeName, stemLength } from "./names.ts";
+import { extensionChange, freeName, stemLength } from "./names.ts";
 
 test("selects a file's name without its extension", () => {
   assert.equal(stemLength("Beach day.jpg"), "Beach day".length);
@@ -34,4 +34,21 @@ test("counts up from a number the name already has", () => {
 test("numbers a name without an extension at its end", () => {
   assert.equal(freeName("Photos", new Set(["Photos"])), "Photos (1)");
   assert.equal(freeName(".config", new Set([".config"])), ".config (1)");
+});
+
+test("notices a removed or changed extension", () => {
+  assert.deepEqual(extensionChange("Plans.html", "Plans"), { kind: "removed", before: ".html", after: "" });
+  assert.deepEqual(extensionChange("Plans.html", "Plans.txt"), { kind: "changed", before: ".html", after: ".txt" });
+  assert.deepEqual(extensionChange("Beach.jpg", "Beach v1.2"), { kind: "removed", before: ".jpg", after: "" });
+  assert.deepEqual(extensionChange("Clip.mp4", "Clip.mkv"), { kind: "changed", before: ".mp4", after: ".mkv" });
+});
+
+test("doesn't ask when the extension stays, is added, or isn't one", () => {
+  assert.equal(extensionChange("Plans.html", "Old plans.html"), null);
+  assert.equal(extensionChange("Beach.JPG", "Beach.jpg"), null);
+  assert.equal(extensionChange("README", "README.md"), null);
+  assert.equal(extensionChange(".bashrc", "bashrc"), null);
+  assert.equal(extensionChange("Budget v1.2", "Budget v1.3"), null);
+  assert.equal(extensionChange("Meeting 3.5 notes", "Meeting notes"), null);
+  assert.equal(extensionChange("Archive.001", "Archive"), null);
 });

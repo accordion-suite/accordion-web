@@ -14,7 +14,7 @@ import { ItemIcon } from "./icons.tsx";
 import { LinksSection } from "./links.tsx";
 import { type Access, pathTo, whoHasAccess } from "./store.ts";
 import { keptFor, useRetention } from "./retention.ts";
-import { freeName, stemLength } from "./names.ts";
+import { extensionChange, freeName, stemLength } from "./names.ts";
 import { type Consent, type Person as Leaving, askToMove, everyone, moveWithConsent } from "./move-check.tsx";
 import { folderName, isAppPlace, loadPlaces } from "./places.ts";
 
@@ -25,6 +25,7 @@ export function NameDialog({
   submit,
   initial = "",
   file = false,
+  askExtension = false,
   onSubmit,
   onClose,
 }: {
@@ -33,18 +34,28 @@ export function NameDialog({
   initial?: string;
   /** Selects only the part before the extension. */
   file?: boolean;
+  /** Asks before removing or changing the extension `initial` has, since
+   * the file might then open in a different app. */
+  askExtension?: boolean;
   onSubmit: (name: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [name, setName] = useState(initial);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState<ReturnType<typeof extensionChange>>(null);
   const input = useRef<HTMLInputElement>(null);
+  const keep = useRef<HTMLButtonElement>(null);
 
+  // Runs again after the question, so the name box has focus once more.
   useEffect(() => {
+    if (asking) {
+      keep.current?.focus();
+      return;
+    }
     input.current?.focus();
-    input.current?.setSelectionRange(0, file ? stemLength(initial) : initial.length);
-  }, []);
+    input.current?.setSelectionRange(0, file ? stemLength(name) : name.length);
+  }, [asking]);
 
   async function save(event: TargetedSubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,6 +63,16 @@ export function NameDialog({
       setError(t("drive.nameNeeded"));
       return;
     }
+    const change = askExtension ? extensionChange(initial, name.trim()) : null;
+    if (change) {
+      setError("");
+      setAsking(change);
+      return;
+    }
+    await finish();
+  }
+
+  async function finish() {
     setBusy(true);
     setError("");
     try {
@@ -59,7 +80,44 @@ export function NameDialog({
     } catch (problem) {
       setError(message(problem));
       setBusy(false);
+      setAsking(null);
     }
+  }
+
+  if (asking) {
+    const { kind, before, after } = asking;
+    return (
+      <Dialog title={title} onClose={onClose}>
+        <p>
+          {kind === "removed"
+            ? t("drive.extensionRemoveAsk", { name: name.trim(), before })
+            : t("drive.extensionChangeAsk", { before, after })}
+        </p>
+        <p>{t("drive.extensionHelp")}</p>
+        <div class="dialog-buttons">
+          <button type="button" disabled={busy} onClick={finish}>
+            {kind === "removed" ? t("drive.extensionRemove", { before }) : t("drive.extensionUse", { after })}
+          </button>
+          {/* Focus starts on the choice that keeps the file opening as it
+              did. It puts the old extension back in place of the new one,
+              or at the end if there's none, then goes back to the name box,
+              so nothing is renamed until it's checked. */}
+          <button
+            ref={keep}
+            type="button"
+            class="secondary"
+            disabled={busy}
+            onClick={() => {
+              const typed = name.trim();
+              setName((kind === "changed" ? typed.slice(0, stemLength(typed)) : typed) + before);
+              setAsking(null);
+            }}
+          >
+            {t("drive.extensionKeep", { before })}
+          </button>
+        </div>
+      </Dialog>
+    );
   }
 
   return (

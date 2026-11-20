@@ -160,6 +160,13 @@ export const en = {
   "drive.rename": "Rename",
   "drive.renameNamed": "Rename {name}",
   "drive.renamed": "Renamed to {name}.",
+  "drive.extensionRemoveAsk": "Name it {name}, without {before} at the end?",
+  "drive.extensionChangeAsk": "Change the end of the name from {before} to {after}?",
+  "drive.extensionHelp":
+    "The part after the last dot, called the extension, tells apps what kind of file it is. If it changes, the file might open in a different app, or not open at all.",
+  "drive.extensionRemove": "Remove {before}",
+  "drive.extensionUse": "Use {after}",
+  "drive.extensionKeep": "Keep {before}",
   "drive.move": "Move",
   "drive.moveOne": "Move {name}",
   "drive.moveMany": { one: "Move {count} item", other: "Move {count} items" },

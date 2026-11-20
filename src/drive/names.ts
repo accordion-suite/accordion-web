@@ -28,3 +28,27 @@ export function freeName(name: string, taken: ReadonlySet<string>): string {
     if (!taken.has(next)) return next;
   }
 }
+
+/** What a rename does to a file's extension, so Drive can ask first, as
+ * Windows and macOS do: "removed" or "changed", with the extensions before
+ * and after, or null when it stays (ignoring capitals) or is only added.
+ *
+ * Only an ending that looks like an extension counts: up to 12 letters or
+ * digits with at least one letter, such as ".html" or ".mp4". That keeps
+ * "Budget v1.2" and "Meeting 3.5 notes" from counting as extensions, so
+ * renaming them doesn't ask. */
+export function extensionChange(
+  before: string,
+  after: string,
+): { kind: "removed" | "changed"; before: string; after: string } | null {
+  const from = extensionOf(before);
+  if (!from) return null;
+  const to = extensionOf(after);
+  if (!to) return { kind: "removed", before: from, after: "" };
+  return to.toLowerCase() === from.toLowerCase() ? null : { kind: "changed", before: from, after: to };
+}
+
+function extensionOf(name: string): string {
+  const extension = name.slice(stemLength(name));
+  return /^\.(?=[\p{L}\p{N}]*\p{L})[\p{L}\p{N}]{1,12}$/u.test(extension) ? extension : "";
+}

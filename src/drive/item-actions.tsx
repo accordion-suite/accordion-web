@@ -275,6 +275,7 @@ export function useItemActions({
         submit={t("drive.rename")}
         initial={open.item.name}
         file={open.item.kind === "file"}
+        askExtension={open.item.kind === "file"}
         onSubmit={async (name) => {
           const { id, name: before } = open.item;
           await api("PATCH", `/api/drive/items/${id}`, { name });
