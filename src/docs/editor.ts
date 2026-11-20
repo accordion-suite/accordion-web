@@ -2,14 +2,24 @@
 // Yjs fragment with y-prosemirror, so everyone's edits merge, with the
 // commands the toolbar and keys use.
 
-import { baseKeymap, chainCommands, exitCode, lift, setBlockType, toggleMark, wrapIn } from "prosemirror-commands";
+import {
+  baseKeymap,
+  chainCommands,
+  createParagraphNear,
+  exitCode,
+  lift,
+  liftEmptyBlock,
+  newlineInCode,
+  toggleMark,
+  wrapIn,
+} from "prosemirror-commands";
 import { dropCursor } from "prosemirror-dropcursor";
 import { gapCursor } from "prosemirror-gapcursor";
 import { InputRule, inputRules, textblockTypeInputRule, wrappingInputRule } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
 import type { MarkType, Node, NodeType, ResolvedPos } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from "prosemirror-schema-list";
-import { type Command, EditorState, Selection, TextSelection, type Transaction } from "prosemirror-state";
+import { type Command, EditorState, NodeSelection, Selection, TextSelection, type Transaction } from "prosemirror-state";
 import {
   addColumnAfter,
   addColumnBefore,
@@ -30,7 +40,22 @@ import type * as Y from "yjs";
 
 import { CARET_COLORS, type LiveDocument } from "../shell/coedit.ts";
 import { t } from "../i18n.ts";
-import { schema } from "./schema.ts";
+import { addFonts } from "./font-faces.ts";
+import type { Align, Layout } from "./layout.ts";
+import {
+  changeIndent,
+  currentLayout,
+  currentListStyle,
+  currentStyle,
+  inNumberedList,
+  insertPageBreak,
+  listsPlaceText,
+  setAlign,
+  setStyle,
+  splitKeepingLayout,
+} from "./paragraph.ts";
+import { keepPastedStyles, schema } from "./schema.ts";
+import { clearFormatting, stepFontSize, styleMarkViews, type TextStyle, textStyle } from "./text-style.ts";
 
 const nodes = schema.nodes as Record<string, NodeType>;
 const marks = schema.marks as Record<string, MarkType>;
@@ -50,6 +75,7 @@ export function createEditor(
     onLink,
     pictureAddress,
     onPictures,
+    onAltText,
   }: {
     readOnly: boolean;
     onChange: () => void;
@@ -58,8 +84,11 @@ export function createEditor(
     pictureAddress: (hash: string) => string;
     /** Picture files someone pasted or dropped, to add where the caret is. */
     onPictures: (files: File[]) => void;
+    /** Someone asked to change the selected picture's alt text. */
+    onAltText: () => void;
   },
 ): EditorView {
+  addFonts();
   const fragment: Y.XmlFragment = live.doc.getXmlFragment(FRAGMENT);
   const state = EditorState.create({
     schema,
@@ -67,9 +96,10 @@ export function createEditor(
       ySyncPlugin(fragment),
       yCursorPlugin(live.awareness, { cursorBuilder, selectionBuilder }),
       yUndoPlugin(),
-      keymap(keys(onLink)),
+      keymap(keys(onLink, onAltText)),
       keymap(baseKeymap),
       typingShortcuts(),
+      listsPlaceText(),
       dropCursor(),
       gapCursor(),
       columnResizing(),
@@ -82,8 +112,11 @@ export function createEditor(
     attributes: { class: "docs-text", spellcheck: "true" },
     nodeViews: {
       check_item: (node, editorView, getPos) => new CheckItemView(node, editorView, getPos),
-      image: (node) => new ImageView(node, pictureAddress),
+      page_break: () => pageBreakView(),
+      image: (node, editorView, getPos) => new ImageView(node, editorView, getPos, pictureAddress, !readOnly, onAltText),
     },
+    markViews: styleMarkViews,
+    transformPastedHTML: keepPastedStyles,
     handlePaste(editorView, event) {
       const files = pictureFiles(event.clipboardData);
       if (!files.length || !editorView.editable) return false;
@@ -95,7 +128,10 @@ export function createEditor(
       if (!files.length || !editorView.editable) return false;
       event.preventDefault();
       // The pictures go where they were dropped.
-      const at = editorView.posAtCoords({ left: event.clientX, top: event.clientY });
+      const at = editorView.posAtCoords({
+        left: event.clientX,
+        top: event.clientY,
+      });
       if (at) editorView.dispatch(editorView.state.tr.setSelection(Selection.near(editorView.state.doc.resolve(at.pos))));
       onPictures(files);
       return true;
@@ -129,10 +165,13 @@ function cursorBuilder(user: { name: string; color: string }): HTMLElement {
  * reason. */
 function selectionBuilder(user: { color: string }) {
   const index = Math.max(0, CARET_COLORS.indexOf(user.color));
-  return { class: `docs-selection docs-color-${index}`, nodeName: "span" } as Parameters<typeof Decoration.inline>[2];
+  return {
+    class: `docs-selection docs-color-${index}`,
+    nodeName: "span",
+  } as Parameters<typeof Decoration.inline>[2];
 }
 
-function keys(onLink: () => void): Record<string, Command> {
+function keys(onLink: () => void, onAltText: () => void): Record<string, Command> {
   const splitItem = chainCommands(splitListItem(nodes["list_item"]!), splitListItem(nodes["check_item"]!, { checked: false }));
   const sink = chainCommands(sinkListItem(nodes["list_item"]!), sinkListItem(nodes["check_item"]!));
   const liftItem = chainCommands(liftListItem(nodes["list_item"]!), liftListItem(nodes["check_item"]!));
@@ -148,22 +187,46 @@ function keys(onLink: () => void): Record<string, Command> {
     "Mod-i": toggleMark(marks["italic"]!),
     "Mod-u": toggleMark(marks["underline"]!),
     "Alt-Shift-5": toggleMark(marks["strike"]!),
+    // Google Docs' shortcuts for lists.
+    "Shift-Mod-7": toggleList("numbers"),
+    "Shift-Mod-8": toggleList("bullets"),
+    "Shift-Mod-9": toggleList("checks"),
     "Mod-e": toggleMark(marks["code"]!),
+    // Google Docs' shortcuts for these.
+    "Mod-.": toggleMark(marks["superscript"]!),
+    "Mod-,": toggleMark(marks["subscript"]!),
+    "Mod-\\": clearFormatting,
+    "Shift-Mod-.": stepFontSize(1),
+    "Shift-Mod-,": stepFontSize(-1),
     "Mod-k": () => {
       onLink();
       return true;
     },
-    "Mod-Alt-0": setBlockType(nodes["paragraph"]!),
-    "Mod-Alt-1": setBlockType(nodes["heading"]!, { level: 1 }),
-    "Mod-Alt-2": setBlockType(nodes["heading"]!, { level: 2 }),
-    "Mod-Alt-3": setBlockType(nodes["heading"]!, { level: 3 }),
-    Enter: splitItem,
+    // Google Docs' shortcut for a picture's alt text.
+    "Mod-Alt-y": (state) => {
+      if (!selectedPicture(state)) return false;
+      onAltText();
+      return true;
+    },
+    // Google Docs' shortcuts for styles, alignment, and page breaks.
+    "Mod-Alt-0": setStyle("paragraph"),
+    "Mod-Alt-1": setStyle("heading-1"),
+    "Mod-Alt-2": setStyle("heading-2"),
+    "Mod-Alt-3": setStyle("heading-3"),
+    "Mod-Alt-4": setStyle("heading-4"),
+    "Mod-Alt-5": setStyle("heading-5"),
+    "Mod-Alt-6": setStyle("heading-6"),
+    "Shift-Mod-l": setAlign("left"),
+    "Shift-Mod-e": setAlign("center"),
+    "Shift-Mod-r": setAlign("right"),
+    "Shift-Mod-j": setAlign("justify"),
+    Enter: chainCommands(splitItem, newlineInCode, createParagraphNear, liftEmptyBlock, splitKeepingLayout),
     "Shift-Enter": lineBreak,
-    "Mod-Enter": lineBreak,
+    "Mod-Enter": chainCommands(exitCode, insertPageBreak),
     Tab: chainCommands(goToNextCell(1), tabInLastCell, sink),
     "Shift-Tab": chainCommands(goToNextCell(-1), liftItem),
-    "Mod-]": sink,
-    "Mod-[": liftItem,
+    "Mod-]": changeIndent(1),
+    "Mod-[": changeIndent(-1),
   };
 }
 
@@ -172,7 +235,9 @@ function keys(onLink: () => void): Record<string, Command> {
 function typingShortcuts() {
   return inputRules({
     rules: [
-      textblockTypeInputRule(/^(#{1,3})\s$/, nodes["heading"]!, (match) => ({ level: match[1]!.length })),
+      textblockTypeInputRule(/^(#{1,3})\s$/, nodes["heading"]!, (match) => ({
+        level: match[1]!.length,
+      })),
       wrappingInputRule(/^\s*>\s$/, nodes["blockquote"]!),
       wrappingInputRule(/^\s*([-+*])\s$/, nodes["bullet_list"]!),
       wrappingInputRule(
@@ -222,27 +287,56 @@ export function insertPicture(hash: string): Command {
 
 /** A picture, shown from the document's pictures by its hash. Its width
  * is an attribute, not a style, since the page's security policy doesn't
- * allow style attributes. */
+ * allow style attributes. While it's selected, an editor can drag its
+ * corners to resize it, keeping its shape, and has buttons for its alt text
+ * and its own size. */
 class ImageView implements NodeView {
-  dom: HTMLImageElement;
+  dom: HTMLElement;
+  private img: HTMLImageElement;
+  private resizing = false;
 
   constructor(
     private node: Node,
+    private view: EditorView,
+    private getPos: () => number | undefined,
     private address: (hash: string) => string,
+    editable: boolean,
+    onAltText: () => void,
   ) {
-    this.dom = document.createElement("img");
-    this.dom.className = "docs-picture";
-    this.dom.draggable = true;
+    this.dom = document.createElement("div");
+    this.dom.className = "docs-picture-frame";
+    this.img = document.createElement("img");
+    this.img.className = "docs-picture";
+    this.dom.append(this.img);
+    if (editable) {
+      for (const corner of ["top-left", "top-right", "bottom-left", "bottom-right"] as const) {
+        const handle = document.createElement("span");
+        handle.className = `docs-picture-handle ${corner}`;
+        handle.title = t("docs.resizePicture");
+        handle.addEventListener("pointerdown", (event) => this.resize(event, corner.endsWith("left") ? -1 : 1));
+        this.dom.append(handle);
+      }
+      const bar = document.createElement("span");
+      bar.className = "docs-picture-bar";
+      bar.append(
+        barButton(t("docs.altText"), () => {
+          this.select();
+          onAltText();
+        }),
+        barButton(t("docs.resetSize"), () => this.setWidth(null)),
+      );
+      this.dom.append(bar);
+    }
     this.show(node);
   }
 
   private show(node: Node) {
     this.node = node;
-    this.dom.src = this.address(node.attrs["src"] as string);
-    this.dom.alt = node.attrs["alt"] as string;
+    this.img.src = this.address(node.attrs["src"] as string);
+    this.img.alt = node.attrs["alt"] as string;
     const width = node.attrs["width"] as number | null;
-    if (width) this.dom.width = width;
-    else this.dom.removeAttribute("width");
+    if (width) this.img.width = width;
+    else this.img.removeAttribute("width");
   }
 
   update(node: Node): boolean {
@@ -253,9 +347,138 @@ class ImageView implements NodeView {
     return true;
   }
 
+  /** Drags a corner: the picture follows the pointer across, as wide as the
+   * text at most, and its height follows. `sign` is -1 for a left corner. */
+  private resize(start: PointerEvent, sign: 1 | -1) {
+    start.preventDefault();
+    start.stopPropagation();
+    const handle = start.currentTarget as HTMLElement;
+    handle.setPointerCapture(start.pointerId);
+    const from = this.img.getBoundingClientRect().width;
+    const most = Math.max(MIN_PICTURE_WIDTH, this.dom.parentElement?.clientWidth ?? from);
+    this.resizing = true;
+    this.dom.classList.add("resizing");
+    const move = (event: PointerEvent) => {
+      const width = Math.round(from + sign * (event.clientX - start.clientX));
+      this.img.width = Math.min(most, Math.max(MIN_PICTURE_WIDTH, width));
+    };
+    const finish = (event: PointerEvent) => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
+      this.resizing = false;
+      this.dom.classList.remove("resizing");
+      if (event.type === "pointerup" && Math.abs(this.img.width - from) >= 1) this.setWidth(this.img.width);
+      else this.show(this.node);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+  }
+
+  /** Sets the picture's width, or its own size for null, and keeps it
+   * selected. */
+  private setWidth(width: number | null) {
+    const pos = this.getPos();
+    if (pos === undefined) return;
+    const tr = this.view.state.tr.setNodeAttribute(pos, "width", width);
+    this.view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, pos)));
+    this.view.focus();
+  }
+
+  private select() {
+    const pos = this.getPos();
+    if (pos === undefined) return;
+    this.view.dispatch(this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, pos)));
+  }
+
+  /** The handles and buttons are the picture's own, not the editor's. */
+  stopEvent(event: Event): boolean {
+    const target = event.target as HTMLElement | null;
+    return this.resizing || !!target?.closest(".docs-picture-handle, .docs-picture-bar");
+  }
+
   ignoreMutation(): boolean {
     return true;
   }
+}
+
+/** Narrower than this, a picture is hard to see or to grab. */
+const MIN_PICTURE_WIDTH = 24;
+
+function barButton(label: string, onSelect: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  // Focus stays in the document, with the picture selected, so a dialog
+  // gives it back to the picture when it closes.
+  button.tabIndex = -1;
+  button.addEventListener("mousedown", (event) => event.preventDefault());
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    onSelect();
+  });
+  return button;
+}
+
+/** A picture in the document: where it is when found, and its hash, to
+ * find it again if others' edits move it. */
+export interface PictureAt {
+  pos: number;
+  src: string;
+  alt: string;
+}
+
+/** The selected picture, if a picture is selected. */
+export function selectedPicture(state: EditorState): PictureAt | null {
+  const { selection } = state;
+  if (!(selection instanceof NodeSelection) || selection.node.type !== nodes["image"]) return null;
+  return {
+    pos: selection.from,
+    src: selection.node.attrs["src"] as string,
+    alt: selection.node.attrs["alt"] as string,
+  };
+}
+
+/** Where `picture` is now: where it was, or the first picture with its
+ * hash. */
+function findPicture(doc: Node, picture: PictureAt): number | null {
+  const isIt = (node: Node | null | undefined) => !!node && node.type === nodes["image"] && node.attrs["src"] === picture.src;
+  if (picture.pos <= doc.content.size && isIt(doc.nodeAt(picture.pos))) return picture.pos;
+  let found: number | null = null;
+  doc.descendants((node, pos) => {
+    if (found === null && isIt(node)) found = pos;
+    return found === null;
+  });
+  return found;
+}
+
+/** The longest alt text the server keeps (accordion-docs' `MAX_ALT`). */
+export const MAX_ALT = 1000;
+
+/** Selects `picture` again, first setting its alt text, which says what it
+ * shows to someone who can't see it, if `alt` is given. */
+export function selectPicture(picture: PictureAt, alt?: string): Command {
+  return (state, dispatch) => {
+    const pos = findPicture(state.doc, picture);
+    if (pos === null) return false;
+    const tr = alt === undefined ? state.tr : state.tr.setNodeAttribute(pos, "alt", alt.trim().slice(0, MAX_ALT));
+    dispatch?.(tr.setSelection(NodeSelection.create(tr.doc, pos)));
+    return true;
+  };
+}
+
+/** A page break: a dashed line across the page, named, where printing
+ * starts a new page. */
+function pageBreakView(): NodeView {
+  const dom = document.createElement("div");
+  dom.className = "page-break";
+  dom.contentEditable = "false";
+  const label = document.createElement("span");
+  label.className = "docs-page-break-label";
+  label.textContent = t("docs.pageBreak");
+  dom.append(label);
+  return { dom };
 }
 
 /** A checklist item with a checkbox people can select, even while others
@@ -285,7 +508,12 @@ class CheckItemView implements NodeView {
         this.box.checked = this.node.attrs["checked"] as boolean;
         return;
       }
-      view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...this.node.attrs, checked: this.box.checked }));
+      view.dispatch(
+        view.state.tr.setNodeMarkup(pos, undefined, {
+          ...this.node.attrs,
+          checked: this.box.checked,
+        }),
+      );
     });
     label.append(this.box);
     this.contentDOM = document.createElement("div");
@@ -324,11 +552,20 @@ export interface Formatting {
   strike: boolean;
   code: boolean;
   link: string | null;
-  /** "paragraph", "heading-1" to "heading-3", or "code". */
+  /** "paragraph", "title", "subtitle", "heading-1" to "heading-6", or
+   * "code". */
   style: string;
+  /** The paragraph's layout, outside code. */
+  layout: Layout | null;
+  align: Align | null;
   list: "bullets" | "numbers" | "checks" | null;
+  /** The list's own style, if it has one. */
+  listStyle: string | null;
+  numbered: boolean;
   quote: boolean;
   table: boolean;
+  /** Font, size, colors, superscript, and subscript. */
+  text: TextStyle;
 }
 
 export function formatting(state: EditorState): Formatting {
@@ -338,13 +575,7 @@ export function formatting(state: EditorState): Formatting {
   const linkMark = (empty ? $from.marks() : state.doc.resolve(from + 1 > to ? from : from + 1).marks()).find(
     (mark) => mark.type === marks["link"],
   );
-  const parent = $from.parent;
-  const style =
-    parent.type === nodes["heading"]
-      ? `heading-${Math.min(parent.attrs["level"] as number, 3)}`
-      : parent.type === nodes["code_block"]
-        ? "code"
-        : "paragraph";
+  const layout = currentLayout(state);
   const list = listAround($from);
   return {
     bold: has(marks["bold"]!),
@@ -353,7 +584,11 @@ export function formatting(state: EditorState): Formatting {
     strike: has(marks["strike"]!),
     code: has(marks["code"]!),
     link: (linkMark?.attrs["href"] as string | undefined) ?? null,
-    style,
+    style: currentStyle(state),
+    layout,
+    align: layout?.align ?? null,
+    listStyle: currentListStyle(state),
+    numbered: inNumberedList(state),
     list:
       list?.node.type === nodes["bullet_list"]
         ? "bullets"
@@ -364,6 +599,7 @@ export function formatting(state: EditorState): Formatting {
             : null,
     quote: ancestor($from, nodes["blockquote"]!) !== null,
     table: isInTable(state),
+    text: textStyle(state),
   };
 }
 
@@ -386,6 +622,8 @@ function ancestor($pos: ResolvedPos, type: NodeType): Node | null {
 }
 
 export const toggle = {
+  superscript: () => toggleMark(marks["superscript"]!),
+  subscript: () => toggleMark(marks["subscript"]!),
   bold: () => toggleMark(marks["bold"]!),
   italic: () => toggleMark(marks["italic"]!),
   underline: () => toggleMark(marks["underline"]!),
@@ -393,17 +631,14 @@ export const toggle = {
   code: () => toggleMark(marks["code"]!),
 };
 
-export function setStyle(style: string): Command {
-  if (style === "paragraph") return setBlockType(nodes["paragraph"]!);
-  if (style === "code") return setBlockType(nodes["code_block"]!);
-  const level = Number(style.replace("heading-", ""));
-  return setBlockType(nodes["heading"]!, { level });
-}
-
 /** Turns the list `kind` on or off where the selection is. A different
  * kind of list changes into this one. */
 export function toggleList(kind: "bullets" | "numbers" | "checks"): Command {
-  const listType = { bullets: nodes["bullet_list"]!, numbers: nodes["ordered_list"]!, checks: nodes["check_list"]! }[kind];
+  const listType = {
+    bullets: nodes["bullet_list"]!,
+    numbers: nodes["ordered_list"]!,
+    checks: nodes["check_list"]!,
+  }[kind];
   const itemType = kind === "checks" ? nodes["check_item"]! : nodes["list_item"]!;
   return (state, dispatch, view) => {
     const around = listAround(state.selection.$from);
@@ -441,8 +676,16 @@ export function toggleQuote(): Command {
     ancestor(state.selection.$from, nodes["blockquote"]!) ? lift(state, dispatch, view) : wrapIn(nodes["blockquote"]!)(state, dispatch, view);
 }
 
+/** A horizontal line, with the caret after it, on an empty line if
+ * nothing follows, so what's typed or added next doesn't replace it. */
 export const insertRule: Command = (state, dispatch) => {
-  dispatch?.(state.tr.replaceSelectionWith(nodes["horizontal_rule"]!.create()).scrollIntoView());
+  const tr = state.tr.replaceSelectionWith(nodes["horizontal_rule"]!.create());
+  if (!(tr.selection instanceof TextSelection)) {
+    const end = tr.selection.to;
+    tr.insert(end, nodes["paragraph"]!.create());
+    tr.setSelection(TextSelection.create(tr.doc, end + 1));
+  }
+  dispatch?.(tr.scrollIntoView());
   return true;
 };
 

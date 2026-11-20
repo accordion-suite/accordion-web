@@ -12,7 +12,11 @@
 // app, and dist/app/ holds the scripts, styles, and icons. The manifest in
 // dist/manifest.webmanifest lets phones and computers install the app. Each
 // file also has .gz and .br copies, so the server never compresses on a
-// request. PNGs are compressed already, so they don't.
+// request. PNGs and fonts are compressed already, so they don't.
+//
+// Docs' fonts are files in dist/app/ too, one for each style and language
+// of each font in src/docs/fonts.ts. The editor imports the list of them
+// from "docs-fonts", which this script makes as it builds.
 //
 // dist/files.json lists every file with its SHA-256 hash. The server checks
 // the files against it as it starts, and says so if any is missing or
@@ -20,10 +24,12 @@
 // file that isn't in the list.
 
 import { createHash } from "node:crypto";
-import { build, type Metafile } from "esbuild";
-import { readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { build, type Metafile, type Plugin } from "esbuild";
+import { access, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
 import { brotliCompressSync, constants, gzipSync } from "node:zlib";
+
+import { FONTS } from "../src/docs/fonts.ts";
 
 const OUT = "dist";
 const ENTRY = "src/main.tsx";
@@ -35,6 +41,56 @@ const DARK = "#111418";
 // Drive's first load, compressed with gzip. The build fails above it, so
 // the first load stays fast on a Raspberry Pi over 4G (decision 13).
 const BUDGET = 150 * 1024;
+
+/** The weights documents use: regular and bold. */
+const FONT_WEIGHTS = [400, 700];
+
+/** Makes the "docs-fonts" module: every font file, with the family, weight,
+ * style, and characters each one is for, as FontFace takes them. Importing
+ * each file through esbuild names it by its hash and copies it to dist/app/. */
+const docsFonts: Plugin = {
+  name: "docs-fonts",
+  setup(builder) {
+    builder.onResolve({ filter: /^docs-fonts$/ }, () => ({ path: "docs-fonts", namespace: "docs-fonts" }));
+    builder.onLoad({ filter: /.*/, namespace: "docs-fonts" }, async () => {
+      const imports: string[] = [];
+      const ranges: string[] = [];
+      const faces: string[] = [];
+      for (const font of FONTS) {
+        const folder = resolve("node_modules", "@fontsource", font.package);
+        const metadata = JSON.parse(await readFile(join(folder, "metadata.json"), "utf8")) as {
+          id: string;
+          subsets: string[];
+          weights: number[];
+          styles: string[];
+        };
+        const unicode = JSON.parse(await readFile(join(folder, "unicode.json"), "utf8")) as Record<string, string>;
+        let found = 0;
+        for (const subset of metadata.subsets) {
+          const range = unicode[subset];
+          if (!range) continue;
+          for (const weight of FONT_WEIGHTS.filter((weight) => metadata.weights.includes(weight))) {
+            for (const style of metadata.styles) {
+              const file = join(folder, "files", `${metadata.id}-${subset}-${weight}-${style}.woff2`);
+              if (!(await access(file).then(() => true, () => false))) continue;
+              let at = ranges.indexOf(range);
+              if (at < 0) at = ranges.push(range) - 1;
+              imports.push(`import f${imports.length} from ${JSON.stringify(file)};`);
+              faces.push(`[${JSON.stringify(font.name)},${weight},${style === "italic"},R[${at}],f${imports.length - 1}]`);
+              found++;
+            }
+          }
+        }
+        if (found === 0) throw new Error(`@fontsource/${font.package} has no regular or bold files.`);
+      }
+      const contents = `${imports.join("\n")}
+const R = ${JSON.stringify(ranges)};
+export const FACES = [${faces.join(",")}];
+`;
+      return { contents, loader: "js", resolveDir: process.cwd() };
+    });
+  },
+};
 
 await rm(OUT, { recursive: true, force: true });
 const { metafile } = await build({
@@ -54,6 +110,10 @@ const { metafile } = await build({
   charset: "utf8",
   metafile: true,
   logLevel: "warning",
+  loader: { ".woff2": "file" },
+  // Fonts are named from the page, which isn't in dist/app/.
+  publicPath: "/app/",
+  plugins: [docsFonts],
 });
 
 // The files the first load needs: the entry, the chunks it imports right
@@ -141,7 +201,8 @@ await writeFile(join(OUT, "index.html"), page);
 
 const sizes = new Map<string, number>();
 for (const entry of await readdir(OUT, { recursive: true, withFileTypes: true })) {
-  if (!entry.isFile() || entry.name.endsWith(".png")) continue;
+  // PNGs and fonts are compressed already.
+  if (!entry.isFile() || entry.name.endsWith(".png") || entry.name.endsWith(".woff2")) continue;
   const file = join(entry.parentPath, entry.name);
   const content = await readFile(file);
   const gzipped = gzipSync(content, { level: 9 });

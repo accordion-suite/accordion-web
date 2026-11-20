@@ -2507,6 +2507,49 @@ dialog label {
   }
 }
 
+.menu-more {
+  margin-right: -4px;
+  color: var(--muted);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+/* An item whose submenu is open stays lit while the submenu has focus. */
+.menu [role^="menuitem"][aria-expanded="true"] {
+  background: var(--surface);
+}
+
+/* In a menu with choices, every item lines up with the choices' names. */
+.menu.has-choices > [role="menuitem"]::before {
+  content: "";
+  flex: none;
+  width: 20px;
+}
+
+/* A row of menus, such as Docs' File, Edit, and Format. */
+.menu-bar {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+button.menu-bar-item {
+  flex: none;
+  padding: 2px 8px;
+  font-size: 0.875rem;
+  font-weight: normal;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 4px;
+}
+
+button.menu-bar-item:hover,
+button.menu-bar-item[aria-expanded="true"] {
+  background: var(--surface);
+}
+
 .menu hr {
   margin: 8px 0;
   border: none;
@@ -4985,15 +5028,48 @@ button.checklist-add {
 .docs-document {
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - 64px);
+  min-height: 100dvh;
 }
 
+/* A document's name and Share, in the top bar after its icon and before
+   the app picker. */
 .docs-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  min-width: 0;
   color: var(--kind-document);
+}
+
+.docs-head .spacer {
+  flex: 1;
+}
+
+/* The document's icon in Accordion's name's place, leading back to Docs. */
+.docs-home-link {
+  display: flex;
+  flex: none;
+  padding: 4px;
+  color: var(--kind-document);
+  border-radius: 8px;
+}
+
+.docs-home-link:hover {
+  background: var(--surface);
+}
+
+.docs-home-link svg {
+  width: 32px;
+  height: 32px;
+}
+
+/* The menus under the top bar, lined up with the icon. */
+.docs-menus {
+  padding: 0 12px 4px;
+}
+
+.docs-head .docs-share {
+  flex: none;
 }
 
 .docs-head .docs-name {
@@ -5063,10 +5139,34 @@ button.checklist-add {
   background: var(--accent-soft);
 }
 
+/* On a wide screen, the tools are as narrow as Google Docs' so they fit
+   on one line. Phones keep them large enough to touch, and scroll. */
+@media (min-width: 861px) {
+  .docs-toolbar .docs-tool {
+    width: 32px;
+    height: 32px;
+  }
+
+  .docs-toolbar .docs-toolbar-gap {
+    margin: 0 2px;
+  }
+}
+
+/* The arrow for list styles, beside the list buttons, pointing down as
+   the font menu's does. */
+.docs-toolbar .docs-tool.docs-tool-narrow {
+  width: 20px;
+  margin-left: -2px;
+}
+
+.docs-tool-narrow svg {
+  transform: rotate(90deg);
+}
+
 .docs-toolbar-gap {
   width: 1px;
   height: 20px;
-  margin: 0 6px;
+  margin: 0 4px;
   background: var(--border);
 }
 
@@ -5087,14 +5187,135 @@ button.checklist-add {
   border-color: var(--border);
 }
 
-.docs-status {
-  margin: 8px 16px 0;
+.docs-font {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: 120px;
+  cursor: pointer;
 }
 
-.docs-head .docs-file {
+.docs-font-name {
+  flex: 1;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The chevron points down, as the style menu's arrow does. */
+.docs-font svg {
   flex: none;
+  width: 18px;
+  height: 18px;
+  transform: rotate(90deg);
+}
+
+.docs-size {
+  display: inline-flex;
+  align-items: center;
+}
+
+.docs-toolbar .docs-size-input {
+  flex: none;
+  width: 44px;
+  height: 28px;
+  padding: 0 4px;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+/* Hides the list's arrow, which leaves too little room for the size. */
+.docs-size-input::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
+.docs-color-button {
+  position: relative;
+}
+
+.docs-color-bar {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  left: 8px;
+  height: 3px;
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.docs-colors {
+  position: fixed;
+  z-index: 6;
+  padding: 12px;
+  background: var(--panel);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.docs-colors:focus {
+  outline: none;
+}
+
+.docs-color-none {
+  width: 100%;
+  margin-bottom: 10px;
   padding: 4px 12px;
   font-size: 0.875rem;
+}
+
+.docs-swatches {
+  display: grid;
+  grid-template-columns: repeat(10, 20px);
+  gap: 3px;
+}
+
+/* The bright row stands apart from the grays above and the shades below,
+   as in Google Docs. */
+.docs-swatch-bright {
+  margin: 6px 0;
+}
+
+.docs-swatch {
+  width: 20px;
+  height: 20px;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  border-radius: 50%;
+}
+
+.docs-swatch[aria-pressed="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.docs-swatch:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.docs-color-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.875rem;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+.docs-colors .docs-color-custom input {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+}
+
+.docs-status {
+  margin: 8px 16px 0;
 }
 
 /* The print page waits here, unseen, while the browser prints it. */
@@ -5169,16 +5390,24 @@ button.checklist-add {
   box-shadow: var(--shadow);
 }
 
+/* Arial at 11 points, as in Google Docs and the Word download. Docs adds
+   its own Arial, made to match it (fonts.ts), so text breaks into lines the
+   same way everywhere. Lines are 1.15 apart, and single spacing is Arial's
+   own line height, 1.15 (layout.ts' SINGLE), as the file and the downloads
+   space them. */
 .docs-text {
   min-height: 600px;
   outline: none;
-  font: 16px/1.6 system-ui, sans-serif;
+  font: 11pt/1.3225 "Arial", sans-serif;
   white-space: pre-wrap;
   word-wrap: break-word;
 }
 
+/* Each style's space before and after, in points, as the file and the
+   downloads have them (layout.ts' styleSpacing). A paragraph's own layout
+   is set on it. */
 .docs-text p {
-  margin: 0 0 0.6em;
+  margin: 0 0 6pt;
 }
 
 .docs-text h1,
@@ -5187,21 +5416,73 @@ button.checklist-add {
 .docs-text h4,
 .docs-text h5,
 .docs-text h6 {
-  margin: 1em 0 0.4em;
-  font-weight: 600;
-  line-height: 1.3;
+  font-weight: 700;
 }
 
+/* Sized as the downloads size them (text-style.ts' HEADING_SIZES). */
 .docs-text h1 {
-  font-size: 1.75em;
+  margin: 20pt 0 6pt;
+  font-size: 20pt;
 }
 
 .docs-text h2 {
-  font-size: 1.4em;
+  margin: 18pt 0 6pt;
+  font-size: 16pt;
 }
 
 .docs-text h3 {
-  font-size: 1.2em;
+  margin: 16pt 0 4pt;
+  font-size: 14pt;
+}
+
+.docs-text h4 {
+  margin: 14pt 0 4pt;
+  font-size: 12pt;
+}
+
+.docs-text h5,
+.docs-text h6 {
+  margin: 12pt 0 4pt;
+  font-size: 11pt;
+}
+
+.docs-text p.title {
+  margin: 0 0 3pt;
+  font-size: 26pt;
+}
+
+.docs-text p.subtitle {
+  margin: 0 0 16pt;
+  font-size: 15pt;
+  color: #666;
+}
+
+/* A page break: a dashed line across the page with its name, where
+   printing starts a new page. */
+.docs-text .page-break {
+  position: relative;
+  margin: 12pt 0;
+  border-top: 1px dashed #9aa0a6;
+  text-align: center;
+  cursor: default;
+}
+
+.docs-page-break-label {
+  position: relative;
+  top: -0.75em;
+  padding: 0 8px;
+  font: 12px/1.5 system-ui, sans-serif;
+  color: #5f6368;
+  background: #fff;
+}
+
+.docs-text .page-break.ProseMirror-selectednode {
+  outline: 2px solid #1a5fb4;
+  outline-offset: 2px;
+}
+
+.docs-text h6 {
+  font-style: italic;
 }
 
 .docs-text > :first-child {
@@ -5227,8 +5508,11 @@ button.checklist-add {
 }
 
 .docs-text code {
-  font-family: ui-monospace, monospace;
-  font-size: 0.9em;
+  font-family: "Courier New", monospace;
+}
+
+.docs-text pre code {
+  font-size: 10pt;
 }
 
 .docs-text hr {
@@ -5241,24 +5525,180 @@ button.checklist-add {
   outline: 2px solid #1a5fb4;
 }
 
-/* A picture on a line of its own, never wider than the page. */
+/* A picture on a line of its own, never wider than the page. Its frame is
+   as wide as the picture, so the handles sit on its corners. */
+.docs-text .docs-picture-frame {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 0.6em;
+}
+
 .docs-text .docs-picture {
   display: block;
   max-width: 100%;
   height: auto;
-  margin: 0 0 0.6em;
   cursor: default;
 }
 
-.docs-text .docs-picture.ProseMirror-selectednode {
+.docs-text .docs-picture-frame.ProseMirror-selectednode .docs-picture {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
+.docs-picture-handle,
+.docs-picture-bar {
+  display: none;
+}
+
+.docs-text .docs-picture-frame.ProseMirror-selectednode :is(.docs-picture-handle, .docs-picture-bar) {
+  display: flex;
+}
+
+.docs-text .docs-picture-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  border-radius: 2px;
+  /* Dragging with a finger resizes rather than scrolls. */
+  touch-action: none;
+}
+
+.docs-picture-handle.top-left {
+  top: -7px;
+  left: -7px;
+  cursor: nwse-resize;
+}
+
+.docs-picture-handle.top-right {
+  top: -7px;
+  right: -7px;
+  cursor: nesw-resize;
+}
+
+.docs-picture-handle.bottom-left {
+  bottom: -7px;
+  left: -7px;
+  cursor: nesw-resize;
+}
+
+.docs-picture-handle.bottom-right {
+  right: -7px;
+  bottom: -7px;
+  cursor: nwse-resize;
+}
+
+/* Alt text and Reset size, over the picture's bottom left corner. */
+.docs-text .docs-picture-bar {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  gap: 2px;
+  padding: 2px;
+  white-space: nowrap;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+.docs-picture-bar button {
+  padding: 4px 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+}
+
+.docs-picture-bar button:hover {
+  background: var(--surface);
+}
+
+.docs-picture-frame.resizing .docs-picture-bar {
+  display: none;
+}
+
+/* Alt text is a sentence or two, so its box is a few lines, styled as the
+   other fields are. */
+.docs-alt-dialog textarea {
+  display: block;
+  width: 100%;
+  min-height: 80px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  font: inherit;
+  font-weight: 400;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  resize: vertical;
+}
+
 .docs-text ul,
 .docs-text ol {
-  margin: 0 0 0.6em;
+  margin: 0 0 6pt;
   padding-left: 24px;
+}
+
+/* List styles (layout.ts' BULLET_STYLES and NUMBER_STYLES), as the file
+   shows them. */
+@counter-style decimal-paren {
+  system: extends decimal;
+  suffix: ") ";
+}
+
+.docs-text ul[data-list="disc"] {
+  list-style-type: disc;
+}
+
+.docs-text ul[data-list="circle"] {
+  list-style-type: circle;
+}
+
+.docs-text ul[data-list="square"] {
+  list-style-type: square;
+}
+
+.docs-text ul[data-list="dash"] {
+  list-style-type: "\2013  ";
+}
+
+.docs-text ul[data-list="arrow"] {
+  list-style-type: "\27A2  ";
+}
+
+.docs-text ul[data-list="star"] {
+  list-style-type: "\2605  ";
+}
+
+.docs-text ol[data-list="decimal"] {
+  list-style-type: decimal;
+}
+
+.docs-text ol[data-list="decimal-paren"] {
+  list-style-type: decimal-paren;
+}
+
+.docs-text ol[data-list="lower-alpha"] {
+  list-style-type: lower-alpha;
+}
+
+.docs-text ol[data-list="upper-alpha"] {
+  list-style-type: upper-alpha;
+}
+
+.docs-text ol[data-list="lower-roman"] {
+  list-style-type: lower-roman;
+}
+
+.docs-text ol[data-list="upper-roman"] {
+  list-style-type: upper-roman;
 }
 
 .docs-text li > p {
@@ -5423,6 +5863,19 @@ button.checklist-add {
     border-right: none;
   }
 
+  /* The document's name and menus keep room beside Share. */
+  .docs-head {
+    gap: 4px;
+  }
+
+  .docs-menus {
+    padding: 0 4px 4px;
+  }
+
+  .docs-head .docs-share {
+    padding: 8px 14px;
+  }
+
   /* One row that scrolls sideways, so the page stays in view. */
   .docs-toolbar {
     flex-wrap: nowrap;
@@ -5437,9 +5890,44 @@ button.checklist-add {
   }
 }
 
+/* Full screen, from the View menu, leaves only the page. Esc comes back. */
+:root:fullscreen:has(.docs-document) .top-bar,
+:root:fullscreen .docs-head,
+:root:fullscreen .docs-menus,
+:root:fullscreen .docs-toolbar {
+  display: none;
+}
+
+:root:fullscreen .docs-document {
+  min-height: 100dvh;
+}
+
+/* On a phone, the document gets a row of its own under the app picker, the
+   bell, and the account. */
+@media (max-width: 600px) {
+  .docs-top-bar {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    height: auto;
+    min-height: var(--top-bar-height);
+    padding: 4px 8px 8px;
+  }
+
+  .docs-top-bar .top-bar-middle {
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  /* The phone's Back takes its place. */
+  .docs-home-link {
+    display: none;
+  }
+}
+
 @media print {
   .top-bar,
   .docs-head,
+  .docs-menus,
   .docs-toolbar,
   .docs-status {
     display: none;

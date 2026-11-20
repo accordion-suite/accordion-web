@@ -112,3 +112,78 @@ export const TableIcon = () => (
     <path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10M15 9.5v10" {...line} />
   </Icon>
 );
+
+/** The letter A, for text color. The color shows in a bar under it. */
+export const TextColorIcon = () => (
+  <Icon>
+    <path d="M7.5 16 12 4.5 16.5 16M9.2 11.8h5.6" {...line} />
+  </Icon>
+);
+
+/** A highlighter pen, for highlight color. The color shows in a bar under
+ * it. */
+export const HighlightIcon = () => (
+  <Icon>
+    <path d="m14.5 4.5 4 4-7 7H7.5v-4Z M12.5 6.5l4 4M7.5 15.5l-2 2" {...line} />
+  </Icon>
+);
+
+/** A T with a slash through it, for clearing formatting. */
+export const ClearFormatIcon = () => (
+  <Icon>
+    <path d="M6 5.5h10M11 5.5 8.5 18.5M14.5 13.5l5 5M19.5 13.5l-5 5" {...line} />
+  </Icon>
+);
+
+export const MinusIcon = () => (
+  <Icon>
+    <path d="M6 12h12" {...line} />
+  </Icon>
+);
+
+export const PlusIcon = () => (
+  <Icon>
+    <path d="M6 12h12M12 6v12" {...line} />
+  </Icon>
+);
+
+/** Lines lined up at the left, centered, at the right, or both sides. */
+const alignLines = {
+  left: "M4.5 6h15M4.5 10h10M4.5 14h15M4.5 18h10",
+  center: "M4.5 6h15M7 10h10M4.5 14h15M7 18h10",
+  right: "M4.5 6h15M9.5 10h10M4.5 14h15M9.5 18h10",
+  justify: "M4.5 6h15M4.5 10h15M4.5 14h15M4.5 18h15",
+} as const;
+
+export const AlignIcon = ({ align }: { align: keyof typeof alignLines }) => (
+  <Icon>
+    <path d={alignLines[align]} {...line} />
+  </Icon>
+);
+
+/** Lines with arrows up and down beside them: line spacing. */
+export const LineSpacingIcon = () => (
+  <Icon>
+    <path d="M10.5 6h9M10.5 10h9M10.5 14h9M10.5 18h9M6 4.5v15M3.5 7 6 4.5 8.5 7M3.5 17 6 19.5 8.5 17" {...line} />
+  </Icon>
+);
+
+/** Lines with an arrow into them or out of them. */
+export const IndentMoreIcon = () => (
+  <Icon>
+    <path d="M4.5 5.5h15M11 10h8.5M11 14h8.5M4.5 18.5h15M4.5 9.5 7.5 12l-3 2.5" {...line} />
+  </Icon>
+);
+
+export const IndentLessIcon = () => (
+  <Icon>
+    <path d="M4.5 5.5h15M11 10h8.5M11 14h8.5M4.5 18.5h15M7.5 9.5 4.5 12l3 2.5" {...line} />
+  </Icon>
+);
+
+/** Two pages, one ending and the next starting: a page break. */
+export const PageBreakIcon = () => (
+  <Icon>
+    <path d="M6 3.5v5h12v-5M6 20.5v-5h12v5M3.5 12h2.5M9 12h2M13 12h2M18 12h2.5" {...line} />
+  </Icon>
+);

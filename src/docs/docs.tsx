@@ -3,7 +3,8 @@
 
 import "./messages.ts";
 
-import type { ComponentChildren } from "preact";
+import type { ComponentChildren, RefObject } from "preact";
+import { deleteSelection, selectAll } from "prosemirror-commands";
 import type { Command } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -11,13 +12,14 @@ import * as Y from "yjs";
 
 import { api, type Session } from "../api.ts";
 import { NameDialog, ShareDialog } from "../drive/dialogs.tsx";
-import { CloseIcon, MoreIcon } from "../drive/icons.tsx";
+import { ChevronIcon, CloseIcon, MoreIcon } from "../drive/icons.tsx";
 import { type Item, thumbnailAddress } from "../drive/item.ts";
 import { formatDate, formatList, type MessageKey, t } from "../i18n.ts";
 import { LiveDocument, type LiveStatus, type Visitor } from "../shell/coedit.ts";
 import { Dialog, problemText } from "../shell/dialog.tsx";
 import { rememberAppPage } from "../shell/last-app.ts";
 import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.tsx";
+import { MenuBar, type MenuBarMenu } from "../shell/menu-bar.tsx";
 import { PageThumbnail } from "../shell/page-thumbnail.tsx";
 import { PageTitle, useTabTitle } from "../shell/page.tsx";
 import { followLink, navigate, usePath } from "../shell/router.ts";
@@ -44,33 +46,49 @@ import {
   insertPicture,
   insertRule,
   insertTable,
+  MAX_ALT,
   redo,
   PICTURE_TYPES,
   removeLink,
+  type PictureAt,
+  selectedPicture,
   selectedText,
+  selectPicture,
   setLink,
-  setStyle,
   tableCommands,
   toggle,
   toggleList,
   toggleQuote,
   undo,
 } from "./editor.ts";
+import { ColorMenu } from "./color-menu.tsx";
+import { addFonts } from "./font-faces.ts";
+import { fitSize, FONTS, fontStack, SIZES } from "./fonts.ts";
 import {
+  AlignIcon,
   BoldIcon,
   BulletsIcon,
   ChecklistIcon,
+  ClearFormatIcon,
   CodeIcon,
   DocIcon,
+  HighlightIcon,
+  IndentLessIcon,
+  IndentMoreIcon,
   ItalicIcon,
+  LineSpacingIcon,
   LinkIcon,
+  MinusIcon,
   NumbersIcon,
+  PageBreakIcon,
   PictureIcon,
+  PlusIcon,
   QuoteIcon,
   RedoIcon,
   RuleIcon,
   StrikeIcon,
   TableIcon,
+  TextColorIcon,
   UnderlineIcon,
   UndoIcon,
 } from "./icons.tsx";
@@ -91,7 +109,32 @@ import {
   usesInches,
   writePage,
 } from "./page-setup.ts";
-import { linkFromTyped } from "./schema.ts";
+import {
+  type Align,
+  ALIGNS,
+  BULLET_STYLES,
+  type BulletStyle,
+  type Layout,
+  LINE_PRESETS,
+  LIST_SAMPLES,
+  NUMBER_STYLES,
+  type NumberStyle,
+} from "./layout.ts";
+import {
+  changeIndent,
+  currentNumber,
+  insertPageBreak,
+  type ParagraphSettings,
+  restartNumbering,
+  setAlign,
+  setLineSpacing,
+  setListStyle,
+  setParagraph,
+  setStyle,
+  toggleSpace,
+} from "./paragraph.ts";
+import { HEADING_LEVELS, linkFromTyped } from "./schema.ts";
+import { clearFormatting, setColor, setFont, setHighlight, setSize, stepFontSize } from "./text-style.ts";
 
 export function Docs({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
   const path = usePath();
@@ -103,12 +146,13 @@ export function Docs({ session, onSignOut }: { session: Session; onSignOut: () =
   const editing = path === NEW_DOCUMENT_PATH || opened !== null;
   return (
     <>
-      <TopBar session={session} onSignOut={onSignOut} module={t("apps.docs")} home="/docs/" />
+      {!editing && <TopBar session={session} onSignOut={onSignOut} module={t("apps.docs")} home="/docs/" />}
       {editing ? (
         <DocumentPage
           key={opened === null || opened === started.current ? "new" : opened}
           id={opened}
           session={session}
+          onSignOut={onSignOut}
           onStarted={(id) => {
             started.current = id;
             navigate(documentPath(id), { replace: true });
@@ -125,7 +169,11 @@ export function Docs({ session, onSignOut }: { session: Session; onSignOut: () =
 function DocsHome() {
   const [documents, setDocuments] = useState<DocumentInfo[] | null>(null);
   const [error, setError] = useState("");
-  const [menu, setMenu] = useState<{ document: DocumentInfo; place: MenuPlace; byKeyboard: boolean } | null>(null);
+  const [menu, setMenu] = useState<{
+    document: DocumentInfo;
+    place: MenuPlace;
+    byKeyboard: boolean;
+  } | null>(null);
   const [renaming, setRenaming] = useState<DocumentInfo | null>(null);
   const [notice, setNotice] = useState<HomeNotice | null>(null);
 
@@ -172,7 +220,10 @@ function DocsHome() {
 
   function entries(document: DocumentInfo): MenuEntry[] {
     const entries: MenuEntry[] = [
-      { label: t("shortcuts.newTab"), onSelect: () => window.open(documentPath(document.id), "_blank", "noopener") },
+      {
+        label: t("shortcuts.newTab"),
+        onSelect: () => window.open(documentPath(document.id), "_blank", "noopener"),
+      },
     ];
     if (document.access !== "viewer") {
       entries.push(
@@ -356,10 +407,12 @@ function HomeNoticeView({ notice, onClose }: { notice: HomeNotice; onClose: () =
 function DocumentPage({
   id,
   session,
+  onSignOut,
   onStarted,
 }: {
   id: string | null;
   session: Session;
+  onSignOut: () => void;
   /** A new document has its file, with this ID. */
   onStarted: (id: string) => void;
 }) {
@@ -372,13 +425,21 @@ function DocumentPage({
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [format, setFormat] = useState<Formatting | null>(null);
   const [linking, setLinking] = useState<{ href: string } | null>(null);
+  const [describing, setDescribing] = useState<PictureAt | null>(null);
+  // What to do to the picture once its alt text dialog has gone, since the
+  // document can't have focus, or select it, while the dialog is open.
+  const described = useRef<{ picture: PictureAt; alt?: string } | null>(null);
   const [sharing, setSharing] = useState<Item | null>(null);
   const [page, setPage] = useState<PageSetup | null>(null);
   const [settingUp, setSettingUp] = useState(false);
-  const [fileMenu, setFileMenu] = useState<{ place: MenuPlace; byKeyboard: boolean } | null>(null);
+  const [spacing, setSpacing] = useState<Layout | null>(null);
+  const [restarting, setRestarting] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const mount = useRef<HTMLDivElement>(null);
+  const nameField = useRef<HTMLInputElement>(null);
+  const choosePictures = useRef<HTMLInputElement>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const view = useRef<EditorView | null>(null);
   const live = useRef<LiveDocument | null>(null);
   /** The file's ID, once there is one. */
@@ -456,6 +517,7 @@ function DocumentPage({
       onLink: () => startLink(),
       pictureAddress: (hash) => pictureAddress(fileId.current ?? "", hash),
       onPictures: (files) => void addPictures(files),
+      onAltText: () => startAltText(),
     });
     setFormat(formatting(view.current.state));
     // A new document, or one from before page setup, gets the paper of the
@@ -568,8 +630,31 @@ function DocumentPage({
     if (!editor) return;
     const now = formatting(editor.state);
     const selected = selectedText(editor.state);
-    setLinking({ href: now.link ?? (linkFromTyped(selected) && /\.\w/.test(selected) ? selected : "") });
+    setLinking({
+      href: now.link ?? (linkFromTyped(selected) && /\.\w/.test(selected) ? selected : ""),
+    });
   }
+
+  function startSpacing() {
+    const layout = view.current && formatting(view.current.state).layout;
+    if (layout) setSpacing(layout);
+  }
+
+  function startRestart() {
+    if (view.current) setRestarting(currentNumber(view.current.state));
+  }
+
+  function startAltText() {
+    const picture = view.current && selectedPicture(view.current.state);
+    if (picture) setDescribing(picture);
+  }
+
+  useEffect(() => {
+    const done = described.current;
+    if (describing || !done) return;
+    described.current = null;
+    run(selectPicture(done.picture, done.alt));
+  }, [describing]);
 
   async function share() {
     try {
@@ -584,16 +669,384 @@ function DocumentPage({
     return renameDocument(await makeFile(), name);
   }
 
-  if (failed) {
-    return (
-      <main class="page narrow">
-        <p class="error" role="alert">
-          {t("docs.loadDocumentFailed")}
-        </p>
-      </main>
+  /** A notice that goes away by itself after a while. */
+  function tell(text: string) {
+    clearTimeout(noticeTimer.current);
+    setNotice(text);
+    noticeTimer.current = setTimeout(() => setNotice((now) => (now === text ? "" : now)), 10_000);
+  }
+  useEffect(() => () => clearTimeout(noticeTimer.current), []);
+
+  /** Cut or copy from the menu, which browsers allow right after a click. */
+  function clipboard(action: "cut" | "copy") {
+    const editor = view.current;
+    if (!editor) return;
+    editor.focus();
+    if (!document.execCommand(action)) tell(t("docs.clipboardKeys"));
+  }
+
+  /** Paste from the menu. Browsers ask first, or don't allow it, since
+   * only a key press shows the person chose to paste. */
+  async function paste(plain: boolean) {
+    const editor = view.current;
+    if (!editor) return;
+    editor.focus();
+    try {
+      if (plain) {
+        editor.pasteText(await navigator.clipboard.readText());
+        return;
+      }
+      for (const item of await navigator.clipboard.read()) {
+        const picture = item.types.find((type) => PICTURE_TYPES.includes(type));
+        if (item.types.includes("text/html")) editor.pasteHTML(await (await item.getType("text/html")).text());
+        else if (picture)
+          await addPictures([
+            new File([await item.getType(picture)], "picture", {
+              type: picture,
+            }),
+          ]);
+        else if (item.types.includes("text/plain")) editor.pasteText(await (await item.getType("text/plain")).text());
+        else continue;
+        return;
+      }
+    } catch {
+      tell(t("docs.pasteKeys"));
+    }
+  }
+
+  function fullScreen() {
+    document.documentElement.requestFullscreen().then(
+      () => view.current?.focus(),
+      () => undefined,
     );
   }
-  if (!info) return <p class="loading">{t("shell.loading")}</p>;
+
+  function menus(): MenuBarMenu[] {
+    const editing = !readOnly && format !== null;
+    const file: MenuEntry[] = [
+      {
+        label: t("docs.newDocument"),
+        onSelect: () => window.open(NEW_DOCUMENT_PATH, "_blank", "noopener"),
+      },
+      SEPARATOR,
+      { label: t("docs.shareMenu"), onSelect: () => void share() },
+      {
+        label: t("docs.download"),
+        submenu: [
+          {
+            label: t("docs.downloadDocx"),
+            onSelect: () => void download("docx"),
+          },
+          {
+            label: t("docs.downloadOdt"),
+            onSelect: () => void download("odt"),
+          },
+          {
+            label: t("docs.downloadPdf"),
+            onSelect: () => void print(t("docs.pdfHint")),
+          },
+          {
+            label: t("docs.downloadHtml"),
+            onSelect: () => void download("html"),
+          },
+          { label: t("docs.downloadMd"), onSelect: () => void download("md") },
+        ],
+      },
+      ...(readOnly
+        ? []
+        : [
+            {
+              label: t("docs.renameMenu"),
+              onSelect: () => nameField.current?.focus(),
+            },
+          ]),
+      SEPARATOR,
+      ...(readOnly ? [] : [{ label: t("docs.pageSetup"), onSelect: () => setSettingUp(true) }]),
+      {
+        label: t("docs.print"),
+        shortcut: t("docs.printShortcut"),
+        onSelect: () => void print(),
+      },
+    ];
+    const edit: MenuEntry[] = readOnly
+      ? [
+          {
+            label: t("docs.copy"),
+            shortcut: t("docs.copyShortcut"),
+            onSelect: () => clipboard("copy"),
+          },
+          SEPARATOR,
+          {
+            label: t("docs.selectAll"),
+            shortcut: t("docs.selectAllShortcut"),
+            onSelect: () => run(selectAll),
+          },
+        ]
+      : [
+          {
+            label: t("docs.undo"),
+            shortcut: t("docs.undoShortcut"),
+            onSelect: () => run(undo),
+          },
+          {
+            label: t("docs.redo"),
+            shortcut: t("docs.redoShortcut"),
+            onSelect: () => run(redo),
+          },
+          SEPARATOR,
+          {
+            label: t("docs.cut"),
+            shortcut: t("docs.cutShortcut"),
+            onSelect: () => clipboard("cut"),
+          },
+          {
+            label: t("docs.copy"),
+            shortcut: t("docs.copyShortcut"),
+            onSelect: () => clipboard("copy"),
+          },
+          {
+            label: t("docs.paste"),
+            shortcut: t("docs.pasteShortcut"),
+            onSelect: () => void paste(false),
+          },
+          {
+            label: t("docs.pastePlain"),
+            shortcut: t("docs.pastePlainShortcut"),
+            onSelect: () => void paste(true),
+          },
+          SEPARATOR,
+          {
+            label: t("docs.selectAll"),
+            shortcut: t("docs.selectAllShortcut"),
+            onSelect: () => run(selectAll),
+          },
+          { label: t("docs.delete"), onSelect: () => run(deleteSelection) },
+        ];
+    const all: MenuBarMenu[] = [
+      { label: t("docs.file"), entries: () => file },
+      { label: t("docs.edit"), entries: () => edit },
+    ];
+    if (document.fullscreenEnabled) {
+      all.push({
+        label: t("docs.view"),
+        entries: () => [{ label: t("docs.fullScreen"), onSelect: fullScreen }],
+      });
+    }
+    if (editing && format) {
+      all.push(
+        {
+          label: t("docs.insert"),
+          entries: () => [
+            {
+              label: t("docs.menuPicture"),
+              onSelect: () => choosePictures.current?.click(),
+            },
+            { label: t("docs.menuTable"), onSelect: () => run(insertTable) },
+            {
+              label: t("docs.menuLink"),
+              shortcut: t("docs.linkShortcut"),
+              onSelect: startLink,
+            },
+            SEPARATOR,
+            { label: t("docs.rule"), onSelect: () => run(insertRule) },
+            {
+              label: t("docs.pageBreak"),
+              shortcut: t("docs.pageBreakShortcut"),
+              onSelect: () => run(insertPageBreak),
+            },
+          ],
+        },
+        { label: t("docs.format"), entries: () => formatEntries(format) },
+      );
+    }
+    return all;
+  }
+
+  function formatEntries(format: Formatting): MenuEntry[] {
+    const picture = view.current && selectedPicture(view.current.state);
+    const listStyles = (styles: readonly (BulletStyle | NumberStyle)[]) =>
+      styles.map((style) => ({
+        label: LIST_SAMPLES[style],
+        checked: format.listStyle === style,
+        onSelect: () => run(setListStyle(style)),
+      }));
+    return [
+      {
+        label: t("docs.text"),
+        submenu: [
+          {
+            label: t("docs.bold"),
+            shortcut: t("docs.boldShortcut"),
+            onSelect: () => run(toggle.bold()),
+          },
+          {
+            label: t("docs.italic"),
+            shortcut: t("docs.italicShortcut"),
+            onSelect: () => run(toggle.italic()),
+          },
+          {
+            label: t("docs.underline"),
+            shortcut: t("docs.underlineShortcut"),
+            onSelect: () => run(toggle.underline()),
+          },
+          {
+            label: t("docs.strike"),
+            shortcut: t("docs.strikeShortcut"),
+            onSelect: () => run(toggle.strike()),
+          },
+          {
+            label: t("docs.superscript"),
+            shortcut: t("docs.superscriptShortcut"),
+            onSelect: () => run(toggle.superscript()),
+          },
+          {
+            label: t("docs.subscript"),
+            shortcut: t("docs.subscriptShortcut"),
+            onSelect: () => run(toggle.subscript()),
+          },
+          {
+            label: t("docs.inlineCode"),
+            shortcut: t("docs.inlineCodeShortcut"),
+            onSelect: () => run(toggle.code()),
+          },
+          SEPARATOR,
+          {
+            label: t("docs.larger"),
+            shortcut: t("docs.largerShortcut"),
+            onSelect: () => run(stepFontSize(1)),
+          },
+          {
+            label: t("docs.smaller"),
+            shortcut: t("docs.smallerShortcut"),
+            onSelect: () => run(stepFontSize(-1)),
+          },
+        ],
+      },
+      {
+        label: t("docs.paragraphStyles"),
+        submenu: STYLES.map(([style, label, key]) => ({
+          label: label(),
+          shortcut: key === undefined ? undefined : t("docs.styleShortcut", { key }),
+          checked: format.style === style,
+          onSelect: () => run(setStyle(style)),
+        })),
+      },
+      ...(format.layout
+        ? [
+            {
+              label: t("docs.alignIndent"),
+              submenu: [
+                ...alignEntries(format, run),
+                SEPARATOR,
+                {
+                  label: t("docs.indentMore"),
+                  shortcut: t("docs.indentMoreShortcut"),
+                  onSelect: () => run(changeIndent(1)),
+                },
+                {
+                  label: t("docs.indentLess"),
+                  shortcut: t("docs.indentLessShortcut"),
+                  onSelect: () => run(changeIndent(-1)),
+                },
+                SEPARATOR,
+                { label: t("docs.customSpacing"), onSelect: startSpacing },
+              ],
+            },
+            {
+              label: t("docs.lineSpacing"),
+              submenu: spacingEntries(format.layout, run, startSpacing),
+            },
+          ]
+        : []),
+      {
+        label: t("docs.bulletsNumbering"),
+        submenu: [
+          { label: t("docs.bullets"), submenu: listStyles(BULLET_STYLES) },
+          { label: t("docs.numbers"), submenu: listStyles(NUMBER_STYLES) },
+          {
+            label: t("docs.checklist"),
+            shortcut: t("docs.checklistShortcut"),
+            onSelect: () => run(toggleList("checks")),
+          },
+          ...(format.numbered ? [SEPARATOR, { label: t("docs.restartNumbering"), onSelect: startRestart }] : []),
+          ...(format.list
+            ? [
+                SEPARATOR,
+                {
+                  label: t("docs.removeList"),
+                  onSelect: () => run(toggleList(format.list!)),
+                },
+              ]
+            : []),
+        ],
+      },
+      { label: t("docs.quote"), onSelect: () => run(toggleQuote()) },
+      ...(format.table ? [{ label: t("docs.tableMenu"), submenu: tableEntries(run) }] : []),
+      ...(picture
+        ? [
+            {
+              label: t("docs.picture"),
+              submenu: [
+                {
+                  label: t("docs.altTextMenu"),
+                  shortcut: t("docs.altTextShortcut"),
+                  onSelect: startAltText,
+                },
+                {
+                  label: t("docs.resetSize"),
+                  onSelect: () => run(resetPictureSize),
+                },
+              ],
+            },
+          ]
+        : []),
+      SEPARATOR,
+      {
+        label: t("docs.clearFormatting"),
+        shortcut: t("docs.clearFormattingShortcut"),
+        onSelect: () => run(clearFormatting),
+      },
+    ];
+  }
+
+  // The document's icon and name take Accordion's name's place in the top
+  // bar, with Share beside the app picker, so the page starts higher up.
+  // The icon leads back to Docs.
+  const bar = (children?: ComponentChildren) => (
+    <TopBar
+      session={session}
+      onSignOut={onSignOut}
+      className="docs-top-bar"
+      brand={
+        <a class="docs-home-link" href="/docs/" title={t("docs.backToDocs")} aria-label={t("docs.backToDocs")} onClick={followLink}>
+          <DocIcon />
+        </a>
+      }
+    >
+      {children}
+    </TopBar>
+  );
+
+  if (failed) {
+    return (
+      <>
+        {bar()}
+        <main class="page narrow">
+          <p class="error" role="alert">
+            {t("docs.loadDocumentFailed")}
+          </p>
+        </main>
+      </>
+    );
+  }
+  if (!info) {
+    return (
+      <>
+        {bar()}
+        <p class="loading">{t("shell.loading")}</p>
+      </>
+    );
+  }
 
   const statusText =
     status === "connecting"
@@ -608,44 +1061,59 @@ function DocumentPage({
 
   return (
     <div class="docs-document">
-      <div class="docs-head">
-        <DocIcon />
-        <DocumentName
-          info={info}
-          rename={rename}
-          onRenamed={(name) => setInfo({ ...info, name })}
-          onError={(problem) => setError(t("docs.renameFailed", { problem }))}
-        />
-        {readOnly && <span class="docs-badge">{t("docs.viewOnly")}</span>}
-        <span class="spacer" />
-        {visitors.length > 0 && (
-          <span class="docs-visitors" title={t("docs.others", { names: formatList(visitors.map((visitor) => visitor.name)) })}>
-            {visitors.slice(0, 4).map((visitor) => (
-              <Initials key={visitor.name} visitor={visitor} />
-            ))}
-          </span>
-        )}
-        <button
-          type="button"
-          class="secondary docs-file"
-          aria-haspopup="menu"
-          aria-expanded={fileMenu !== null}
-          onClick={(event) => setFileMenu({ place: { under: event.currentTarget }, byKeyboard: event.detail === 0 })}
-        >
-          {t("docs.file")}
-        </button>
-        <button type="button" onClick={() => void share()}>
-          {t("docs.share")}
-        </button>
+      {bar(
+        <div class="docs-head">
+          <DocumentName
+            info={info}
+            field={nameField}
+            rename={rename}
+            onRenamed={(name) => setInfo({ ...info, name })}
+            onError={(problem) => setError(t("docs.renameFailed", { problem }))}
+          />
+          {readOnly && <span class="docs-badge">{t("docs.viewOnly")}</span>}
+          <span class="spacer" />
+          {visitors.length > 0 && (
+            <span
+              class="docs-visitors"
+              title={t("docs.others", {
+                names: formatList(visitors.map((visitor) => visitor.name)),
+              })}
+            >
+              {visitors.slice(0, 4).map((visitor) => (
+                <Initials key={visitor.name} visitor={visitor} />
+              ))}
+            </span>
+          )}
+          <button type="button" class="docs-share" onClick={() => void share()}>
+            {t("docs.share")}
+          </button>
+        </div>,
+      )}
+      <div class="docs-menus">
+        <MenuBar label={t("docs.menus")} menus={menus()} />
       </div>
       {!readOnly && format && (
         <Toolbar
           format={format}
           run={run}
           onLink={startLink}
-          onPictures={(files) => void addPictures(files)}
+          onChoosePictures={() => choosePictures.current?.click()}
+          onSpacing={startSpacing}
+          onRestart={startRestart}
         />
       )}
+      <input
+        ref={choosePictures}
+        type="file"
+        accept={PICTURE_TYPES.join(",")}
+        multiple
+        hidden
+        onChange={(event) => {
+          const files = [...(event.currentTarget.files ?? [])];
+          event.currentTarget.value = "";
+          if (files.length) void addPictures(files);
+        }}
+      />
       {(statusText || error || notice) && (
         <p class={status === "gone" || status === "signedOut" || error ? "error docs-status" : "hint docs-status"} role="status">
           {error || statusText || notice}
@@ -672,24 +1140,44 @@ function DocumentPage({
           }}
         />
       )}
+      {describing && (
+        <AltTextDialog
+          alt={describing.alt}
+          onApply={(alt) => {
+            described.current = { picture: describing, alt };
+            setDescribing(null);
+          }}
+          onClose={() => {
+            described.current = { picture: describing };
+            setDescribing(null);
+          }}
+        />
+      )}
       {sharing && <ShareDialog item={sharing} onClose={() => setSharing(null)} />}
-      {fileMenu && (
-        <Menu
-          label={t("docs.file")}
-          entries={[
-            ...(readOnly ? [] : [{ label: t("docs.pageSetup"), onSelect: () => setSettingUp(true) }]),
-            { label: t("docs.print"), shortcut: t("docs.printShortcut"), onSelect: () => void print() },
-            "separator",
-            { label: t("docs.downloadDocx"), onSelect: () => void download("docx") },
-            { label: t("docs.downloadOdt"), onSelect: () => void download("odt") },
-            { label: t("docs.downloadPdf"), onSelect: () => void print(t("docs.pdfHint")) },
-            { label: t("docs.downloadHtml"), onSelect: () => void download("html") },
-            { label: t("docs.downloadMd"), onSelect: () => void download("md") },
-          ]}
-          place={fileMenu.place}
-          align="end"
-          byKeyboard={fileMenu.byKeyboard}
-          onClose={() => setFileMenu(null)}
+      {spacing && (
+        <SpacingDialog
+          layout={spacing}
+          onApply={(settings) => {
+            setSpacing(null);
+            run(setParagraph(settings));
+          }}
+          onClose={() => {
+            setSpacing(null);
+            view.current?.focus();
+          }}
+        />
+      )}
+      {restarting !== null && (
+        <RestartDialog
+          start={restarting}
+          onApply={(start) => {
+            setRestarting(null);
+            run(restartNumbering(start));
+          }}
+          onClose={() => {
+            setRestarting(null);
+            view.current?.focus();
+          }}
         />
       )}
       {settingUp && live.current && (
@@ -753,9 +1241,16 @@ function printDocument(id: string): Promise<void> {
         return;
       }
       page.addEventListener("afterprint", done);
-      page.focus();
-      page.print();
-      resolve();
+      // The print page has the document's fonts too, and prints once the
+      // ones it shows have loaded.
+      const printed = frame.contentDocument;
+      addFonts(printed);
+      void printed.body.offsetHeight;
+      void printed.fonts.ready.then(() => {
+        page.focus();
+        page.print();
+        resolve();
+      });
     });
     frame.addEventListener("error", () => {
       frame.remove();
@@ -895,20 +1390,178 @@ function PageSetupDialog({
   );
 }
 
+/** A paragraph's indents, in inches or centimeters as the reader's region
+ * measures them, and its line spacing and the space around it, as Google
+ * Docs' **Indentation options** and **Custom spacing** have them. */
+function SpacingDialog({
+  layout,
+  onApply,
+  onClose,
+}: {
+  layout: Layout;
+  onApply: (settings: ParagraphSettings) => void;
+  onClose: () => void;
+}) {
+  const inches = usesInches();
+  const unit = inches ? t("docs.unitInches") : t("docs.unitCentimeters");
+  const length = (points: number) => String(fromPoints(points, inches));
+  const [left, setLeft] = useState(length(layout.indent));
+  const [right, setRight] = useState(length(layout.indentRight));
+  const [special, setSpecial] = useState<"none" | "first" | "hanging">(
+    layout.firstLine > 0 ? "first" : layout.firstLine < 0 ? "hanging" : "none",
+  );
+  const [by, setBy] = useState(length(Math.abs(layout.firstLine) || 36));
+  const [line, setLine] = useState(String(layout.line));
+  const [before, setBefore] = useState(String(layout.before));
+  const [after, setAfter] = useState(String(layout.after));
+  const [problem, setProblem] = useState("");
+  const number = (text: string) => (text.trim() === "" ? Number.NaN : Number(text.replace(",", ".")));
+
+  return (
+    <Dialog title={t("docs.paragraphTitle")} class="docs-setup-dialog" onClose={onClose}>
+      <form
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          const values = [left, right, special === "none" ? "0" : by, line, before, after].map(number);
+          const [leftValue, rightValue, byValue, lineValue, beforeValue, afterValue] = values as [
+            number,
+            number,
+            number,
+            number,
+            number,
+            number,
+          ];
+          if (values.some((value) => !Number.isFinite(value) || value < 0) || lineValue < 0.5 || lineValue > 10) {
+            setProblem(t("docs.paragraphInvalid"));
+            return;
+          }
+          const firstLine = toPoints(byValue, inches) * (special === "hanging" ? -1 : 1);
+          onApply({
+            indent: toPoints(leftValue, inches),
+            indentRight: toPoints(rightValue, inches),
+            firstLine: special === "none" ? 0 : firstLine,
+            line: lineValue,
+            before: beforeValue,
+            after: afterValue,
+          });
+        }}
+      >
+        <fieldset>
+          <legend>{t("docs.indents")}</legend>
+          <div class="docs-margin-fields">
+            <label>
+              {t("docs.indentLeft", { unit })}
+              <input type="text" inputMode="decimal" value={left} onInput={(event) => setLeft(event.currentTarget.value)} />
+            </label>
+            <label>
+              {t("docs.indentRight", { unit })}
+              <input type="text" inputMode="decimal" value={right} onInput={(event) => setRight(event.currentTarget.value)} />
+            </label>
+            <label>
+              {t("docs.indentSpecial")}
+              <select value={special} onChange={(event) => setSpecial(event.currentTarget.value as typeof special)}>
+                <option value="none">{t("docs.indentNone")}</option>
+                <option value="first">{t("docs.indentFirstLine")}</option>
+                <option value="hanging">{t("docs.indentHanging")}</option>
+              </select>
+            </label>
+            <label>
+              {t("docs.indentBy", { unit })}
+              <input
+                type="text"
+                inputMode="decimal"
+                value={by}
+                disabled={special === "none"}
+                onInput={(event) => setBy(event.currentTarget.value)}
+              />
+            </label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>{t("docs.spacing")}</legend>
+          <div class="docs-margin-fields">
+            <label>
+              {t("docs.spacingLine")}
+              <input type="text" inputMode="decimal" value={line} onInput={(event) => setLine(event.currentTarget.value)} />
+            </label>
+            <label>
+              {t("docs.spacingBefore")}
+              <input type="text" inputMode="decimal" value={before} onInput={(event) => setBefore(event.currentTarget.value)} />
+            </label>
+            <label>
+              {t("docs.spacingAfter")}
+              <input type="text" inputMode="decimal" value={after} onInput={(event) => setAfter(event.currentTarget.value)} />
+            </label>
+          </div>
+        </fieldset>
+        <p class="error" role="alert">
+          {problem}
+        </p>
+        <div class="dialog-buttons">
+          <button type="button" class="secondary" onClick={onClose}>
+            {t("docs.cancel")}
+          </button>
+          <button type="submit">{t("docs.paragraphApply")}</button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
+/** The number a numbered list's item starts from, which splits the list
+ * there if the item isn't its first. */
+function RestartDialog({ start, onApply, onClose }: { start: number; onApply: (start: number) => void; onClose: () => void }) {
+  const [typed, setTyped] = useState(String(start));
+  const [problem, setProblem] = useState("");
+  return (
+    <Dialog title={t("docs.restartTitle")} onClose={onClose}>
+      <form
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          const value = Number(typed.trim());
+          if (typed.trim() === "" || !Number.isInteger(value) || value < 0 || value > 1_000_000) {
+            setProblem(t("docs.restartInvalid"));
+            return;
+          }
+          onApply(value);
+        }}
+      >
+        <label>
+          {t("docs.restartAt")}
+          <input type="text" inputMode="numeric" value={typed} onInput={(event) => setTyped(event.currentTarget.value)} />
+        </label>
+        <p class="error" role="alert">
+          {problem}
+        </p>
+        <div class="dialog-buttons">
+          <button type="button" class="secondary" onClick={onClose}>
+            {t("docs.cancel")}
+          </button>
+          <button type="submit">{t("docs.restartApply")}</button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
 /** The document's name, which the owner and editors can change. */
 function DocumentName({
   info,
+  field,
   rename,
   onRenamed,
   onError,
 }: {
   info: DocumentInfo;
+  /** The name's box, which **Rename** in the File menu focuses. */
+  field: RefObject<HTMLInputElement | null>;
   rename: (name: string) => Promise<string>;
   onRenamed: (name: string) => void;
   onError: (problem: string) => void;
 }) {
   const [value, setValue] = useState(info.name);
-  const field = useRef<HTMLInputElement>(null);
   // A new document's file gets its name while someone may be typing one.
   useEffect(() => {
     if (document.activeElement !== field.current) setValue(info.name);
@@ -970,19 +1623,124 @@ function Initials({ visitor }: { visitor: Visitor }) {
 
 type Run = (command: Command) => void;
 
+/** The labels for each alignment, in menus and on buttons. */
+const ALIGN_NAMES = {
+  left: ["docs.alignLeftLong", "docs.alignLeftShortcut"],
+  center: ["docs.alignCenterLong", "docs.alignCenterShortcut"],
+  right: ["docs.alignRightLong", "docs.alignRightShortcut"],
+  justify: ["docs.alignJustifyLong", "docs.alignJustifyShortcut"],
+} as const satisfies Record<Align, readonly [string, string]>;
+
+function alignEntries(format: Formatting, run: Run): MenuEntry[] {
+  return ALIGNS.map((align) => ({
+    label: t(ALIGN_NAMES[align][0]),
+    shortcut: t(ALIGN_NAMES[align][1]),
+    checked: format.align === align,
+    onSelect: () => run(setAlign(align)),
+  }));
+}
+
+/** The paragraph styles, with what names each and its key after Ctrl+Alt. */
+const STYLES: [string, () => string, number?][] = [
+  ["paragraph", () => t("docs.styleNormal"), 0],
+  ["title", () => t("docs.styleTitle")],
+  ["subtitle", () => t("docs.styleSubtitle")],
+  ...HEADING_LEVELS.map((level): [string, () => string, number] => [
+    `heading-${level}`,
+    () => t("docs.styleHeading", { level }),
+    level,
+  ]),
+  ["code", () => t("docs.styleCode")],
+];
+
+function spacingEntries(layout: Layout, run: Run, onSpacing: () => void): MenuEntry[] {
+  return [
+    ...LINE_PRESETS.map((line) => ({
+      label: lineName(line),
+      checked: layout.line === line,
+      onSelect: () => run(setLineSpacing(line)),
+    })),
+    SEPARATOR,
+    {
+      label: t(layout.before === 0 ? "docs.addSpaceBefore" : "docs.removeSpaceBefore"),
+      onSelect: () => run(toggleSpace("before")),
+    },
+    {
+      label: t(layout.after === 0 ? "docs.addSpaceAfter" : "docs.removeSpaceAfter"),
+      onSelect: () => run(toggleSpace("after")),
+    },
+    SEPARATOR,
+    { label: t("docs.customSpacing"), onSelect: onSpacing },
+  ];
+}
+
+function tableEntries(run: Run): MenuEntry[] {
+  return [
+    { label: t("docs.rowAbove"), onSelect: () => run(tableCommands.rowAbove) },
+    { label: t("docs.rowBelow"), onSelect: () => run(tableCommands.rowBelow) },
+    {
+      label: t("docs.columnLeft"),
+      onSelect: () => run(tableCommands.columnLeft),
+    },
+    {
+      label: t("docs.columnRight"),
+      onSelect: () => run(tableCommands.columnRight),
+    },
+    SEPARATOR,
+    {
+      label: t("docs.headerRow"),
+      onSelect: () => run(tableCommands.headerRow),
+    },
+    SEPARATOR,
+    {
+      label: t("docs.deleteRow"),
+      onSelect: () => run(tableCommands.deleteRow),
+    },
+    {
+      label: t("docs.deleteColumn"),
+      onSelect: () => run(tableCommands.deleteColumn),
+    },
+    {
+      label: t("docs.deleteTable"),
+      onSelect: () => run(tableCommands.deleteTable),
+    },
+  ];
+}
+
+/** The selected picture back to its own size, or the text's width. */
+const resetPictureSize: Command = (state, dispatch) => {
+  const picture = selectedPicture(state);
+  if (!picture) return false;
+  dispatch?.(state.tr.setNodeAttribute(picture.pos, "width", null));
+  return true;
+};
+
+/** Line spacing as the menu names it. */
+function lineName(line: number): string {
+  if (line === 1) return t("docs.lineSingle");
+  if (line === 2) return t("docs.lineDouble");
+  return String(line);
+}
+
 function Toolbar({
   format,
   run,
   onLink,
-  onPictures,
+  onChoosePictures,
+  onSpacing,
+  onRestart,
 }: {
   format: Formatting;
   run: Run;
   onLink: () => void;
-  onPictures: (files: File[]) => void;
+  onChoosePictures: () => void;
+  onSpacing: () => void;
+  onRestart: () => void;
 }) {
-  const [tableMenu, setTableMenu] = useState<{ place: MenuPlace; byKeyboard: boolean } | null>(null);
-  const choosePictures = useRef<HTMLInputElement>(null);
+  const [tableMenu, setTableMenu] = useState<{
+    place: MenuPlace;
+    byKeyboard: boolean;
+  } | null>(null);
   const markButton = (on: boolean, label: string, command: Command, icon: ComponentChildren) => (
     <ToolButton label={label} pressed={on} onClick={() => run(command)}>
       {icon}
@@ -1004,7 +1762,9 @@ function Toolbar({
         onChange={(event) => run(setStyle(event.currentTarget.value))}
       >
         <option value="paragraph">{t("docs.styleNormal")}</option>
-        {[1, 2, 3].map((level) => (
+        <option value="title">{t("docs.styleTitle")}</option>
+        <option value="subtitle">{t("docs.styleSubtitle")}</option>
+        {HEADING_LEVELS.map((level) => (
           <option key={level} value={`heading-${level}`}>
             {t("docs.styleHeading", { level })}
           </option>
@@ -1012,45 +1772,82 @@ function Toolbar({
         <option value="code">{t("docs.styleCode")}</option>
       </select>
       <span class="docs-toolbar-gap" />
+      <FontPicker font={format.text.font} run={run} />
+      <span class="docs-toolbar-gap" />
+      <SizeBox size={format.text.size} run={run} />
+      <span class="docs-toolbar-gap" />
       {markButton(format.bold, t("docs.bold"), toggle.bold(), <BoldIcon />)}
       {markButton(format.italic, t("docs.italic"), toggle.italic(), <ItalicIcon />)}
       {markButton(format.underline, t("docs.underline"), toggle.underline(), <UnderlineIcon />)}
       {markButton(format.strike, t("docs.strike"), toggle.strike(), <StrikeIcon />)}
       {markButton(format.code, t("docs.inlineCode"), toggle.code(), <CodeIcon />)}
+      <ColorButton kind="text" color={format.text.color} run={run} />
+      <ColorButton kind="highlight" color={format.text.highlight} run={run} />
       <ToolButton label={t("docs.link")} pressed={format.link !== null} onClick={onLink}>
         <LinkIcon />
       </ToolButton>
       <span class="docs-toolbar-gap" />
+      {format.layout && (
+        <>
+          <MenuButton
+            label={t("docs.align")}
+            icon={<AlignIcon align={format.align ?? "left"} />}
+            entries={() => alignEntries(format, run)}
+          />
+          <MenuButton
+            label={t("docs.lineSpacing")}
+            icon={<LineSpacingIcon />}
+            entries={() => spacingEntries(format.layout!, run, onSpacing)}
+          />
+          <span class="docs-toolbar-gap" />
+        </>
+      )}
       <ToolButton label={t("docs.bullets")} pressed={format.list === "bullets"} onClick={() => run(toggleList("bullets"))}>
         <BulletsIcon />
       </ToolButton>
       <ToolButton label={t("docs.numbers")} pressed={format.list === "numbers"} onClick={() => run(toggleList("numbers"))}>
         <NumbersIcon />
       </ToolButton>
+      <MenuButton
+        label={t("docs.listStyles")}
+        icon={<ChevronIcon />}
+        narrow
+        entries={() => [
+          ...BULLET_STYLES.map((style) => ({
+            label: LIST_SAMPLES[style],
+            checked: format.listStyle === style,
+            onSelect: () => run(setListStyle(style)),
+          })),
+          SEPARATOR,
+          ...NUMBER_STYLES.map((style) => ({
+            label: LIST_SAMPLES[style],
+            checked: format.listStyle === style,
+            onSelect: () => run(setListStyle(style)),
+          })),
+          ...(format.numbered ? ([SEPARATOR, { label: t("docs.restartNumbering"), onSelect: onRestart }] as MenuEntry[]) : []),
+        ]}
+      />
       <ToolButton label={t("docs.checklist")} pressed={format.list === "checks"} onClick={() => run(toggleList("checks"))}>
         <ChecklistIcon />
+      </ToolButton>
+      <ToolButton label={t("docs.indentLess")} onClick={() => run(changeIndent(-1))}>
+        <IndentLessIcon />
+      </ToolButton>
+      <ToolButton label={t("docs.indentMore")} onClick={() => run(changeIndent(1))}>
+        <IndentMoreIcon />
       </ToolButton>
       <ToolButton label={t("docs.quote")} pressed={format.quote} onClick={() => run(toggleQuote())}>
         <QuoteIcon />
       </ToolButton>
       <span class="docs-toolbar-gap" />
-      <ToolButton label={t("docs.picture")} onClick={() => choosePictures.current?.click()}>
+      <ToolButton label={t("docs.picture")} onClick={onChoosePictures}>
         <PictureIcon />
       </ToolButton>
-      <input
-        ref={choosePictures}
-        type="file"
-        accept={PICTURE_TYPES.join(",")}
-        multiple
-        hidden
-        onChange={(event) => {
-          const files = [...(event.currentTarget.files ?? [])];
-          event.currentTarget.value = "";
-          if (files.length) onPictures(files);
-        }}
-      />
       <ToolButton label={t("docs.rule")} onClick={() => run(insertRule)}>
         <RuleIcon />
+      </ToolButton>
+      <ToolButton label={t("docs.pageBreak")} onClick={() => run(insertPageBreak)}>
+        <PageBreakIcon />
       </ToolButton>
       {format.table ? (
         <button
@@ -1060,7 +1857,12 @@ function Toolbar({
           aria-label={t("docs.tableMenu")}
           aria-haspopup="menu"
           aria-expanded={tableMenu !== null}
-          onClick={(event) => setTableMenu({ place: { under: event.currentTarget }, byKeyboard: event.detail === 0 })}
+          onClick={(event) =>
+            setTableMenu({
+              place: { under: event.currentTarget },
+              byKeyboard: event.detail === 0,
+            })
+          }
         >
           <TableIcon />
         </button>
@@ -1072,24 +1874,200 @@ function Toolbar({
       {tableMenu && (
         <Menu
           label={t("docs.tableMenu")}
-          entries={[
-            { label: t("docs.rowAbove"), onSelect: () => run(tableCommands.rowAbove) },
-            { label: t("docs.rowBelow"), onSelect: () => run(tableCommands.rowBelow) },
-            { label: t("docs.columnLeft"), onSelect: () => run(tableCommands.columnLeft) },
-            { label: t("docs.columnRight"), onSelect: () => run(tableCommands.columnRight) },
-            "separator",
-            { label: t("docs.headerRow"), onSelect: () => run(tableCommands.headerRow) },
-            "separator",
-            { label: t("docs.deleteRow"), onSelect: () => run(tableCommands.deleteRow) },
-            { label: t("docs.deleteColumn"), onSelect: () => run(tableCommands.deleteColumn) },
-            { label: t("docs.deleteTable"), onSelect: () => run(tableCommands.deleteTable) },
-          ]}
+          entries={tableEntries(run)}
           place={tableMenu.place}
           byKeyboard={tableMenu.byKeyboard}
           onClose={() => setTableMenu(null)}
         />
       )}
+      <span class="docs-toolbar-gap" />
+      <ToolButton label={t("docs.clearFormatting")} onClick={() => run(clearFormatting)}>
+        <ClearFormatIcon />
+      </ToolButton>
     </div>
+  );
+}
+
+/** The font menu, each font's name shown in that font. With more than one
+ * font selected, the button shows none. */
+function FontPicker({ font, run }: { font: string | null; run: Run }) {
+  const [menu, setMenu] = useState<{
+    place: MenuPlace;
+    byKeyboard: boolean;
+  } | null>(null);
+  return (
+    <>
+      <button
+        type="button"
+        class="docs-style docs-font"
+        title={t("docs.font")}
+        aria-label={t("docs.font")}
+        aria-haspopup="menu"
+        aria-expanded={menu !== null}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) =>
+          setMenu({
+            place: { under: event.currentTarget },
+            byKeyboard: event.detail === 0,
+          })
+        }
+      >
+        <span class="docs-font-name">{font ?? ""}</span>
+        <ChevronIcon />
+      </button>
+      {menu && (
+        <Menu
+          label={t("docs.font")}
+          entries={FONTS.map((choice) => ({
+            label: choice.name,
+            font: fontStack(choice.name),
+            checked: choice.name === font,
+            onSelect: () => run(setFont(choice.name)),
+          }))}
+          place={menu.place}
+          byKeyboard={menu.byKeyboard}
+          onClose={() => setMenu(null)}
+        />
+      )}
+    </>
+  );
+}
+
+/** The size in points, with a step down and up on either side, as in
+ * Google Docs. Typing a size and pressing Enter sets it, and the list
+ * offers the usual ones. */
+function SizeBox({ size, run }: { size: number | null; run: Run }) {
+  // What's typed, until it's set or dropped.
+  const [typed, setTyped] = useState<string | null>(null);
+  const shown = typed ?? (size === null ? "" : String(size));
+  const apply = (text: string) => {
+    setTyped(null);
+    const points = fitSize(Number(text.trim().replace(",", ".")));
+    if (text.trim() && points !== null) run(setSize(points));
+  };
+  return (
+    <span class="docs-size">
+      <ToolButton label={t("docs.smaller")} onClick={() => run(stepFontSize(-1))}>
+        <MinusIcon />
+      </ToolButton>
+      <input
+        class="docs-size-input"
+        inputMode="decimal"
+        list="docs-sizes"
+        title={t("docs.fontSize")}
+        aria-label={t("docs.fontSize")}
+        value={shown}
+        onFocus={(event) => event.currentTarget.select()}
+        onInput={(event) => {
+          const value = event.currentTarget.value;
+          // Choosing from the list sets the size straight away.
+          if ((event as InputEvent).inputType === "insertReplacementText" || !(event as InputEvent).inputType) apply(value);
+          else setTyped(value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            apply(event.currentTarget.value);
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            setTyped(null);
+            run(() => true);
+          }
+        }}
+        onBlur={() => setTyped(null)}
+      />
+      <datalist id="docs-sizes">
+        {SIZES.map((choice) => (
+          <option key={choice} value={choice} />
+        ))}
+      </datalist>
+      <ToolButton label={t("docs.larger")} onClick={() => run(stepFontSize(1))}>
+        <PlusIcon />
+      </ToolButton>
+    </span>
+  );
+}
+
+/** Text color or highlight: the button shows the color now in a bar under
+ * its icon, and opens the grid. */
+function ColorButton({ kind, color, run }: { kind: "text" | "highlight"; color: string | null; run: Run }) {
+  const [open, setOpen] = useState<{
+    under: Element;
+    byKeyboard: boolean;
+  } | null>(null);
+  const label = t(kind === "text" ? "docs.textColor" : "docs.highlight");
+  const bar = color ?? (kind === "text" ? "currentColor" : "transparent");
+  return (
+    <>
+      <button
+        type="button"
+        class="icon-button docs-tool docs-color-button"
+        title={label}
+        aria-label={label}
+        aria-haspopup="dialog"
+        aria-expanded={open !== null}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) => setOpen(open ? null : { under: event.currentTarget, byKeyboard: event.detail === 0 })}
+      >
+        {kind === "text" ? <TextColorIcon /> : <HighlightIcon />}
+        <span class="docs-color-bar" style={{ backgroundColor: bar }} aria-hidden="true" />
+      </button>
+      {open && (
+        <ColorMenu
+          label={label}
+          noneLabel={t(kind === "text" ? "docs.colorDefault" : "docs.colorNone")}
+          color={color}
+          under={open.under}
+          byKeyboard={open.byKeyboard}
+          onPick={(picked) => run(kind === "text" ? setColor(picked) : setHighlight(picked))}
+          onClose={() => setOpen(null)}
+        />
+      )}
+    </>
+  );
+}
+
+/** A toolbar button that opens a menu under it. `entries` runs as it
+ * opens, so the menu shows the selection as it is then. */
+function MenuButton({
+  label,
+  icon,
+  entries,
+  narrow,
+}: {
+  label: string;
+  icon: ComponentChildren;
+  entries: () => MenuEntry[];
+  /** A small arrow beside the button before it, as Google Docs has. */
+  narrow?: boolean;
+}) {
+  const [menu, setMenu] = useState<{
+    place: MenuPlace;
+    byKeyboard: boolean;
+  } | null>(null);
+  return (
+    <>
+      <button
+        type="button"
+        class={narrow ? "icon-button docs-tool docs-tool-narrow" : "icon-button docs-tool"}
+        title={label}
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={menu !== null}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) =>
+          setMenu({
+            place: { under: event.currentTarget },
+            byKeyboard: event.detail === 0,
+          })
+        }
+      >
+        {icon}
+      </button>
+      {menu && (
+        <Menu label={label} entries={entries()} place={menu.place} byKeyboard={menu.byKeyboard} onClose={() => setMenu(null)} />
+      )}
+    </>
   );
 }
 
@@ -1117,6 +2095,48 @@ function ToolButton({
     >
       {children}
     </button>
+  );
+}
+
+/** A picture's alt text: what it shows, for someone who can't see it, such
+ * as a person using a screen reader. Downloads and the file keep it. */
+function AltTextDialog({ alt, onApply, onClose }: { alt: string; onApply: (alt: string) => void; onClose: () => void }) {
+  const [typed, setTyped] = useState(alt);
+  return (
+    <Dialog title={t("docs.altTextTitle")} class="docs-alt-dialog" onClose={onClose}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onApply(typed);
+        }}
+      >
+        <label class="field">
+          <span>{t("docs.altTextLabel")}</span>
+          <textarea
+            rows={3}
+            maxLength={MAX_ALT}
+            autoFocus
+            value={typed}
+            onInput={(event) => setTyped(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              // Enter saves, as in the other dialogs. Alt text is one line.
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                onApply(typed);
+              }
+            }}
+          />
+        </label>
+        <p class="hint">{t("docs.altTextHint")}</p>
+        <div class="dialog-buttons">
+          <span class="spacer" />
+          <button type="button" class="secondary" onClick={onClose}>
+            {t("docs.cancel")}
+          </button>
+          <button type="submit">{t("docs.altTextApply")}</button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 

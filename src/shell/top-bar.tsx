@@ -22,6 +22,8 @@ export function TopBar({
   settings,
   menuOpen,
   onMenu,
+  brand,
+  className,
   children,
 }: {
   session: Session;
@@ -35,13 +37,17 @@ export function TopBar({
   /** Whether the sidebar is open, on screens too small to show it always. */
   menuOpen?: boolean;
   onMenu?: () => void;
+  /** What stands in Accordion's name's place, such as a document's icon
+   * leading back to Docs, beside its name. */
+  brand?: ComponentChildren;
+  className?: string;
   children?: ComponentChildren;
 }) {
   const [account, setAccount] = useState<{ place: MenuPlace; byKeyboard: boolean } | null>(null);
   const name = session.user.display_name;
 
   return (
-    <header class="top-bar">
+    <header class={className ? `top-bar ${className}` : "top-bar"}>
       {onMenu && (
         <button
           type="button"
@@ -54,16 +60,24 @@ export function TopBar({
           <MenuIcon />
         </button>
       )}
-      <a class="brand" href={home} onClick={followLink}>
-        <Logo />
-        <span class="brand-name">{t("app.name")}</span>
-        <span class="brand-module">{module}</span>
-      </a>
+      {brand ?? (
+        <a class="brand" href={home} onClick={followLink}>
+          <Logo />
+          <span class="brand-name">{t("app.name")}</span>
+          <span class="brand-module">{module}</span>
+        </a>
+      )}
       <div class="top-bar-middle">{children}</div>
       <AppsButton modules={modulesOn(session)} />
       <NotificationsButton me={session.user.id} />
       {settings && (
-        <a class="icon-button settings-button" href={settings} title={t("settings.title")} aria-label={t("settings.title")} onClick={followLink}>
+        <a
+          class="icon-button settings-button"
+          href={settings}
+          title={t("settings.title")}
+          aria-label={t("settings.title")}
+          onClick={followLink}
+        >
           <SettingsIcon />
         </a>
       )}
