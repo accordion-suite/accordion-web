@@ -197,6 +197,22 @@ const nodes: Record<string, NodeSpec> = {
     parseDOM: [{ tag: "br" }],
     toDOM: () => ["br"],
   },
+  // A footnote (footnotes.ts): its number where it stands, and its text,
+  // which it holds, so it moves, copies, and goes with its number. The text
+  // is edited in an editor of its own at the bottom of the page, so the
+  // caret steps over the number as over a letter. Its text has no page
+  // numbers, which only headers and footers have (accordion-docs'
+  // `Inline::Footnote`).
+  footnote: {
+    inline: true,
+    group: "inline",
+    atom: true,
+    content: "(text | hard_break)*",
+    marks: "link bold italic underline strike code superscript subscript text_color highlight font_size font_family",
+    // Ahead of the superscript mark's rule for <sup>.
+    parseDOM: [{ tag: "sup[data-footnote]", priority: 60 }],
+    toDOM: () => ["sup", { "data-footnote": "" }, 0],
+  },
 };
 
 const marks: Record<string, MarkSpec> = {

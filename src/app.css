@@ -5702,14 +5702,16 @@ button.checklist-add {
 
 .docs-sheets,
 .docs-margins,
-.docs-cuts {
+.docs-cuts,
+.docs-notes-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
 .docs-margins,
-.docs-cuts {
+.docs-cuts,
+.docs-notes-layer {
   z-index: 2;
 }
 
@@ -5868,6 +5870,79 @@ button.checklist-add {
   width: 100%;
 }
 
+/* Footnotes (footnotes.ts): each number in the text, counted in order,
+   and each page's notes at its bottom under a short line, in 10 point, as
+   in Google Docs and Word. The space above the line, the line, and the
+   space under it are pages.ts' NOTES_TOP. */
+.docs-text {
+  counter-reset: docs-footnote;
+}
+
+.docs-footnote-ref {
+  counter-increment: docs-footnote;
+  font-size: 0.7em;
+  line-height: 0;
+  vertical-align: super;
+  cursor: default;
+}
+
+.docs-footnote-ref::after {
+  content: counter(docs-footnote);
+}
+
+.docs-footnote-ref.ProseMirror-selectednode {
+  outline: 2px solid #1a73e8;
+  border-radius: 2px;
+}
+
+.docs-notes {
+  position: absolute;
+  padding-top: 10px;
+  color: #1f1f1f;
+  font: 10pt/1.15 "Arial", sans-serif;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  pointer-events: auto;
+}
+
+.docs-notes-rule {
+  width: 144px;
+  margin-bottom: 6px;
+  border-top: 1px solid #444746;
+}
+
+.docs-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 2px;
+  align-items: baseline;
+  cursor: text;
+}
+
+.docs-note-number {
+  position: relative;
+  top: -0.4em;
+  font-size: 0.7em;
+}
+
+.docs-note-text {
+  min-width: 0;
+  outline: none;
+}
+
+.docs-notes-measure {
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Without pages, as on phones, the notes follow the text. */
+.docs-endnotes {
+  position: static;
+  margin-top: 24px;
+}
+
 /* A page break ends its page, which shows where it is. */
 .docs-page.paged .page-break {
   height: 0;
@@ -5887,6 +5962,10 @@ button.checklist-add {
   font: 11pt/1.3225 "Arial", sans-serif;
   white-space: pre-wrap;
   word-wrap: break-word;
+  /* Pages break where the editor breaks them (pages.ts), so printing
+     mustn't move a paragraph's last lines to keep two together. */
+  orphans: 1;
+  widows: 1;
 }
 
 /* Each style's space before and after, in points, as the file and the

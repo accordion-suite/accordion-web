@@ -74,7 +74,9 @@ export async function printDocument(
     await Promise.all(
       [...page.images].map((image) => (image.complete ? Promise.resolve() : image.decode().catch(() => undefined))),
     );
-    layOutNow(view);
+    // Each pass measures the last one's pages, so pages break again until
+    // they stop moving, as they settle on screen.
+    for (let pass = 0; pass < 8 && layOutNow(view); pass++);
     layOutNow(view);
     window.addEventListener("afterprint", () => setTimeout(done, 1000), { once: true });
     window.focus();

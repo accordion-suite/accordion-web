@@ -375,6 +375,7 @@ export function DocsShortcutsDialog({ readOnly, onClose }: { readOnly: boolean; 
         [{ or: ["Tab", "Shift+Tab"] }, t("docs.keysListLevel")],
         ["Shift+Enter", t("docs.keysLineBreak")],
         [t("docs.pageBreakShortcut"), t("docs.pageBreak")],
+        [t("docs.footnoteShortcut"), t("docs.footnote")],
         [t("docs.altTextShortcut"), t("docs.keysAltText")],
       ],
     },

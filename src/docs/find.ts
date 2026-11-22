@@ -37,9 +37,9 @@ export function findMatches(doc: Node, query: string, matchCase: boolean): Match
     if (!node.isTextblock) return true;
     let text = "";
     node.forEach((child) => {
-      // Anything else, such as a picture, takes one position, as it does
-      // in the document, and matches nothing.
-      text += child.isText ? child.text! : "￼";
+      // Anything else, such as a footnote, takes its positions in the
+      // document, and matches nothing.
+      text += child.isText ? child.text! : "￼".repeat(child.nodeSize);
     });
     for (const found of text.matchAll(pattern)) {
       matches.push({ from: pos + 1 + found.index, to: pos + 1 + found.index + found[0].length });

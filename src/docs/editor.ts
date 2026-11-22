@@ -86,6 +86,8 @@ export function createEditor(
     onPictures,
     onAltText,
     onOpenPart,
+    onOpenNote,
+    onInsertFootnote,
   }: {
     readOnly: boolean;
     onChange: () => void;
@@ -98,6 +100,10 @@ export function createEditor(
     onAltText: () => void;
     /** Someone double-clicked a sheet's header or footer. */
     onOpenPart: (kind: PartKind, sheet: number) => void;
+    /** Someone clicked the note of the footnote at `pos`. */
+    onOpenNote: (pos: number) => void;
+    /** Someone asked for a footnote where the caret is. */
+    onInsertFootnote: () => void;
   },
 ): EditorView {
   addFonts();
@@ -109,6 +115,8 @@ export function createEditor(
       yCursorPlugin(live.awareness, { cursorBuilder, selectionBuilder }),
       yUndoPlugin(),
       keymap({ Enter: autoLinkOnEnter, "Shift-Enter": autoLinkOnEnter }),
+      // Google Docs' shortcut for a footnote.
+      keymap({ "Mod-Alt-f": () => (onInsertFootnote(), true) }),
       keymap(keys(onLink, onAltText)),
       keymap(baseKeymap),
       typingShortcuts(),
@@ -118,7 +126,7 @@ export function createEditor(
       gapCursor(),
       columnResizing(),
       tableEditing(),
-      pagesPlugin(mount, onOpenPart),
+      pagesPlugin(mount, onOpenPart, onOpenNote),
     ],
   });
   const view: EditorView = new EditorView(mount, {
@@ -129,6 +137,7 @@ export function createEditor(
       check_item: (node, editorView, getPos) => new CheckItemView(node, editorView, getPos),
       page_break: () => pageBreakView(),
       image: (node, editorView, getPos) => new ImageView(node, editorView, getPos, pictureAddress, !readOnly, onAltText),
+      footnote: () => footnoteView(),
     },
     markViews: styleMarkViews,
     transformPastedHTML: keepPastedStyles,
@@ -232,9 +241,22 @@ export function createPrintView(mount: HTMLElement, doc: Node, pictureAddress: (
       check_item: (node, editorView, getPos) => new CheckItemView(node, editorView, getPos),
       page_break: () => pageBreakView(),
       image: (node, editorView, getPos) => new ImageView(node, editorView, getPos, pictureAddress, false, () => undefined),
+      footnote: () => footnoteView(),
     },
     markViews: styleMarkViews,
   });
+}
+
+/** A footnote's number in the text. The style sheet numbers footnotes in
+ * order; its note shows at the bottom of the page (pages.ts). */
+function footnoteView(): NodeView {
+  const dom = document.createElement("sup");
+  dom.className = "docs-footnote-ref";
+  return {
+    dom,
+    update: (node) => node.type.name === "footnote",
+    ignoreMutation: () => true,
+  };
 }
 
 /** Someone else's caret: a line in their color, with their name. Colors go

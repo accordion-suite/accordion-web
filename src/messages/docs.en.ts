@@ -88,6 +88,8 @@ export const docsEn = {
   "docs.pageNumber": "Page number",
   "docs.pageCount": "Page count",
   "docs.pageBreakShortcut": "Ctrl+Enter",
+  "docs.footnote": "Footnote",
+  "docs.footnoteShortcut": "Ctrl+Alt+F",
   "docs.paragraphTitle": "Spacing and indents",
   "docs.paragraphApply": "Apply",
   "docs.indents": "Indents",

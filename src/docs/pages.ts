@@ -81,10 +81,25 @@ export interface PartEditing {
   element: HTMLElement;
 }
 
+/** A footnote's note someone is editing (footnotes.ts): where the footnote
+ * is, the element with its editor, which the bottom of the note's page
+ * shows, and what takes in the note as the document changes, or null once
+ * it's gone. */
+export interface NoteEditing {
+  pos: number;
+  element: HTMLElement;
+  sync: (node: Node | null) => void;
+  /** Where the footnote is after a change that replaced the whole
+   * document, as someone else's does, -1 if it's gone, or undefined for
+   * a change whose steps tell. */
+  relocate: (tr: Transaction, state: EditorState) => number | undefined;
+}
+
 interface PagesState {
   geometry: Geometry | null;
   parts: PageParts | null;
   editing: PartEditing | null;
+  note: NoteEditing | null;
   breaks: Break[];
   decorations: DecorationSet;
 }
@@ -93,7 +108,8 @@ type Meta =
   | { geometry: Geometry | null }
   | { breaks: Break[] }
   | { parts: PageParts | null }
-  | { editing: PartEditing | null };
+  | { editing: PartEditing | null }
+  | { note: NoteEditing | null };
 
 const key = new PluginKey<PagesState>("pages");
 
@@ -101,7 +117,7 @@ const key = new PluginKey<PagesState>("pages");
 interface Runtime {
   /** Each spacer's last height, so a spacer drawn again starts there. */
   heights: Map<string, Height>;
-  layOut: () => void;
+  layOut: () => boolean;
   mount: HTMLElement;
 }
 
@@ -133,6 +149,18 @@ export function setPartEditing(view: EditorView, editing: PartEditing | null) {
   view.dispatch(view.state.tr.setMeta(key, { editing } satisfies Meta).setMeta("addToHistory", false));
 }
 
+/** Shows a note's editor at the bottom of its page, in place of the note,
+ * or closes it. */
+export function setNoteEditing(view: EditorView, note: NoteEditing | null) {
+  view.dispatch(view.state.tr.setMeta(key, { note } satisfies Meta).setMeta("addToHistory", false));
+}
+
+/** Where the footnote whose note is open is now, if one is. */
+export function noteAt(view: EditorView): number | null {
+  const note = key.getState(view.state)?.note;
+  return note && note.pos >= 0 ? note.pos : null;
+}
+
 function sameGeometry(a: Geometry | null, b: Geometry | null): boolean {
   if (!a || !b) return a === b;
   return a.width === b.width && a.height === b.height && a.margins.every((margin, index) => margin === b.margins[index]);
@@ -140,11 +168,15 @@ function sameGeometry(a: Geometry | null, b: Geometry | null): boolean {
 
 /** The plugin that breaks the document into pages. `mount` is the editor's
  * page, where the sheets and margins are drawn. */
-export function pagesPlugin(mount: HTMLElement, onOpenPart?: (kind: PartKind, sheet: number) => void): Plugin<PagesState> {
+export function pagesPlugin(
+  mount: HTMLElement,
+  onOpenPart?: (kind: PartKind, sheet: number) => void,
+  onOpenNote?: (pos: number) => void,
+): Plugin<PagesState> {
   return new Plugin<PagesState>({
     key,
     state: {
-      init: () => ({ geometry: null, parts: null, editing: null, breaks: [], decorations: DecorationSet.empty }),
+      init: () => ({ geometry: null, parts: null, editing: null, note: null, breaks: [], decorations: DecorationSet.empty }),
       apply(tr: Transaction, before: PagesState, _old: EditorState, state: EditorState): PagesState {
         const meta = tr.getMeta(key) as Meta | undefined;
         if (meta && "geometry" in meta) {
@@ -152,20 +184,29 @@ export function pagesPlugin(mount: HTMLElement, onOpenPart?: (kind: PartKind, sh
         }
         if (meta && "parts" in meta) return { ...before, parts: meta.parts };
         if (meta && "editing" in meta) return { ...before, editing: meta.editing };
+        if (meta && "note" in meta) return { ...before, note: meta.note };
         if (meta && "breaks" in meta) {
           return { ...before, breaks: meta.breaks, decorations: decorate(state.doc, meta.breaks) };
         }
-        if (!tr.docChanged || !before.breaks.length) return before;
+        if (!tr.docChanged) return before;
+        // The open note follows its footnote, and closes if it goes.
+        let note = before.note;
+        if (note && note.pos >= 0) {
+          const found = note.relocate(tr, state);
+          const mapped = found === undefined ? tr.mapping.mapResult(note.pos, 1) : null;
+          note = { ...note, pos: found ?? (mapped!.deletedAfter ? -1 : mapped!.pos) };
+        }
+        if (!before.breaks.length) return note === before.note ? before : { ...before, note };
         const breaks = before.breaks.map((anchors) =>
           anchors.map((anchor) => ({ ...anchor, pos: tr.mapping.map(anchor.pos, -1) })),
         );
-        return { ...before, breaks, decorations: before.decorations.map(tr.mapping, tr.doc) };
+        return { ...before, note, breaks, decorations: before.decorations.map(tr.mapping, tr.doc) };
       },
     },
     props: {
       decorations: (state) => key.getState(state)?.decorations,
     },
-    view: (view) => new PagesView(view, mount, onOpenPart),
+    view: (view) => new PagesView(view, mount, onOpenPart, onOpenNote),
   });
 }
 
@@ -254,11 +295,28 @@ class PagesView {
   /** The height of each header and footer: the first page's, then the
    * others'. */
   private measured = { first: [0, 0], other: [0, 0] };
+  /** Where notes are measured, out of sight. */
+  private measurer: HTMLElement;
+  /** Each note's height, for the text's width. */
+  private noteHeights = new WeakMap<Node, number>();
+  private noteWidth = 0;
+  /** Each note as it's drawn, so a note is drawn again only once it
+   * changes. */
+  private noteRows = new WeakMap<Node, HTMLElement>();
+  /** The open note's editor, with its number. */
+  private editRow: { element: HTMLElement; row: HTMLElement } | null = null;
+  /** The notes at the bottom of each sheet, in a layer over the rest, so
+   * a table row's closed borders never cover them. */
+  private notesLayer: HTMLElement;
+  private noteAreas: HTMLElement[] = [];
+  /** The notes after the text, without pages, as on phones. */
+  private endnotes: HTMLElement;
 
   constructor(
     private view: EditorView,
     private mount: HTMLElement,
     private onOpenPart: ((kind: PartKind, sheet: number) => void) | undefined,
+    private onOpenNote: ((pos: number) => void) | undefined,
   ) {
     runtimes.set(view, { heights: new Map(), layOut: () => this.layOut(), mount });
     const document = mount.ownerDocument;
@@ -270,8 +328,16 @@ class PagesView {
     this.cuts = document.createElement("div");
     this.cuts.className = "docs-cuts";
     this.cuts.setAttribute("aria-hidden", "true");
+    this.notesLayer = document.createElement("div");
+    this.notesLayer.className = "docs-notes-layer";
+    this.measurer = document.createElement("div");
+    this.measurer.className = "docs-notes docs-notes-measure";
+    this.measurer.setAttribute("aria-hidden", "true");
+    this.endnotes = document.createElement("div");
+    this.endnotes.className = "docs-notes docs-endnotes";
+    this.endnotes.hidden = true;
     mount.prepend(this.sheets);
-    mount.append(this.margins, this.cuts);
+    mount.append(this.margins, this.cuts, this.notesLayer, this.measurer, this.endnotes);
     // Fonts and pictures that arrive later move the text, and so does a
     // change of width.
     const window = document.defaultView!;
@@ -281,8 +347,18 @@ class PagesView {
     view.dom.addEventListener("load", this.schedule, true);
     this.margins.addEventListener("load", this.schedule, true);
     this.margins.addEventListener("dblclick", this.open);
+    this.notesLayer.addEventListener("mousedown", this.openNote);
+    this.endnotes.addEventListener("mousedown", this.openNote);
     this.schedule();
   }
+
+  /** Clicking a note opens it for editing, where it is. */
+  private openNote = (event: MouseEvent) => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>(".docs-note");
+    if (!row || row === this.editRow?.row || !this.onOpenNote || !this.view.editable) return;
+    event.preventDefault();
+    this.onOpenNote(Number(row.dataset["pos"]));
+  };
 
   update(view: EditorView, previous: EditorState) {
     this.view = view;
@@ -292,9 +368,16 @@ class PagesView {
       view.state.doc !== previous.doc ||
       now?.geometry !== before?.geometry ||
       now?.parts !== before?.parts ||
-      now?.editing !== before?.editing
+      now?.editing !== before?.editing ||
+      now?.note !== before?.note
     ) {
       this.schedule();
+    }
+    // An open note takes in changes made elsewhere, such as an undo.
+    const note = now?.note;
+    if (note && view.state.doc !== previous.doc) {
+      const node = note.pos >= 0 ? view.state.doc.nodeAt(note.pos) : null;
+      note.sync(node?.type.name === "footnote" ? node : null);
     }
   }
 
@@ -334,30 +417,146 @@ class PagesView {
     return { top: (sheet) => room(sheet, 0), bottom: (sheet) => room(sheet, 1) };
   }
 
-  /** Breaks the pages now, as printing does once the fonts are in. */
-  layOut() {
+  /** Breaks the pages now, as printing does once the fonts are in, and
+   * says whether the breaks moved. */
+  layOut(): boolean {
     const state = key.getState(this.view.state);
     const geometry = state?.geometry ?? null;
     this.mount.classList.toggle("paged", geometry !== null);
+    const footnotes = this.measureNotes();
     if (!geometry) {
       this.clear();
-      return;
+      this.drawEndnotes(footnotes);
+      return false;
     }
+    this.drawEndnotes([]);
     const frame = this.frameFor(geometry);
     this.mount.style.paddingTop = `${frame.top(0)}px`;
-    const breaks = paginate(this.view, geometry, frame);
-    if (!sameBreaks(breaks, state!.breaks)) {
+    const breaks = paginate(this.view, geometry, frame, footnotes);
+    const moved = !sameBreaks(breaks, state!.breaks);
+    if (moved) {
       this.view.dispatch(this.view.state.tr.setMeta(key, { breaks } satisfies Meta).setMeta("addToHistory", false));
     }
     const gap = band(this.mount);
     const { count, cuts } = fitSpacers(this.view, this.mount, geometry, gap, frame);
     this.draw(geometry, count, frame);
     drawCuts(this.cuts, this.mount, geometry, gap, frame, cuts);
+    this.drawNotes(geometry, count, frame, gap, footnotes);
+    return moved;
+  }
+
+  /** The document's footnotes, with their notes' heights at the text's
+   * width. */
+  private measureNotes(): Footnote[] {
+    const found: { pos: number; node: Node }[] = [];
+    this.view.state.doc.descendants((node, pos) => {
+      if (node.type.name !== "footnote") return !node.isLeaf;
+      found.push({ pos, node });
+      return false;
+    });
+    if (!found.length) return [];
+    const width = this.view.dom.getBoundingClientRect().width;
+    if (Math.abs(width - this.noteWidth) > 0.5) {
+      this.noteHeights = new WeakMap();
+      this.noteWidth = width;
+    }
+    const missing = found.filter(({ node }) => !this.noteHeights.has(node));
+    if (missing.length) {
+      const document = this.mount.ownerDocument;
+      this.measurer.style.width = `${width}px`;
+      const rows = missing.map(({ node }) => noteRow(document, node));
+      this.measurer.replaceChildren(...rows);
+      rows.forEach((row, index) => this.noteHeights.set(missing[index]!.node, row.getBoundingClientRect().height));
+      this.measurer.replaceChildren();
+    }
+    return found.map((note) => ({ ...note, height: this.noteHeights.get(note.node) ?? 0 }));
+  }
+
+  /** Each note's row as it shows now, numbered: the open note's editor,
+   * or the note itself. */
+  private rows(footnotes: readonly Footnote[], indexes: readonly number[]): HTMLElement[] {
+    const document = this.mount.ownerDocument;
+    const open = key.getState(this.view.state)?.note ?? null;
+    const used = new Set<HTMLElement>();
+    return indexes.map((index) => {
+      const note = footnotes[index]!;
+      let row: HTMLElement;
+      if (open && open.pos === note.pos) {
+        if (this.editRow?.element !== open.element) {
+          row = noteRow(document, null);
+          row.append(open.element);
+          this.editRow = { element: open.element, row };
+        }
+        row = this.editRow.row;
+      } else {
+        row = this.noteRows.get(note.node) ?? noteRow(document, note.node);
+        // The same note twice, as after pasting it twice, needs a row each.
+        if (used.has(row)) row = noteRow(document, note.node);
+        else this.noteRows.set(note.node, row);
+      }
+      used.add(row);
+      row.dataset["pos"] = String(note.pos);
+      row.firstElementChild!.textContent = String(index + 1);
+      return row;
+    });
+  }
+
+  /** Draws each sheet's notes at its bottom, above the margin, under a
+   * short line, as Google Docs and Word draw them. */
+  private drawNotes(geometry: Geometry, count: number, frame: Frame, gap: number, footnotes: readonly Footnote[]) {
+    const document = this.mount.ownerDocument;
+    const stride = geometry.height + gap;
+    const pageTop = this.mount.getBoundingClientRect().top;
+    const bySheet = new Map<number, number[]>();
+    footnotes.forEach((note, index) => {
+      const dom = this.view.nodeDOM(note.pos);
+      if (!dom || dom.nodeType !== 1) return;
+      const y = (dom as HTMLElement).getBoundingClientRect().top - pageTop;
+      const sheet = Math.min(count - 1, Math.max(0, Math.floor(y / stride)));
+      const list = bySheet.get(sheet);
+      if (list) list.push(index);
+      else bySheet.set(sheet, [index]);
+    });
+    while (this.noteAreas.length > count) this.noteAreas.pop()!.remove();
+    while (this.noteAreas.length < count) {
+      const area = document.createElement("div");
+      area.className = "docs-notes";
+      area.append(noteRule(document));
+      this.notesLayer.append(area);
+      this.noteAreas.push(area);
+    }
+    const [, right, , left] = geometry.margins;
+    this.noteAreas.forEach((area, sheet) => {
+      const indexes = bySheet.get(sheet) ?? [];
+      area.hidden = !indexes.length;
+      if (!indexes.length) {
+        if (area.childElementCount > 1) area.replaceChildren(area.firstElementChild!);
+        return;
+      }
+      const height = notesRoom(indexes.reduce((sum, index) => sum + footnotes[index]!.height, 0));
+      area.style.left = `${left}px`;
+      area.style.width = `${geometry.width - left - right}px`;
+      area.style.top = `${sheet * stride + geometry.height - frame.bottom(sheet) - height}px`;
+      setChildren(area, [area.firstElementChild as HTMLElement, ...this.rows(footnotes, indexes)]);
+    });
+  }
+
+  /** Draws every note after the text, without pages, as on phones. */
+  private drawEndnotes(footnotes: readonly Footnote[]) {
+    this.endnotes.hidden = !footnotes.length;
+    if (!footnotes.length) {
+      this.endnotes.replaceChildren();
+      return;
+    }
+    const rule = (this.endnotes.firstElementChild as HTMLElement | null) ?? noteRule(this.mount.ownerDocument);
+    setChildren(this.endnotes, [rule, ...this.rows(footnotes, footnotes.map((_, index) => index))]);
   }
 
   private clear() {
     for (const zone of this.zones) zone.paper.remove();
     this.zones = [];
+    this.noteAreas = [];
+    this.notesLayer.replaceChildren();
     this.sheets.replaceChildren();
     this.margins.replaceChildren();
     this.cuts.replaceChildren();
@@ -462,6 +661,9 @@ class PagesView {
     this.sheets.remove();
     this.margins.remove();
     this.cuts.remove();
+    this.notesLayer.remove();
+    this.measurer.remove();
+    this.endnotes.remove();
     this.mount.classList.remove("paged", "editing-part");
   }
 }
@@ -475,6 +677,40 @@ function renderPart(document: Document, node: Node, number: number, count: numbe
     field.textContent = String(field.dataset["field"] === "pages" ? count : number);
   }
   return element;
+}
+
+/** A note as it shows at the bottom of a page: its number, and its text,
+ * or a place for its editor when `node` is null. */
+function noteRow(document: Document, node: Node | null): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "docs-note";
+  const number = document.createElement("span");
+  number.className = "docs-note-number";
+  row.append(number);
+  if (node) {
+    const text = document.createElement("div");
+    text.className = "docs-note-text";
+    text.append(partSerializer().serializeFragment(node.content, { document }));
+    row.append(text);
+  }
+  return row;
+}
+
+/** The short line over a page's notes. */
+function noteRule(document: Document): HTMLElement {
+  const rule = document.createElement("div");
+  rule.className = "docs-notes-rule";
+  return rule;
+}
+
+/** Gives `parent` exactly `children`, in order, moving nothing that's
+ * already in place, so an editor among them keeps its focus. */
+function setChildren(parent: HTMLElement, children: readonly HTMLElement[]) {
+  children.forEach((child, index) => {
+    const there = parent.children[index];
+    if (there !== child) parent.insertBefore(child, there ?? null);
+  });
+  while (parent.children.length > children.length) parent.lastElementChild!.remove();
 }
 
 let serializer: DOMSerializer | null = null;
@@ -505,8 +741,8 @@ export function sheetAt(view: EditorView, pos: number): number {
 }
 
 /** Lays out `view`'s pages at once, as printing needs before it starts. */
-export function layOutNow(view: EditorView) {
-  runtimes.get(view)?.layOut();
+export function layOutNow(view: EditorView): boolean {
+  return runtimes.get(view)?.layOut() ?? false;
 }
 
 function sameBreaks(a: readonly Break[], b: readonly Break[]): boolean {
@@ -545,6 +781,8 @@ interface CellUnit {
   top: number;
   bottom: number;
   anchor: Anchor;
+  /** How tall the notes of its footnotes are. */
+  notes: number;
 }
 
 /** A row's cell, as pages break it. */
@@ -562,10 +800,78 @@ interface CellFlow {
 
 const CONTAINERS = new Set(["blockquote", "bullet_list", "ordered_list", "check_list", "list_item", "check_item"]);
 
+/** A footnote: where it is, its node, and how tall its note is at the
+ * bottom of a page. */
+interface Footnote {
+  pos: number;
+  node: Node;
+  height: number;
+}
+
+/** The room a page's notes take beyond the notes themselves: the space
+ * above the line over them, the line, and the space under it (app.css'
+ * `.docs-notes`). */
+const NOTES_TOP = 17;
+
+/** The room notes `height` tall take at the bottom of a page. */
+function notesRoom(height: number): number {
+  return height > 0 ? NOTES_TOP + height : 0;
+}
+
+/** The document's footnotes, in order, for finding the notes in a stretch
+ * of it quickly. */
+class NoteIndex {
+  private sums: number[] = [0];
+
+  constructor(
+    private view: EditorView,
+    private notes: readonly Footnote[],
+  ) {
+    for (const note of notes) this.sums.push(this.sums[this.sums.length - 1]! + note.height);
+  }
+
+  /** The first footnote at or after `pos`. */
+  private first(pos: number): number {
+    let low = 0;
+    let high = this.notes.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (this.notes[middle]!.pos < pos) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  }
+
+  /** How tall the notes of the footnotes from `from` to `to` are. */
+  between(from: number, to: number): number {
+    return this.sums[this.first(to)]! - this.sums[this.first(from)]!;
+  }
+
+  /** How tall the notes of each line's footnotes are, for the lines of the
+   * text from `from` to `to`, measured with `free`. */
+  perLine(from: number, to: number, lines: readonly { bottom: number }[], free: (y: number) => number): number[] {
+    const out = lines.map(() => 0);
+    if (!lines.length) return out;
+    for (let index = this.first(from); index < this.notes.length && this.notes[index]!.pos < to; index++) {
+      const note = this.notes[index]!;
+      const dom = this.view.nodeDOM(note.pos);
+      if (!dom || dom.nodeType !== 1) continue;
+      const rect = (dom as HTMLElement).getBoundingClientRect();
+      const y = free((rect.top + rect.bottom) / 2);
+      const line = lines.findIndex((each) => y <= each.bottom);
+      out[line < 0 ? lines.length - 1 : line]! += note.height;
+    }
+    return out;
+  }
+}
+
 /** Where each page after the first starts, measuring the text as though no
- * spacers pushed it down. */
-function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
+ * spacers pushed it down. Each page leaves room at its bottom for the notes
+ * of the footnotes on it. A line goes to the next page when its own
+ * footnotes' notes don't fit under it. */
+function paginate(view: EditorView, geometry: Geometry, frame: Frame, footnotes: readonly Footnote[]): Break[] {
   const doc = view.state.doc;
+  const notes = new NoteIndex(view, footnotes);
   const marks = spacerMarks(view.dom);
   const origin = view.dom.getBoundingClientRect().top;
   /** How far each row with spacers in its cells pushed what follows it. */
@@ -590,13 +896,19 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
   let limit = room(0);
   let placed = false;
   let forced = false;
+  /** How tall the notes on the page so far are. */
+  let pageNotes = 0;
+  /** The room at the bottom of the page for its notes, with `more`. */
+  const reserve = (more: number) => notesRoom(pageNotes + more);
   // A heading at the end of a page goes to the next with the text after it.
-  let heading: { anchors: Break; top: number; first: boolean } | null = null;
+  let heading: { anchors: Break; top: number; first: boolean; notes: number } | null = null;
 
   const newPage = (anchors: Break, top: number) => {
+    pageNotes = 0;
     if (heading && !heading.first && !forced) {
       anchors = heading.anchors;
       top = heading.top;
+      pageNotes = heading.notes;
     }
     heading = null;
     forced = false;
@@ -605,13 +917,15 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
     placed = false;
   };
 
-  /** Something that can't be broken. It goes on the page if it fits, or
-   * if it's the first thing on the page, and starts the next otherwise. */
-  const unit = (bottom: number, start: () => { anchors: Break; top: number }) => {
-    if (forced || (placed && bottom > limit + 0.5)) {
+  /** Something that can't be broken, with its footnotes' notes `own` tall.
+   * It goes on the page if it fits, with its notes, or if it's the first
+   * thing on the page, and starts the next otherwise. */
+  const unit = (bottom: number, start: () => { anchors: Break; top: number }, own = 0) => {
+    if (forced || (placed && bottom + reserve(own) > limit + 0.5)) {
       const { anchors, top } = start();
       newPage(anchors, top);
     }
+    pageNotes += own;
     placed = true;
   };
 
@@ -628,16 +942,21 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
     const rect = element.getBoundingClientRect();
     const top = free(rect.top) - marginTop(element);
     const bottom = free(rect.bottom);
-    if (!forced && bottom <= limit + 0.5) {
-      heading = isHeading(node) ? { anchors: [hoist(doc, pos)], top, first: !placed } : null;
+    const own = notes.between(pos, pos + node.nodeSize);
+    if (!forced && bottom + reserve(own) <= limit + 0.5) {
+      heading = isHeading(node) ? { anchors: [hoist(doc, pos)], top, first: !placed, notes: own } : null;
+      pageNotes += own;
       placed = true;
       return;
     }
     if (node.isTextblock) {
       const lines = textLines(element, free);
+      const lineNotes = notes.perLine(pos, pos + node.nodeSize, lines, free);
       lines.forEach((line, index) => {
-        unit(line.bottom, () =>
-          index === 0 ? { anchors: [hoist(doc, pos)], top } : { anchors: [{ kind: "inline", pos: lineStart(view, line) }], top: line.top },
+        unit(
+          line.bottom,
+          () => (index === 0 ? { anchors: [hoist(doc, pos)], top } : { anchors: [{ kind: "inline", pos: lineStart(view, line) }], top: line.top }),
+          lineNotes[index],
         );
       });
       heading = null;
@@ -657,7 +976,7 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
       node.forEach((child, offset) => visit(child, pos + 1 + offset));
       return;
     }
-    unit(bottom, () => ({ anchors: [hoist(doc, pos)], top }));
+    unit(bottom, () => ({ anchors: [hoist(doc, pos)], top }), own);
     heading = null;
   };
 
@@ -677,13 +996,15 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
       cellDoms.push({ cell, pos, dom: dom as HTMLElement });
     });
     const spaced = marks.some((mark) => mark.cell && cellDoms.some(({ dom }) => dom === mark.cell));
+    const rowNotes = notes.between(rowPos, rowPos + row.nodeSize);
     // Most rows fit, and measuring their lines would only take time.
-    if (!spaced && !forced && free(rect.bottom) <= limit + 0.5) {
+    if (!spaced && !forced && free(rect.bottom) + reserve(rowNotes) <= limit + 0.5) {
       heading = null;
+      pageNotes += rowNotes;
       placed = true;
       return;
     }
-    const flows = cellDoms.map(({ cell, pos, dom }) => cellFlow(view, cell, pos, dom, freeIn(dom, rect.top, rowTop)));
+    const flows = cellDoms.map(({ cell, pos, dom }) => cellFlow(view, cell, pos, dom, freeIn(dom, rect.top, rowTop), notes));
     // The room under the cells' text, their padding and border.
     const under = flows.length ? rect.bottom - Math.max(...flows.map((flow) => flow.screenBottom)) : 0;
     const rowBottom = spaced && flows.length ? Math.max(...flows.map((flow) => flow.bottom)) + under : free(rect.bottom);
@@ -691,14 +1012,15 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
       if (spaced) rowShifts.push({ bottom: rect.bottom, shift: free(rect.bottom) - rowBottom });
       placed = true;
     };
-    if (!forced && rowBottom <= limit + 0.5) {
+    if (!forced && rowBottom + reserve(rowNotes) <= limit + 0.5) {
       heading = null;
+      pageNotes += rowNotes;
       done();
       return;
     }
     const cells = flows.filter((flow) => flow.units.length);
     if (!cells.length) {
-      unit(rowBottom, () => tableStart ?? rowStart(view, row, rowPos, free));
+      unit(rowBottom, () => tableStart ?? rowStart(view, row, rowPos, free), rowNotes);
       heading = null;
       done();
       return;
@@ -709,7 +1031,8 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
     const origins = cells.map(() => limit - room(startPage));
     const pages = cells.map(() => startPage);
     const firstBottom = Math.max(...cells.map((flow) => flow.units[0]!.bottom + flow.paddingBottom));
-    if (forced || (placed && firstBottom > limit + 0.5)) {
+    const firstNotes = cells.reduce((sum, flow) => sum + flow.units[0]!.notes, 0);
+    if (forced || (placed && firstBottom + reserve(firstNotes) > limit + 0.5)) {
       const starts = cells.map((flow) => (tableStart ? tableStart.top : flow.units[0]!.top - flow.padding));
       if (tableStart) newPage(tableStart.anchors, tableStart.top);
       else newPage(cells.map((flow) => flow.units[0]!.anchor), Math.min(...starts));
@@ -722,21 +1045,38 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
     }
     heading = null;
     placed = true;
+    pageNotes += firstNotes;
     const next = cells.map(() => 1);
     for (;;) {
       const page = breaks.length;
-      const cuts = cells.map((flow, index) => {
-        for (let at = next[index]!; at < flow.units.length; at++) {
-          if (flow.units[at]!.bottom + flow.paddingBottom > origins[index]! + room(page) + 0.5) return at;
-        }
-        return -1;
-      });
+      // The page's notes depend on which lines stay on it, so the room
+      // left for them grows until it holds the notes of the lines that do.
+      let held = 0;
+      let cuts: number[] = [];
+      let kept = 0;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const bottom = room(page) - reserve(held);
+        cuts = cells.map((flow, index) => {
+          for (let at = next[index]!; at < flow.units.length; at++) {
+            if (flow.units[at]!.bottom + flow.paddingBottom > origins[index]! + bottom + 0.5) return at;
+          }
+          return -1;
+        });
+        kept = cells.reduce((sum, flow, index) => {
+          const end = cuts[index]! < 0 ? flow.units.length : cuts[index]!;
+          return sum + flow.units.slice(next[index]!, end).reduce((total, each) => total + each.notes, 0);
+        }, 0);
+        if (kept <= held) break;
+        held = kept;
+      }
+      pageNotes += kept;
       if (cuts.every((cut) => cut < 0)) break;
       const moved = cells.flatMap((flow, index) => (cuts[index]! < 0 ? [] : [{ flow, unit: flow.units[cuts[index]!]! }]));
       newPage(
         moved.map(({ unit }) => unit.anchor),
         Math.min(...moved.map(({ flow, unit }) => unit.top - flow.padding)),
       );
+      pageNotes += moved.reduce((sum, { unit }) => sum + unit.notes, 0);
       cells.forEach((flow, index) => {
         const cut = cuts[index]!;
         next[index] = cut < 0 ? flow.units.length : cut + 1;
@@ -784,7 +1124,14 @@ function hoist(doc: Node, pos: number): Anchor {
 /** What a page can break between in a table cell: each line of its text,
  * and each picture or table of its own whole. `free` measures inside the
  * cell as though no spacers pushed its text down. */
-function cellFlow(view: EditorView, cell: Node, cellPos: number, dom: HTMLElement, free: (y: number) => number): CellFlow {
+function cellFlow(
+  view: EditorView,
+  cell: Node,
+  cellPos: number,
+  dom: HTMLElement,
+  free: (y: number) => number,
+  notes: NoteIndex,
+): CellFlow {
   const doc = view.state.doc;
   const units: CellUnit[] = [];
   const style = getComputedStyle(dom);
@@ -800,21 +1147,24 @@ function cellFlow(view: EditorView, cell: Node, cellPos: number, dom: HTMLElemen
     }
     const rect = box.getBoundingClientRect();
     screenBottom = Math.max(screenBottom, rect.bottom + (parseFloat(getComputedStyle(box).marginBottom) || 0));
-    // The cell's first paragraph moves with a spacer inside it, as a row's
-    // does when it starts a page. A list moves whole, with its bullets.
-    const hoisted = hoist(doc, pos);
-    const inside = units.length === 0 && node.isTextblock && hoisted.pos === pos;
-    const start: Anchor = inside ? { kind: "inline", pos: pos + 1 } : hoisted;
-    const top = inside ? null : free(rect.top) - marginTop(box);
+    // A block moves with a spacer before it, a list whole, with its
+    // bullets. A spacer inside a cell's first paragraph would print wrong:
+    // the browser moves the whole row to the next sheet of paper, spacer and
+    // all, rather than break inside a float at the cell's start.
+    const start = hoist(doc, pos);
+    const top = free(rect.top) - marginTop(box);
     if (!node.isTextblock) {
-      units.push({ top: top!, bottom: free(rect.bottom), anchor: start });
+      units.push({ top, bottom: free(rect.bottom), anchor: start, notes: notes.between(pos, pos + node.nodeSize) });
       return;
     }
-    textLines(box, free).forEach((line, index) => {
+    const lines = textLines(box, free);
+    const lineNotes = notes.perLine(pos, pos + node.nodeSize, lines, free);
+    lines.forEach((line, index) => {
       units.push({
-        top: index === 0 ? (top ?? line.top) : line.top,
+        top: index === 0 ? top : line.top,
         bottom: line.bottom,
         anchor: index === 0 ? start : { kind: "inline", pos: lineStart(view, line) },
+        notes: lineNotes[index]!,
       });
     });
   };
@@ -824,7 +1174,7 @@ function cellFlow(view: EditorView, cell: Node, cellPos: number, dom: HTMLElemen
 }
 
 /** A row after a table's first starts a page with a spacer at the start of
- * each cell. */
+ * each cell, before its first block (see `cellFlow`). */
 function rowStart(view: EditorView, row: Node, rowPos: number, free: (y: number) => number): { anchors: Break; top: number } {
   const anchors: Break = [];
   let top = Infinity;
@@ -840,9 +1190,12 @@ function rowStart(view: EditorView, row: Node, rowPos: number, free: (y: number)
       return true;
     });
     if (first === null) return;
-    anchors.push({ kind: "inline", pos: first + 1 });
+    anchors.push(hoist(view.state.doc, first));
     const dom = view.nodeDOM(first);
-    if (dom && dom.nodeType === 1) top = Math.min(top, free((dom as HTMLElement).getBoundingClientRect().top));
+    if (dom && dom.nodeType === 1) {
+      const element = dom as HTMLElement;
+      top = Math.min(top, free(element.getBoundingClientRect().top) - marginTop(element));
+    }
   });
   if (top === Infinity) {
     const dom = view.nodeDOM(rowPos) as HTMLElement | null;

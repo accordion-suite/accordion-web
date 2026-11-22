@@ -5,7 +5,7 @@ import "./messages.ts";
 
 import type { ComponentChildren, RefObject } from "preact";
 import { deleteSelection, selectAll } from "prosemirror-commands";
-import type { Command } from "prosemirror-state";
+import { type Command, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useEffect, useRef, useState } from "preact/hooks";
 import * as Y from "yjs";
@@ -140,6 +140,7 @@ import { Outline, readShowOutline, saveShowOutline } from "./outline.tsx";
 import {
   geometryOf,
   layOutNow,
+  noteAt,
   type PartKind,
   setPageGeometry,
   setPageParts,
@@ -148,6 +149,7 @@ import {
   showPaper,
 } from "./pages.ts";
 import { PartEditor } from "./part-editor.ts";
+import { footnoteBefore, insertFootnote, NoteEditor } from "./footnotes.ts";
 import { addPageNumbers, readParts, watchParts } from "./parts.ts";
 import { printDocument } from "./print.ts";
 import { HEADING_LEVELS, linkFromTyped } from "./schema.ts";
@@ -529,6 +531,9 @@ function DocumentPage({
   // work on in place of the document.
   const partEditor = useRef<PartEditor | null>(null);
   const [editingPart, setEditingPart] = useState<PartKind | null>(null);
+  // A footnote's note someone is editing at the bottom of its page, which
+  // the toolbar works on in place of the document.
+  const noteEditor = useRef<NoteEditor | null>(null);
   const stopParts = useRef<(() => void) | null>(null);
   const documentElement = useRef<HTMLDivElement>(null);
   const header = useRef<HTMLDivElement>(null);
@@ -592,6 +597,7 @@ function DocumentPage({
     }
     return () => {
       closePart();
+      closeNote();
       stopParts.current?.();
       stopParts.current = null;
       if (firstChange) document.doc.off("update", firstChange);
@@ -614,11 +620,16 @@ function DocumentPage({
       onPictures: (files) => void addPictures(files),
       onAltText: () => startAltText(),
       onOpenPart: (kind, sheet) => openPart(kind, sheet),
+      onOpenNote: (pos) => openNote(pos),
+      onInsertFootnote: () => addFootnote(),
     });
     const editor = view.current;
     stopParts.current = watchParts(document.doc, (parts) => setPageParts(editor, parts));
-    // Going back to the text closes a header or footer.
-    editor.dom.addEventListener("mousedown", () => closePart());
+    // Going back to the text closes a header, a footer, or a note.
+    editor.dom.addEventListener("mousedown", () => {
+      closePart();
+      closeNote();
+    });
     keepClearOfHeader();
     setFormat(formatting(view.current.state));
     // A new document, or one from before page setup, gets the paper of the
@@ -786,7 +797,7 @@ function DocumentPage({
   /** The editor the toolbar and menus work on: an open header's or
    * footer's, or the document's. */
   function target(): EditorView | null {
-    return partEditor.current?.view ?? view.current;
+    return noteEditor.current?.view ?? partEditor.current?.view ?? view.current;
   }
 
   function run(command: Command) {
@@ -794,6 +805,18 @@ function DocumentPage({
     if (!editor) return;
     command(editor.state, editor.dispatch, editor);
     editor.focus();
+  }
+
+  /** Undo or redo. An open note has no history of its own: its changes
+   * are the document's, so they're undone there, as Ctrl+Z in the note
+   * does. */
+  function runHistory(command: Command) {
+    const editor = noteEditor.current ? view.current : target();
+    if (!editor) return;
+    command(editor.state, editor.dispatch, editor);
+    // An undo that takes the footnote away closes its note, which puts
+    // focus back in the text.
+    (noteEditor.current?.view ?? target())?.focus();
   }
 
   /** Runs a command while focus stays where it is, such as in the find
@@ -839,6 +862,52 @@ function DocumentPage({
       setFormat(formatting(view.current.state));
     }
     editor.close();
+  }
+
+  /** Opens the note of the footnote at `pos` for editing, at the bottom of
+   * its page. */
+  function openNote(pos: number) {
+    const main = view.current;
+    if (!main || readOnly) return;
+    closePart();
+    closeNote();
+    const editor = new NoteEditor(main, pos, {
+      onChange: () => noteEditor.current && setFormat(formatting(noteEditor.current.view.state)),
+      onLink: () => startLink(),
+      // Escape goes back to the text, just after the footnote's number.
+      onClose: () => {
+        const at = noteAt(main);
+        closeNote();
+        const node = at === null ? null : main.state.doc.nodeAt(at);
+        if (at !== null && node) main.dispatch(main.state.tr.setSelection(TextSelection.create(main.state.doc, at + node.nodeSize)));
+        main.focus();
+      },
+    });
+    noteEditor.current = editor;
+    // The page shows the editor once the pages are laid out, and only then
+    // can it take focus.
+    layOutNow(main);
+    editor.focus();
+    setFormat(formatting(editor.view.state));
+  }
+
+  function closeNote() {
+    const editor = noteEditor.current;
+    if (!editor) return;
+    noteEditor.current = null;
+    editor.close();
+    if (view.current) setFormat(formatting(view.current.state));
+  }
+
+  /** Puts a footnote where the caret is in the text, and opens its note,
+   * as Google Docs does. */
+  function addFootnote() {
+    const main = view.current;
+    if (!main || readOnly || partEditor.current) return;
+    closeNote();
+    if (!insertFootnote(main.state, main.dispatch)) return;
+    const pos = footnoteBefore(main.state);
+    if (pos !== null) openNote(pos);
   }
 
   /** Opens the header or footer of the page the caret is on. */
@@ -1068,12 +1137,12 @@ function DocumentPage({
           {
             label: t("docs.undo"),
             shortcut: t("docs.undoShortcut"),
-            onSelect: () => run(undo),
+            onSelect: () => runHistory(undo),
           },
           {
             label: t("docs.redo"),
             shortcut: t("docs.redoShortcut"),
-            onSelect: () => run(redo),
+            onSelect: () => runHistory(redo),
           },
           SEPARATOR,
           {
@@ -1148,6 +1217,11 @@ function DocumentPage({
                     label: t("docs.pageBreak"),
                     shortcut: t("docs.pageBreakShortcut"),
                     onSelect: () => run(insertPageBreak),
+                  },
+                  {
+                    label: t("docs.footnote"),
+                    shortcut: t("docs.footnoteShortcut"),
+                    onSelect: addFootnote,
                   },
                 ]),
             SEPARATOR,
@@ -1445,6 +1519,7 @@ function DocumentPage({
             <Toolbar
               format={format}
               run={run}
+              runHistory={runHistory}
               onLink={startLink}
               onChoosePictures={() => choosePictures.current?.click()}
               onSpacing={startSpacing}
@@ -2149,6 +2224,7 @@ function lineName(line: number): string {
 function Toolbar({
   format,
   run,
+  runHistory,
   onLink,
   onChoosePictures,
   onSpacing,
@@ -2157,6 +2233,8 @@ function Toolbar({
 }: {
   format: Formatting;
   run: Run;
+  /** Runs undo or redo on the document's history. */
+  runHistory: Run;
   onLink: () => void;
   onChoosePictures: () => void;
   onSpacing: () => void;
@@ -2174,10 +2252,10 @@ function Toolbar({
   );
   return (
     <div class="docs-toolbar" role="toolbar" aria-label={t("docs.toolbar")}>
-      <ToolButton label={t("docs.undo")} onClick={() => run(undo)}>
+      <ToolButton label={t("docs.undo")} onClick={() => runHistory(undo)}>
         <UndoIcon />
       </ToolButton>
-      <ToolButton label={t("docs.redo")} onClick={() => run(redo)}>
+      <ToolButton label={t("docs.redo")} onClick={() => runHistory(redo)}>
         <RedoIcon />
       </ToolButton>
       <span class="docs-toolbar-gap" />
