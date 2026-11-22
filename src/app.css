@@ -5701,14 +5701,28 @@ button.checklist-add {
 }
 
 .docs-sheets,
-.docs-margins {
+.docs-margins,
+.docs-cuts {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.docs-margins {
+.docs-margins,
+.docs-cuts {
   z-index: 2;
+}
+
+/* Where a page cuts a table row, the row ends under its text on the page,
+   with its borders closed, and goes on at the next page's top (pages.ts'
+   drawCuts). */
+.docs-cut,
+.docs-cut-line {
+  position: absolute;
+}
+
+.docs-cut {
+  background: #fff;
 }
 
 .docs-sheet,

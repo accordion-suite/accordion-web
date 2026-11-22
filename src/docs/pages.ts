@@ -247,6 +247,8 @@ class PagesView {
   private frame = 0;
   private sheets: HTMLElement;
   private margins: HTMLElement;
+  /** Borders closed where pages cut table rows. */
+  private cuts: HTMLElement;
   private watcher: ResizeObserver;
   private zones: Zone[] = [];
   /** The height of each header and footer: the first page's, then the
@@ -265,8 +267,11 @@ class PagesView {
     this.sheets.setAttribute("aria-hidden", "true");
     this.margins = document.createElement("div");
     this.margins.className = "docs-margins";
+    this.cuts = document.createElement("div");
+    this.cuts.className = "docs-cuts";
+    this.cuts.setAttribute("aria-hidden", "true");
     mount.prepend(this.sheets);
-    mount.append(this.margins);
+    mount.append(this.margins, this.cuts);
     // Fonts and pictures that arrive later move the text, and so does a
     // change of width.
     const window = document.defaultView!;
@@ -344,8 +349,10 @@ class PagesView {
     if (!sameBreaks(breaks, state!.breaks)) {
       this.view.dispatch(this.view.state.tr.setMeta(key, { breaks } satisfies Meta).setMeta("addToHistory", false));
     }
-    const sheets = fitSpacers(this.view, this.mount, geometry, band(this.mount), frame);
-    this.draw(geometry, sheets, frame);
+    const gap = band(this.mount);
+    const { count, cuts } = fitSpacers(this.view, this.mount, geometry, gap, frame);
+    this.draw(geometry, count, frame);
+    drawCuts(this.cuts, this.mount, geometry, gap, frame, cuts);
   }
 
   private clear() {
@@ -353,6 +360,7 @@ class PagesView {
     this.zones = [];
     this.sheets.replaceChildren();
     this.margins.replaceChildren();
+    this.cuts.replaceChildren();
     this.mount.style.removeProperty("min-height");
     this.mount.style.removeProperty("padding-top");
   }
@@ -453,6 +461,7 @@ class PagesView {
     this.clear();
     this.sheets.remove();
     this.margins.remove();
+    this.cuts.remove();
     this.mount.classList.remove("paged", "editing-part");
   }
 }
@@ -511,25 +520,44 @@ function sameBreaks(a: readonly Break[], b: readonly Break[]): boolean {
   );
 }
 
-interface SpacerGroup {
+/** A spacer on screen, and the table cell it's in, if any. */
+interface SpacerMark {
   top: number;
   height: number;
+  cell: HTMLElement | null;
 }
 
-/** Each page break's spacers, by their place on screen. */
-function spacerGroups(root: HTMLElement): SpacerGroup[] {
-  const groups = new Map<string, SpacerGroup>();
-  for (const element of root.querySelectorAll<HTMLElement>(".docs-spacer")) {
+function spacerMarks(root: HTMLElement): SpacerMark[] {
+  return [...root.querySelectorAll<HTMLElement>(".docs-spacer")].map((element) => {
     const rect = element.getBoundingClientRect();
-    const index = element.dataset["break"] ?? "";
-    const group = groups.get(index);
-    if (!group) groups.set(index, { top: rect.top, height: rect.height });
-    else {
-      group.top = Math.min(group.top, rect.top);
-      group.height = Math.max(group.height, rect.height);
-    }
-  }
-  return [...groups.values()].sort((a, b) => a.top - b.top);
+    return { top: rect.top, height: rect.height, cell: cellOf(element) };
+  });
+}
+
+/** The table cell `element` is in, or null for the document's own flow. */
+function cellOf(element: HTMLElement): HTMLElement | null {
+  return element.closest<HTMLElement>("td, th");
+}
+
+/** Something in a cell that a page can't break: a line, a picture, or a
+ * table of its own. */
+interface CellUnit {
+  top: number;
+  bottom: number;
+  anchor: Anchor;
+}
+
+/** A row's cell, as pages break it. */
+interface CellFlow {
+  dom: HTMLElement;
+  units: CellUnit[];
+  /** Room above its text on a page it continues on, as at its top, and
+   * below it on a page it goes on from. */
+  padding: number;
+  paddingBottom: number;
+  /** Where its text ends, on screen and without spacers. */
+  screenBottom: number;
+  bottom: number;
 }
 
 const CONTAINERS = new Set(["blockquote", "bullet_list", "ordered_list", "check_list", "list_item", "check_item"]);
@@ -538,15 +566,22 @@ const CONTAINERS = new Set(["blockquote", "bullet_list", "ordered_list", "check_
  * spacers pushed it down. */
 function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
   const doc = view.state.doc;
-  const groups = spacerGroups(view.dom);
+  const marks = spacerMarks(view.dom);
   const origin = view.dom.getBoundingClientRect().top;
+  /** How far each row with spacers in its cells pushed what follows it. */
+  const rowShifts: { bottom: number; shift: number }[] = [];
   /** A place on screen, as it would be without the spacers above it. */
   const free = (y: number) => {
     let at = y - origin;
-    for (const group of groups) {
-      if (group.top >= y - 0.5) break;
-      at -= group.height;
-    }
+    for (const mark of marks) if (!mark.cell && mark.top < y - 0.5) at -= mark.height;
+    for (const row of rowShifts) if (row.bottom <= y + 0.5) at -= row.shift;
+    return at;
+  };
+  /** The same, inside a cell of a row that starts at `rowTop`: each cell's
+   * text flows on its own, pushed down by its own spacers. */
+  const freeIn = (cell: HTMLElement, rowScreenTop: number, rowTop: number) => (y: number) => {
+    let at = rowTop + (y - rowScreenTop);
+    for (const mark of marks) if (mark.cell === cell && mark.top < y - 0.5) at -= mark.height;
     return at;
   };
   const room = (page: number) => geometry.height - frame.top(page) - frame.bottom(page);
@@ -613,8 +648,7 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
         const rowPos = pos + 1 + offset;
         const rowDom = view.nodeDOM(rowPos);
         if (!rowDom || rowDom.nodeType !== 1) return;
-        const rowBottom = free((rowDom as HTMLElement).getBoundingClientRect().bottom);
-        unit(rowBottom, () => (index === 0 ? { anchors: [hoist(doc, pos)], top } : rowStart(view, row, rowPos, free)));
+        visitRow(row, rowPos, rowDom as HTMLElement, index === 0 ? { anchors: [hoist(doc, pos)], top } : null);
       });
       heading = null;
       return;
@@ -625,6 +659,99 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame): Break[] {
     }
     unit(bottom, () => ({ anchors: [hoist(doc, pos)], top }));
     heading = null;
+  };
+
+  /** A table row breaks between the lines of its cells, as Word and Google
+   * Docs break rows by default. Each cell's text goes on where it left off,
+   * at the top of the next page. A row whose first lines don't fit starts
+   * the next page whole; the table's first row takes the table with it. */
+  const visitRow = (row: Node, rowPos: number, rowDom: HTMLElement, tableStart: { anchors: Break; top: number } | null) => {
+    const rect = rowDom.getBoundingClientRect();
+    const rowTop = free(rect.top);
+    const cellDoms: { cell: Node; pos: number; dom: HTMLElement }[] = [];
+    row.forEach((cell, offset) => {
+      const pos = rowPos + 1 + offset;
+      const dom = view.nodeDOM(pos);
+      // A cell over more than one row stays whole, with its first row.
+      if (!dom || dom.nodeType !== 1 || ((cell.attrs["rowspan"] as number | undefined) ?? 1) > 1) return;
+      cellDoms.push({ cell, pos, dom: dom as HTMLElement });
+    });
+    const spaced = marks.some((mark) => mark.cell && cellDoms.some(({ dom }) => dom === mark.cell));
+    // Most rows fit, and measuring their lines would only take time.
+    if (!spaced && !forced && free(rect.bottom) <= limit + 0.5) {
+      heading = null;
+      placed = true;
+      return;
+    }
+    const flows = cellDoms.map(({ cell, pos, dom }) => cellFlow(view, cell, pos, dom, freeIn(dom, rect.top, rowTop)));
+    // The room under the cells' text, their padding and border.
+    const under = flows.length ? rect.bottom - Math.max(...flows.map((flow) => flow.screenBottom)) : 0;
+    const rowBottom = spaced && flows.length ? Math.max(...flows.map((flow) => flow.bottom)) + under : free(rect.bottom);
+    const done = () => {
+      if (spaced) rowShifts.push({ bottom: rect.bottom, shift: free(rect.bottom) - rowBottom });
+      placed = true;
+    };
+    if (!forced && rowBottom <= limit + 0.5) {
+      heading = null;
+      done();
+      return;
+    }
+    const cells = flows.filter((flow) => flow.units.length);
+    if (!cells.length) {
+      unit(rowBottom, () => tableStart ?? rowStart(view, row, rowPos, free));
+      heading = null;
+      done();
+      return;
+    }
+    const startPage = breaks.length;
+    /** Where the page each cell is on starts, as the cell sees it, and
+     * which page that is. */
+    const origins = cells.map(() => limit - room(startPage));
+    const pages = cells.map(() => startPage);
+    const firstBottom = Math.max(...cells.map((flow) => flow.units[0]!.bottom + flow.paddingBottom));
+    if (forced || (placed && firstBottom > limit + 0.5)) {
+      const starts = cells.map((flow) => (tableStart ? tableStart.top : flow.units[0]!.top - flow.padding));
+      if (tableStart) newPage(tableStart.anchors, tableStart.top);
+      else newPage(cells.map((flow) => flow.units[0]!.anchor), Math.min(...starts));
+      // A heading kept with the table moves the page's start up to it.
+      const shift = limit - room(breaks.length) - Math.min(...starts);
+      starts.forEach((start, index) => {
+        origins[index] = start + Math.min(0, shift);
+        pages[index] = breaks.length;
+      });
+    }
+    heading = null;
+    placed = true;
+    const next = cells.map(() => 1);
+    for (;;) {
+      const page = breaks.length;
+      const cuts = cells.map((flow, index) => {
+        for (let at = next[index]!; at < flow.units.length; at++) {
+          if (flow.units[at]!.bottom + flow.paddingBottom > origins[index]! + room(page) + 0.5) return at;
+        }
+        return -1;
+      });
+      if (cuts.every((cut) => cut < 0)) break;
+      const moved = cells.flatMap((flow, index) => (cuts[index]! < 0 ? [] : [{ flow, unit: flow.units[cuts[index]!]! }]));
+      newPage(
+        moved.map(({ unit }) => unit.anchor),
+        Math.min(...moved.map(({ flow, unit }) => unit.top - flow.padding)),
+      );
+      cells.forEach((flow, index) => {
+        const cut = cuts[index]!;
+        next[index] = cut < 0 ? flow.units.length : cut + 1;
+        if (cut < 0) return;
+        origins[index] = flow.units[cut]!.top - flow.padding;
+        pages[index] = breaks.length;
+      });
+    }
+    // What follows the row goes on under the cells' text on its last page.
+    const last = breaks.length;
+    if (last > startPage) {
+      const ends = cells.flatMap((flow, index) => (pages[index] === last ? [flow.bottom + under - origins[index]!] : []));
+      limit = rowBottom - Math.max(...ends) + room(last);
+    }
+    done();
   };
 
   doc.forEach((child, offset) => visit(child, offset));
@@ -652,6 +779,48 @@ function hoist(doc: Node, pos: number): Anchor {
     at = $pos.before(depth);
   }
   return { kind: "block", pos: at };
+}
+
+/** What a page can break between in a table cell: each line of its text,
+ * and each picture or table of its own whole. `free` measures inside the
+ * cell as though no spacers pushed its text down. */
+function cellFlow(view: EditorView, cell: Node, cellPos: number, dom: HTMLElement, free: (y: number) => number): CellFlow {
+  const doc = view.state.doc;
+  const units: CellUnit[] = [];
+  const style = getComputedStyle(dom);
+  const padding = parseFloat(style.paddingTop) || 0;
+  let screenBottom = dom.getBoundingClientRect().top + (parseFloat(style.borderTopWidth) || 0) + padding;
+  const visit = (node: Node, pos: number) => {
+    const element = view.nodeDOM(pos);
+    if (!element || element.nodeType !== 1) return;
+    const box = element as HTMLElement;
+    if (CONTAINERS.has(node.type.name) && !node.isTextblock) {
+      node.forEach((child, offset) => visit(child, pos + 1 + offset));
+      return;
+    }
+    const rect = box.getBoundingClientRect();
+    screenBottom = Math.max(screenBottom, rect.bottom + (parseFloat(getComputedStyle(box).marginBottom) || 0));
+    // The cell's first paragraph moves with a spacer inside it, as a row's
+    // does when it starts a page. A list moves whole, with its bullets.
+    const hoisted = hoist(doc, pos);
+    const inside = units.length === 0 && node.isTextblock && hoisted.pos === pos;
+    const start: Anchor = inside ? { kind: "inline", pos: pos + 1 } : hoisted;
+    const top = inside ? null : free(rect.top) - marginTop(box);
+    if (!node.isTextblock) {
+      units.push({ top: top!, bottom: free(rect.bottom), anchor: start });
+      return;
+    }
+    textLines(box, free).forEach((line, index) => {
+      units.push({
+        top: index === 0 ? (top ?? line.top) : line.top,
+        bottom: line.bottom,
+        anchor: index === 0 ? start : { kind: "inline", pos: lineStart(view, line) },
+      });
+    });
+  };
+  cell.forEach((child, offset) => visit(child, cellPos + 1 + offset));
+  const paddingBottom = parseFloat(style.paddingBottom) || 0;
+  return { dom, units, padding, paddingBottom, screenBottom, bottom: free(screenBottom) };
 }
 
 /** A row after a table's first starts a page with a spacer at the start of
@@ -767,9 +936,22 @@ function lineStart(view: EditorView, line: Line): number {
   return view.posAtDOM(node, low);
 }
 
+/** Where a page break cuts a table row: the row, and the sheet its cells
+ * go on to. */
+interface RowCut {
+  row: HTMLElement;
+  sheet: number;
+}
+
 /** Sizes each spacer to reach the top of the next sheet's text, and
- * returns how many sheets the document takes. */
-function fitSpacers(view: EditorView, mount: HTMLElement, geometry: Geometry, gap: number, frame: Frame): number {
+ * returns how many sheets the document takes, and where it cuts rows. */
+function fitSpacers(
+  view: EditorView,
+  mount: HTMLElement,
+  geometry: Geometry,
+  gap: number,
+  frame: Frame,
+): { count: number; cuts: RowCut[] } {
   const runtime = runtimes.get(view);
   const stride = geometry.height + gap;
   const pageTop = mount.getBoundingClientRect().top;
@@ -791,6 +973,7 @@ function fitSpacers(view: EditorView, mount: HTMLElement, geometry: Geometry, ga
   let shift = 0;
   let stale = false;
   let sheet = 0;
+  const cuts: RowCut[] = [];
   for (const [, elements] of ordered) {
     if (stale) {
       measureAll();
@@ -803,16 +986,98 @@ function fitSpacers(view: EditorView, mount: HTMLElement, geometry: Geometry, ga
     // Something taller than a page pushes what follows past a whole sheet.
     while (sheet * stride + frame.top(sheet) - top < 0) sheet++;
     const bands = sheet - previous;
+    let row: HTMLElement | null = null;
     for (const element of elements) {
       const rect = rects.get(element)!;
-      const height = Math.max(0, sheet * stride + frame.top(sheet) - (rect.top + shift - pageTop));
+      // A cell's text goes on under its padding, as at the cell's top.
+      const cell = cellOf(element);
+      const padding = cell ? parseFloat(getComputedStyle(cell).paddingTop) || 0 : 0;
+      row ??= cell?.parentElement ?? null;
+      const height = Math.max(0, sheet * stride + frame.top(sheet) + padding - (rect.top + shift - pageTop));
       const fitted = { base: height - bands * gap, bands };
       if (Math.abs(height - rect.height) > 0.01) setHeight(element, fitted);
       runtime?.heights.set(element.dataset["name"] ?? "", fitted);
-      if (elements.length === 1) shift += height - rect.height;
+      if (elements.length === 1 && !cell) shift += height - rect.height;
     }
-    if (elements.length > 1) stale = true;
+    // Spacers in cells move what follows by as much as the row grows,
+    // which only measuring again tells.
+    if (row) {
+      cuts.push({ row, sheet });
+      stale = true;
+    } else if (elements.length > 1) stale = true;
   }
   const bottom = view.dom.getBoundingClientRect().bottom - pageTop;
-  return Math.max(sheet + 1, Math.floor(Math.max(0, bottom - 1) / stride) + 1);
+  return { count: Math.max(sheet + 1, Math.floor(Math.max(0, bottom - 1) / stride) + 1), cuts };
+}
+
+/** Closes a table's borders where a page cuts a row, as Word and Google
+ * Docs do: the row's cells end under the last of their text on the page,
+ * with their bottom borders, and go on at the next page's top with their
+ * top borders. Drawn over the text, in `layer`, in `mount`'s coordinates. */
+function drawCuts(layer: HTMLElement, mount: HTMLElement, geometry: Geometry, gap: number, frame: Frame, cuts: RowCut[]) {
+  const document = layer.ownerDocument;
+  const pageTop = mount.getBoundingClientRect().top;
+  const pageLeft = mount.getBoundingClientRect().left;
+  const stride = geometry.height + gap;
+  const pieces: HTMLElement[] = [];
+  const box = (className: string, left: number, top: number, width: number, height: number) => {
+    const element = document.createElement("div");
+    element.className = className;
+    element.style.left = `${left - pageLeft}px`;
+    element.style.top = `${top}px`;
+    element.style.width = `${width}px`;
+    element.style.height = `${height}px`;
+    pieces.push(element);
+    return element;
+  };
+  const line = (cell: HTMLElement, side: "Top" | "Bottom", y: number) => {
+    const style = getComputedStyle(cell);
+    const width = parseFloat(style.getPropertyValue(`border-${side.toLowerCase()}-width`)) || 0;
+    const kind = style.getPropertyValue(`border-${side.toLowerCase()}-style`);
+    if (width <= 0 || kind === "none" || kind === "hidden") return;
+    const rect = cell.getBoundingClientRect();
+    const element = box("docs-cut-line", rect.left, y - width / 2, rect.width, 0);
+    element.style.borderTop = `${width}px ${kind} ${style.getPropertyValue(`border-${side.toLowerCase()}-color`)}`;
+  };
+  for (const { row, sheet } of cuts) {
+    const cells = [...row.children].filter((child): child is HTMLElement => child.tagName === "TD" || child.tagName === "TH");
+    if (!cells.length) continue;
+    const before = sheet - 1;
+    const textBottom = before * stride + geometry.height - frame.bottom(before);
+    const textTop = sheet * stride + frame.top(sheet);
+    // Where each cell's text on the page before ends: at its spacer, or at
+    // its end when it ended there.
+    let empty = true;
+    let end = -Infinity;
+    for (const cell of cells) {
+      const style = getComputedStyle(cell);
+      const rect = cell.getBoundingClientRect();
+      const contentTop = rect.top + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.paddingTop) || 0);
+      const spacer = [...cell.querySelectorAll<HTMLElement>(".docs-spacer")].find(
+        (element) => element.getBoundingClientRect().bottom - pageTop >= textTop - 1,
+      );
+      let bottom = contentTop;
+      if (spacer) bottom = spacer.getBoundingClientRect().top;
+      else {
+        for (const child of cell.children) {
+          if (child.classList.contains("docs-spacer")) continue;
+          const margin = parseFloat(getComputedStyle(child).marginBottom) || 0;
+          bottom = Math.max(bottom, child.getBoundingClientRect().bottom + margin);
+        }
+      }
+      if (bottom - pageTop >= textTop - 1) continue;
+      if (bottom > contentTop + 0.5) empty = false;
+      end = Math.max(end, bottom + (parseFloat(style.paddingBottom) || 0) - pageTop);
+    }
+    const rowRect = row.getBoundingClientRect();
+    const left = Math.min(...cells.map((cell) => cell.getBoundingClientRect().left)) - 4;
+    const right = Math.max(...cells.map((cell) => cell.getBoundingClientRect().right)) + 4;
+    // A row that starts the next page leaves nothing of itself behind but
+    // the border it shares with the row above.
+    const cutAt = Math.min(textBottom, empty ? rowRect.top - pageTop + 1 : end);
+    if (cutAt < textBottom) box("docs-cut", left, cutAt + (empty ? 0 : 1), right - left, textBottom - cutAt);
+    if (!empty) for (const cell of cells) line(cell, "Bottom", cutAt);
+    for (const cell of cells) line(cell, "Top", textTop);
+  }
+  layer.replaceChildren(...pieces);
 }
