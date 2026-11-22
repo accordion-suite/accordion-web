@@ -14,6 +14,12 @@ import { cellBoxFromDom, columnWidthsFromDom, googleLines, rowHeightFromDom, rul
 /** Heading levels, in the order the style menu lists them. */
 export const HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const;
 
+/** How a table of contents shows its headings, as Google Docs' three kinds:
+ * with page numbers, with dots leading to them, or as blue links without
+ * them. */
+export const CONTENTS_STYLES = ["plain", "dotted", "links"] as const;
+export type ContentsStyle = (typeof CONTENTS_STYLES)[number];
+
 /** Elements that hold text, whose background is a highlight. */
 const INLINE = ["span", "font", "a", "b", "strong", "i", "em", "u", "s", "sup", "sub", "code"];
 
@@ -27,8 +33,9 @@ function laidOut(tag: string, node: Node): DOMOutputSpec {
 
 const nodes: Record<string, NodeSpec> = {
   // Page breaks only between the document's own blocks, never in a list,
-  // a quote, or a table, where printing can't break a page.
-  doc: { content: "(block | page_break)+" },
+  // a quote, or a table, where printing can't break a page. A table of
+  // contents too, as in Google Docs.
+  doc: { content: "(block | page_break | table_of_contents)+" },
   paragraph: {
     attrs: { kind: { default: null }, ...LAYOUT_ATTRS },
     content: "inline*",
@@ -59,6 +66,26 @@ const nodes: Record<string, NodeSpec> = {
       { tag: "hr", priority: 60, getAttrs: (dom) => (breaksPage(dom, declared) ? null : false) },
     ],
     toDOM: () => ["div", { class: "page-break" }],
+  },
+  // A table of contents (contents.ts): the document's headings, listed
+  // where it is. It keeps only its style, and its entries come from the
+  // headings each time it's drawn, so it's never out of date (accordion-docs'
+  // `Block::Contents`).
+  table_of_contents: {
+    // A style it doesn't know shows as plain.
+    attrs: { style: { default: "plain", validate: "string" } },
+    atom: true,
+    selectable: true,
+    parseDOM: [
+      {
+        tag: "nav[data-contents]",
+        getAttrs: (dom) => {
+          const style = (dom as HTMLElement).getAttribute("data-contents") as ContentsStyle;
+          return { style: CONTENTS_STYLES.includes(style) ? style : "plain" };
+        },
+      },
+    ],
+    toDOM: (node) => ["nav", { class: "contents", "data-contents": node.attrs["style"] as string }],
   },
   blockquote: {
     content: "block+",

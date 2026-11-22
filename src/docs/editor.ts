@@ -60,6 +60,7 @@ import {
   splitKeepingLayout,
 } from "./paragraph.ts";
 import { autoLink, autoLinkOnEnter, smartQuotes } from "./autoformat.ts";
+import { ContentsView, contentsPlugin } from "./contents.ts";
 import { findPlugin } from "./find.ts";
 import { pagesPlugin, type PartKind } from "./pages.ts";
 import { keepPastedStyles, schema } from "./schema.ts";
@@ -126,6 +127,7 @@ export function createEditor(
       gapCursor(),
       columnResizing(),
       tableEditing(),
+      contentsPlugin(),
       pagesPlugin(mount, onOpenPart, onOpenNote),
     ],
   });
@@ -138,6 +140,8 @@ export function createEditor(
       page_break: () => pageBreakView(),
       image: (node, editorView, getPos) => new ImageView(node, editorView, getPos, pictureAddress, !readOnly, onAltText),
       footnote: () => footnoteView(),
+      table_of_contents: (node, editorView, getPos, decorations) =>
+        new ContentsView(node, editorView, getPos, decorations, !readOnly),
     },
     markViews: styleMarkViews,
     transformPastedHTML: keepPastedStyles,
@@ -232,7 +236,7 @@ export function insertField(kind: "page" | "pages"): Command {
 /** A copy of `doc` that can't be changed, on pages in `mount`, for
  * printing. */
 export function createPrintView(mount: HTMLElement, doc: Node, pictureAddress: (hash: string) => string): EditorView {
-  const state = EditorState.create({ schema, doc, plugins: [pagesPlugin(mount)] });
+  const state = EditorState.create({ schema, doc, plugins: [contentsPlugin(), pagesPlugin(mount)] });
   return new EditorView(mount, {
     state,
     editable: () => false,
@@ -242,6 +246,8 @@ export function createPrintView(mount: HTMLElement, doc: Node, pictureAddress: (
       page_break: () => pageBreakView(),
       image: (node, editorView, getPos) => new ImageView(node, editorView, getPos, pictureAddress, false, () => undefined),
       footnote: () => footnoteView(),
+      table_of_contents: (node, editorView, getPos, decorations) =>
+        new ContentsView(node, editorView, getPos, decorations, false),
     },
     markViews: styleMarkViews,
   });

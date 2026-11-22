@@ -149,10 +149,11 @@ import {
   showPaper,
 } from "./pages.ts";
 import { PartEditor } from "./part-editor.ts";
+import { contentsPages, contentsStyles, insertContents } from "./contents.ts";
 import { footnoteBefore, insertFootnote, NoteEditor } from "./footnotes.ts";
 import { addPageNumbers, readParts, watchParts } from "./parts.ts";
 import { printDocument } from "./print.ts";
-import { HEADING_LEVELS, linkFromTyped } from "./schema.ts";
+import { type ContentsStyle, HEADING_LEVELS, linkFromTyped } from "./schema.ts";
 import { clearFormatting, setColor, setFont, setHighlight, setSize, stepFontSize } from "./text-style.ts";
 import {
   DocsShortcutsDialog,
@@ -770,7 +771,10 @@ function DocumentPage({
       return;
     }
     const link = document.createElement("a");
-    link.href = downloadAddress(id, format);
+    // Word and OpenDocument get each table of contents entry's page
+    // number as the pages show it.
+    const pages = (format === "docx" || format === "odt") && view.current ? contentsPages(view.current) : null;
+    link.href = downloadAddress(id, format, pages);
     // The server names the file after the document, with the format's
     // extension.
     link.download = "";
@@ -908,6 +912,15 @@ function DocumentPage({
     if (!insertFootnote(main.state, main.dispatch)) return;
     const pos = footnoteBefore(main.state);
     if (pos !== null) openNote(pos);
+  }
+
+  /** Puts a table of contents where the caret is in the text. */
+  function addContents(style: ContentsStyle) {
+    const main = view.current;
+    if (!main || readOnly || partEditor.current) return;
+    closeNote();
+    insertContents(style)(main.state, main.dispatch);
+    main.focus();
   }
 
   /** Opens the header or footer of the page the caret is on. */
@@ -1222,6 +1235,13 @@ function DocumentPage({
                     label: t("docs.footnote"),
                     shortcut: t("docs.footnoteShortcut"),
                     onSelect: addFootnote,
+                  },
+                  {
+                    label: t("docs.contents"),
+                    submenu: contentsStyles().map(({ style, label }) => ({
+                      label,
+                      onSelect: () => addContents(style),
+                    })),
                   },
                 ]),
             SEPARATOR,

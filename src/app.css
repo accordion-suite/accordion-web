@@ -6193,6 +6193,106 @@ button.checklist-add {
   display: none;
 }
 
+/* A table of contents (contents.ts): each heading on a line, indented by
+   its level, as Google Docs shows them, with its page number at the right,
+   after dots for the dotted style. */
+.docs-text .docs-contents {
+  position: relative;
+  margin: 0 0 12pt;
+  cursor: default;
+}
+
+.docs-text .docs-contents.ProseMirror-selectednode {
+  outline: 2px solid #1a5fb4;
+  outline-offset: 4px;
+}
+
+.docs-text .docs-contents-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0 0 4pt;
+}
+
+.docs-contents-entry.level-2 {
+  padding-left: 18pt;
+}
+
+.docs-contents-entry.level-3 {
+  padding-left: 36pt;
+}
+
+.docs-contents-entry.level-4 {
+  padding-left: 54pt;
+}
+
+.docs-contents-entry.level-5 {
+  padding-left: 72pt;
+}
+
+.docs-contents-entry.level-6 {
+  padding-left: 90pt;
+}
+
+.docs-text .docs-contents-text {
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.docs-text .docs-contents-text:hover {
+  text-decoration: underline;
+}
+
+.docs-text .docs-contents[data-style="links"] .docs-contents-text {
+  color: #1155cc;
+  text-decoration: underline;
+}
+
+.docs-contents-leader {
+  flex: 1 1 0;
+  min-width: 1em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Dots as many as fit, cut off at the page number. */
+.docs-contents[data-style="dotted"] .docs-contents-leader::after {
+  content: ". . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .";
+}
+
+.docs-contents-page {
+  flex: none;
+  min-width: 1.5em;
+  text-align: right;
+}
+
+.docs-text .docs-contents-empty {
+  margin: 0;
+  color: #5f6368;
+}
+
+/* The style buttons, inside the table's top right corner, since the
+   page's margin covers anything above a table at the top of a page. */
+.docs-text .docs-contents.ProseMirror-selectednode .docs-contents-bar {
+  display: flex;
+}
+
+.docs-text .docs-contents-bar {
+  top: 4px;
+  right: 4px;
+  bottom: auto;
+  left: auto;
+  z-index: 3;
+}
+
+.docs-contents-bar button[aria-pressed="true"] {
+  background: var(--surface);
+  font-weight: 600;
+}
+
 /* Alt text is a sentence or two, so its box is a few lines, styled as the
    other fields are. */
 .docs-alt-dialog textarea {

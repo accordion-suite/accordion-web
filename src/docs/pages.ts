@@ -15,6 +15,7 @@ import { DOMSerializer, type Node } from "prosemirror-model";
 import { type EditorState, Plugin, PluginKey, type Transaction } from "prosemirror-state";
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view";
 
+import { contentsGaps, contentsOf, hasContents, showContentsPages } from "./contents.ts";
 import { type PageSetup, pagePoints } from "./page-setup.ts";
 import { schema } from "./schema.ts";
 import { styleMarkViews } from "./text-style.ts";
@@ -51,11 +52,14 @@ export function geometryOf(setup: PageSetup): Geometry {
   };
 }
 
-/** Where a spacer goes: a block at a position between blocks, or a float
- * at a position inside a paragraph. */
+/** Where a spacer goes: a block at a position between blocks, a float at
+ * a position inside a paragraph, or before an entry of the table of
+ * contents at `pos`, which draws it (contents.ts). */
 export interface Anchor {
-  kind: "block" | "inline";
+  kind: "block" | "inline" | "entry";
   pos: number;
+  /** The entry, for an entry's spacer. */
+  entry?: number;
 }
 
 /** Where a page starts: one spacer, or one in each cell of a table row. */
@@ -212,11 +216,19 @@ export function pagesPlugin(
 
 function decorate(doc: Node, breaks: readonly Break[]): DecorationSet {
   const decorations: Decoration[] = [];
+  const gaps = new Map<number, { entry: number; index: number; name: string }[]>();
   breaks.forEach((anchors, index) => {
     anchors.forEach((anchor, cell) => {
       const name = `${index}-${cell}-${anchor.kind}`;
+      if (anchor.kind === "entry") {
+        const list = gaps.get(anchor.pos) ?? [];
+        list.push({ entry: anchor.entry ?? 0, index, name });
+        gaps.set(anchor.pos, list);
+        return;
+      }
+      const kind = anchor.kind;
       decorations.push(
-        Decoration.widget(anchor.pos, (view) => spacer(view, anchor.kind, index, name), {
+        Decoration.widget(anchor.pos, (view) => spacer(view, kind, index, name), {
           side: -1,
           key: `docs-spacer-${name}`,
           ignoreSelection: true,
@@ -224,10 +236,22 @@ function decorate(doc: Node, breaks: readonly Break[]): DecorationSet {
       );
     });
   });
+  // A table of contents draws the spacers between its entries itself.
+  for (const [pos, list] of gaps) {
+    const node = doc.nodeAt(pos);
+    if (node?.type.name === "table_of_contents") {
+      decorations.push(Decoration.node(pos, pos + node.nodeSize, {}, { contentsGaps: contentsGaps(list) }));
+    }
+  }
   return DecorationSet.create(doc, decorations);
 }
 
-function spacer(view: EditorView, kind: Anchor["kind"], index: number, name: string): HTMLElement {
+/** A spacer a table of contents draws before an entry. */
+export function pageSpacer(view: EditorView, index: number, name: string): HTMLElement {
+  return spacer(view, "block", index, name);
+}
+
+function spacer(view: EditorView, kind: "block" | "inline", index: number, name: string): HTMLElement {
   const element = view.dom.ownerDocument.createElement(kind === "inline" ? "span" : "div");
   element.className = `docs-spacer ${kind}`;
   element.dataset["break"] = String(index);
@@ -427,6 +451,7 @@ class PagesView {
     if (!geometry) {
       this.clear();
       this.drawEndnotes(footnotes);
+      showContentsPages(this.view, null);
       return false;
     }
     this.drawEndnotes([]);
@@ -442,7 +467,22 @@ class PagesView {
     this.draw(geometry, count, frame);
     drawCuts(this.cuts, this.mount, geometry, gap, frame, cuts);
     this.drawNotes(geometry, count, frame, gap, footnotes);
+    this.numberContents(geometry, gap);
     return moved;
+  }
+
+  /** Gives each table of contents entry its heading's page number. */
+  private numberContents(geometry: Geometry, gap: number) {
+    const doc = this.view.state.doc;
+    if (!hasContents(doc)) return;
+    const stride = geometry.height + gap;
+    const top = this.mount.getBoundingClientRect().top;
+    const pages = contentsOf(doc).map((entry) => {
+      const dom = this.view.nodeDOM(entry.pos);
+      const y = dom && dom.nodeType === 1 ? (dom as HTMLElement).getBoundingClientRect().top - top : 0;
+      return Math.max(0, Math.floor(y / stride)) + 1;
+    });
+    showContentsPages(this.view, pages);
   }
 
   /** The document's footnotes, with their notes' heights at the text's
@@ -751,7 +791,10 @@ function sameBreaks(a: readonly Break[], b: readonly Break[]): boolean {
     a.every(
       (anchors, index) =>
         anchors.length === b[index]!.length &&
-        anchors.every((anchor, cell) => anchor.kind === b[index]![cell]!.kind && anchor.pos === b[index]![cell]!.pos),
+        anchors.every((anchor, cell) => {
+          const other = b[index]![cell]!;
+          return anchor.kind === other.kind && anchor.pos === other.pos && anchor.entry === other.entry;
+        }),
     )
   );
 }
@@ -927,6 +970,9 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame, footnotes:
     }
     pageNotes += own;
     placed = true;
+    // A heading goes on with the first line after it, as Word keeps it
+    // with the next paragraph. Once that's on the page, the heading stays.
+    heading = null;
   };
 
   const visit = (node: Node, pos: number) => {
@@ -974,6 +1020,20 @@ function paginate(view: EditorView, geometry: Geometry, frame: Frame, footnotes:
     }
     if (CONTAINERS.has(name)) {
       node.forEach((child, offset) => visit(child, pos + 1 + offset));
+      return;
+    }
+    // A table of contents breaks between its entries.
+    const entries = name === "table_of_contents" ? element.querySelectorAll<HTMLElement>(".docs-contents-entry") : [];
+    if (entries.length) {
+      entries.forEach((entry, index) => {
+        const box = entry.getBoundingClientRect();
+        unit(free(box.bottom), () =>
+          index === 0
+            ? { anchors: [hoist(doc, pos)], top }
+            : { anchors: [{ kind: "entry", pos, entry: Number(entry.dataset["index"]) }], top: free(box.top) },
+        );
+      });
+      heading = null;
       return;
     }
     unit(bottom, () => ({ anchors: [hoist(doc, pos)], top }), own);

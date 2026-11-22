@@ -90,8 +90,9 @@ export type DownloadFormat = "docx" | "odt" | "html" | "md";
 
 /** The document to keep, with everyone's latest edits: "html" is the file
  * itself, which any browser opens, and the others are Word, OpenDocument,
- * and Markdown files the server writes from it. */
-
-export function downloadAddress(id: string, format: DownloadFormat): string {
-  return `/api/docs/documents/${id}/download?as=${format}`;
+ * and Markdown files the server writes from it. `pages` is the page each
+ * table of contents entry is on, as the editor shows them. */
+export function downloadAddress(id: string, format: DownloadFormat, pages: readonly number[] | null = null): string {
+  const address = `/api/docs/documents/${id}/download?as=${format}`;
+  return pages?.length ? `${address}&pages=${pages.join(".")}` : address;
 }
