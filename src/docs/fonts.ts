@@ -45,6 +45,7 @@ export const FONTS: readonly FontChoice[] = [
   { name: "Oswald", package: "oswald", kind: "sans-serif" },
   { name: "Pacifico", package: "pacifico", kind: "handwriting" },
   { name: "Playfair Display", package: "playfair-display", kind: "serif" },
+  { name: "Raleway", package: "raleway", kind: "sans-serif" },
   { name: "Roboto", package: "roboto", kind: "sans-serif" },
   { name: "Roboto Mono", package: "roboto-mono", kind: "monospace" },
   { name: "Roboto Serif", package: "roboto-serif", kind: "serif" },

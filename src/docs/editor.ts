@@ -61,7 +61,9 @@ import {
 } from "./paragraph.ts";
 import { autoLink, autoLinkOnEnter, smartQuotes } from "./autoformat.ts";
 import { findPlugin } from "./find.ts";
+import { pagesPlugin, type PartKind } from "./pages.ts";
 import { keepPastedStyles, schema } from "./schema.ts";
+import { BORDER_ATTRS, fitTables } from "./tables.ts";
 import { clearFormatting, stepFontSize, styleMarkViews, type TextStyle, textStyle } from "./text-style.ts";
 
 const nodes = schema.nodes as Record<string, NodeType>;
@@ -83,6 +85,7 @@ export function createEditor(
     pictureAddress,
     onPictures,
     onAltText,
+    onOpenPart,
   }: {
     readOnly: boolean;
     onChange: () => void;
@@ -93,6 +96,8 @@ export function createEditor(
     onPictures: (files: File[]) => void;
     /** Someone asked to change the selected picture's alt text. */
     onAltText: () => void;
+    /** Someone double-clicked a sheet's header or footer. */
+    onOpenPart: (kind: PartKind, sheet: number) => void;
   },
 ): EditorView {
   addFonts();
@@ -113,6 +118,7 @@ export function createEditor(
       gapCursor(),
       columnResizing(),
       tableEditing(),
+      pagesPlugin(mount, onOpenPart),
     ],
   });
   const view: EditorView = new EditorView(mount, {
@@ -126,6 +132,7 @@ export function createEditor(
     },
     markViews: styleMarkViews,
     transformPastedHTML: keepPastedStyles,
+    transformPasted: (slice, editorView) => fitTables(slice, textWidth(editorView)),
     handlePaste(editorView, event) {
       const files = pictureFiles(event.clipboardData);
       if (!files.length || !editorView.editable) return false;
@@ -153,6 +160,81 @@ export function createEditor(
     },
   });
   return view;
+}
+
+/** An editor in `mount` for a header or footer, the fragment `name` of
+ * `live`'s document. Escape closes it. */
+export function createPartEditor(
+  mount: HTMLElement,
+  live: LiveDocument,
+  name: string,
+  {
+    onChange,
+    onLink,
+    onClose,
+    pictureAddress,
+  }: { onChange: () => void; onLink: () => void; onClose: () => void; pictureAddress: (hash: string) => string },
+): EditorView {
+  const state = EditorState.create({
+    schema,
+    plugins: [
+      ySyncPlugin(live.doc.getXmlFragment(name)),
+      yUndoPlugin(),
+      // Pages don't break in a header.
+      keymap({ Escape: () => (onClose(), true), "Mod-Enter": () => true }),
+      keymap({ Enter: autoLinkOnEnter, "Shift-Enter": autoLinkOnEnter }),
+      keymap(keys(onLink, () => undefined)),
+      keymap(baseKeymap),
+      typingShortcuts(),
+      listsPlaceText(),
+      dropCursor(),
+      gapCursor(),
+      columnResizing(),
+      tableEditing(),
+    ],
+  });
+  return new EditorView(mount, {
+    state,
+    attributes: { class: "docs-text docs-part", spellcheck: "true" },
+    nodeViews: {
+      check_item: (node, editorView, getPos) => new CheckItemView(node, editorView, getPos),
+      image: (node, editorView, getPos) => new ImageView(node, editorView, getPos, pictureAddress, true, () => undefined),
+    },
+    markViews: styleMarkViews,
+    transformPastedHTML: keepPastedStyles,
+    transformPasted: (slice, editorView) => fitTables(slice, textWidth(editorView)),
+    dispatchTransaction(this: EditorView, transaction: Transaction) {
+      this.updateState(this.state.apply(transaction));
+      onChange();
+    },
+  });
+}
+
+/** Puts a page number or the number of pages where the caret is, in a
+ * header or footer. */
+export function insertField(kind: "page" | "pages"): Command {
+  return (state, dispatch) => {
+    const mark = marks["field"]!.create({ kind });
+    dispatch?.(state.tr.replaceSelectionWith(schema.text("#", [...state.selection.$from.marks(), mark]), false).scrollIntoView());
+    return true;
+  };
+}
+
+/** A copy of `doc` that can't be changed, on pages in `mount`, for
+ * printing. */
+export function createPrintView(mount: HTMLElement, doc: Node, pictureAddress: (hash: string) => string): EditorView {
+  const state = EditorState.create({ schema, doc, plugins: [pagesPlugin(mount)] });
+  return new EditorView(mount, {
+    state,
+    editable: () => false,
+    attributes: { class: "docs-text" },
+    nodeViews: {
+      check_item: (node, editorView, getPos) => new CheckItemView(node, editorView, getPos),
+      page_break: () => pageBreakView(),
+      image: (node, editorView, getPos) => new ImageView(node, editorView, getPos, pictureAddress, false, () => undefined),
+    },
+    markViews: styleMarkViews,
+  });
 }
 
 /** Someone else's caret: a line in their color, with their name. Colors go
@@ -628,21 +710,58 @@ export interface CellFormat {
   merge: boolean;
   /** Whether the cell is merged, so it can be split again. */
   split: boolean;
+  /** Whether any side of the cells has a line, and whether any has none. */
+  lines: boolean;
+  lineless: boolean;
+}
+
+/** Calls `each` with each selected cell and its position. */
+function eachSelectedCell(state: EditorState, each: (cell: Node, pos: number) => void) {
+  const selection = state.selection;
+  if (selection instanceof CellSelection) {
+    selection.forEachCell(each);
+  } else {
+    const $cell = selectionCell(state);
+    if ($cell.nodeAfter) each($cell.nodeAfter, $cell.pos);
+  }
 }
 
 function cellFormat(state: EditorState): CellFormat | null {
   if (!isInTable(state)) return null;
-  const selection = state.selection;
   const colors = new Set<string | null>();
-  if (selection instanceof CellSelection) {
-    selection.forEachCell((cell) => colors.add(cell.attrs["background"] as string | null));
-  } else {
-    colors.add(selectionCell(state).nodeAfter?.attrs["background"] as string | null);
-  }
+  let lines = false;
+  let lineless = false;
+  eachSelectedCell(state, (cell) => {
+    colors.add(cell.attrs["background"] as string | null);
+    for (const name of BORDER_ATTRS) {
+      if (cell.attrs[name] === 0) lineless = true;
+      else lines = true;
+    }
+  });
   return {
     color: colors.size === 1 ? [...colors][0]! : null,
     merge: mergeCells(state),
     split: splitCell(state),
+    lines,
+    lineless,
+  };
+}
+
+/** Gives the selected cells the usual lines on every side, with true, or
+ * none, as a table laid out without lines has. */
+function showCellBorders(shown: boolean): Command {
+  return (state, dispatch) => {
+    if (!isInTable(state)) return false;
+    if (dispatch) {
+      const tr = state.tr;
+      eachSelectedCell(state, (cell, pos) => {
+        const attrs: Record<string, unknown> = { ...cell.attrs, border_color: null };
+        for (const name of BORDER_ATTRS) attrs[name] = shown ? null : 0;
+        tr.setNodeMarkup(pos, null, attrs);
+      });
+      dispatch(tr.scrollIntoView());
+    }
+    return true;
   };
 }
 
@@ -740,6 +859,12 @@ export const insertRule: Command = (state, dispatch) => {
   return true;
 };
 
+/** How wide the editor's text is, in pixels, inside its padding. */
+function textWidth(view: EditorView): number {
+  const style = getComputedStyle(view.dom);
+  return view.dom.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+}
+
 /** A table of three columns and three rows, the first a heading row, with
  * the caret in its first cell. */
 export const insertTable: Command = (state, dispatch) => {
@@ -792,6 +917,8 @@ export const tableCommands = {
   unmerge: splitCell,
   /** Colors the selected cells, or takes their color off with null. */
   cellColor: (color: string | null) => setCellAttr("background", color),
+  showBorders: showCellBorders(true),
+  hideBorders: showCellBorders(false),
 };
 
 export { redo, undo };

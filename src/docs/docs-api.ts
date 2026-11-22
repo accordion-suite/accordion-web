@@ -85,12 +85,6 @@ export function documentPath(id: string): string {
   return `/docs/d/${id}`;
 }
 
-/** The document as a page to print, with everyone's latest edits, on its
- * own paper and margins. */
-export function printAddress(id: string): string {
-  return `/api/docs/documents/${id}/print`;
-}
-
 /** The formats a document downloads in, by file name extension. */
 export type DownloadFormat = "docx" | "odt" | "html" | "md";
 

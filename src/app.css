@@ -5464,13 +5464,17 @@ button.checklist-add {
 }
 
 /* The print page waits here, unseen, while the browser prints it. */
+/* Wider than a phone, so the frame lays pages out as a computer shows
+   them, and out of sight. */
 .docs-print-frame {
   position: fixed;
-  right: 0;
-  bottom: 0;
-  width: 0;
-  height: 0;
+  top: 0;
+  left: 0;
+  width: 1200px;
+  height: 600px;
   border: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .docs-orientation {
@@ -5665,6 +5669,9 @@ button.checklist-add {
    browser's light mode. It's as wide as the document's paper, with its
    margins, which the editor sets once it knows them. */
 .docs-page {
+  /* The gap between sheets on screen, which is nothing on paper. */
+  --docs-band: 16px;
+  position: relative;
   box-sizing: border-box;
   max-width: var(--page-width, 816px);
   min-height: var(--page-height, 1056px);
@@ -5676,6 +5683,183 @@ button.checklist-add {
   color-scheme: light;
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+}
+
+/* On pages (pages.ts), the sheets are drawn behind the text and their
+   margins over it, so what crosses the end of a page, such as a table's
+   borders, never shows in the margins or the gap between sheets. */
+.docs-page.paged {
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+.docs-page.paged .docs-text {
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+}
+
+.docs-sheets,
+.docs-margins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.docs-margins {
+  z-index: 2;
+}
+
+.docs-sheet,
+.docs-margin,
+.docs-sheet-gap {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.docs-sheet,
+.docs-margin {
+  background: #fff;
+}
+
+.docs-sheet {
+  box-shadow: 0 0 0 1px var(--border), var(--shadow);
+}
+
+.docs-sheet-gap {
+  background: var(--page);
+}
+
+/* Double-clicking a margin opens its header or footer. */
+.docs-margin {
+  pointer-events: auto;
+}
+
+/* A header half an inch from the paper's top, and a footer half an inch
+   from its bottom, between the side margins (pages.ts' PART_FROM). */
+.docs-page.paged .docs-margin > .docs-part,
+.docs-part-editing > .docs-part-text {
+  position: absolute;
+  left: var(--docs-part-left, 96px);
+  right: var(--docs-part-right, 96px);
+  z-index: auto;
+  min-height: 0;
+}
+
+.docs-margin.top > .docs-part,
+.docs-margin.top .docs-part-text {
+  top: 48px;
+}
+
+.docs-margin.bottom > .docs-part,
+.docs-margin.bottom .docs-part-text {
+  bottom: 48px;
+}
+
+/* An open header or footer fills its margin, with its options at the
+   edge next to the text. */
+.docs-part-editing {
+  position: absolute;
+  inset: 0;
+}
+
+.docs-page.paged .docs-part-text .docs-part {
+  position: static;
+}
+
+.docs-part > :first-child {
+  margin-top: 0;
+}
+
+.docs-part > :last-child {
+  margin-bottom: 0;
+}
+
+/* While a header or footer is open, the text is faded, and a line marks
+   where the header ends, as in Google Docs. */
+.docs-page.editing-part > .docs-text {
+  opacity: 0.45;
+}
+
+.docs-margin.editing {
+  z-index: 1;
+}
+
+.docs-margin.top.editing {
+  border-bottom: 1px dashed #9aa0a6;
+}
+
+.docs-margin.bottom.editing {
+  border-top: 1px dashed #9aa0a6;
+}
+
+.docs-part-editing .docs-part {
+  outline: none;
+}
+
+/* Page numbers show as # while their header is open. */
+.docs-part-editing .docs-field {
+  background: #e8eaed;
+  border-radius: 2px;
+}
+
+.docs-part-bar {
+  position: absolute;
+  right: var(--docs-part-right, 96px);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font: 13px/1.4 system-ui, sans-serif;
+  color: #444746;
+  white-space: nowrap;
+}
+
+.docs-margin.top .docs-part-bar {
+  bottom: 4px;
+}
+
+.docs-margin.bottom .docs-part-bar {
+  top: 4px;
+}
+
+.docs-part-label {
+  padding: 2px 8px;
+  color: #1f1f1f;
+  background: #e8eaed;
+  border-radius: 4px;
+}
+
+.docs-part-bar label {
+  font-weight: 400;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.docs-part-bar button.link {
+  color: #0b57d0;
+}
+
+/* A spacer pushes what follows to the next sheet. Inside a paragraph it's
+   a float as wide as the line, so the line before keeps its alignment. */
+.docs-spacer {
+  display: block;
+}
+
+.docs-spacer.inline {
+  float: left;
+  clear: both;
+  width: 100%;
+}
+
+/* A page break ends its page, which shows where it is. */
+.docs-page.paged .page-break {
+  height: 0;
+  margin: 0;
+  border: none;
+  overflow: hidden;
 }
 
 /* Arial at 11 points, as in Google Docs and the Word download. Docs adds
@@ -5698,13 +5882,15 @@ button.checklist-add {
   margin: 0 0 6pt;
 }
 
+/* Headings have Google Docs' look: regular weight, the smaller ones gray,
+   so bold is a choice, as it is there. */
 .docs-text h1,
 .docs-text h2,
 .docs-text h3,
 .docs-text h4,
 .docs-text h5,
 .docs-text h6 {
-  font-weight: 700;
+  font-weight: 400;
 }
 
 /* Sized as the downloads size them (text-style.ts' HEADING_SIZES). */
@@ -5721,17 +5907,20 @@ button.checklist-add {
 .docs-text h3 {
   margin: 16pt 0 4pt;
   font-size: 14pt;
+  color: #434343;
 }
 
 .docs-text h4 {
   margin: 14pt 0 4pt;
   font-size: 12pt;
+  color: #666;
 }
 
 .docs-text h5,
 .docs-text h6 {
   margin: 12pt 0 4pt;
   font-size: 11pt;
+  color: #666;
 }
 
 .docs-text p.title {
@@ -5803,8 +5992,9 @@ button.checklist-add {
   font-size: 10pt;
 }
 
+/* About a line of text tall, as Google Docs' lines are. */
 .docs-text hr {
-  margin: 1em 0;
+  margin: 0.5em 0;
   border: none;
   border-top: 1px solid #c4c7c5;
 }
@@ -6149,7 +6339,7 @@ button.checklist-add {
 .docs-color-6 { background: rgb(0 121 107 / 0.2); }
 .docs-color-7 { background: rgb(95 99 104 / 0.2); }
 
-@media (max-width: 860px) {
+@media screen and (max-width: 860px) {
   .docs-canvas {
     padding: 8px 0 32px;
   }
@@ -6334,10 +6524,28 @@ dialog.docs-open-dialog {
     padding: 0;
   }
 
-  .docs-page {
+  .docs-canvas .docs-page {
     max-width: none;
     padding: 0;
     border: none;
     box-shadow: none;
   }
+}
+
+/* The frame a document prints from (print.ts): its sheets, one to each
+   sheet of paper, with nothing between them. */
+.docs-print {
+  margin: 0;
+  background: #fff;
+  color-scheme: light;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.docs-print .docs-page {
+  --docs-band: 0px;
+}
+
+.docs-print .docs-sheet {
+  box-shadow: none;
 }

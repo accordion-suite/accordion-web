@@ -9,6 +9,7 @@ import { tableNodes } from "prosemirror-tables";
 
 import { DEFAULT_FONT, fitSize, safeFontName } from "./fonts.ts";
 import { breaksPage, LAYOUT_ATTRS, layoutFromDom, listStyleFromDom, showLayout } from "./layout.ts";
+import { cellBoxFromDom, columnWidthsFromDom, googleLines, rowHeightFromDom, ruleFromDom, showCellBox } from "./tables.ts";
 
 /** Heading levels, in the order the style menu lists them. */
 export const HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const;
@@ -75,10 +76,19 @@ const nodes: Record<string, NodeSpec> = {
     parseDOM: [{ tag: "pre", preserveWhitespace: "full" }],
     toDOM: () => ["pre", ["code", 0]],
   },
+  // A line across the page, thin and gray unless it has a thickness and
+  // color of its own, as Google Docs' lines have (tables.ts).
   horizontal_rule: {
+    attrs: { thickness: { default: null }, color: { default: null } },
     group: "block",
-    parseDOM: [{ tag: "hr" }],
-    toDOM: () => ["hr"],
+    parseDOM: [{ tag: "hr", getAttrs: (dom) => ruleFromDom(dom) }],
+    toDOM: (node) => {
+      const hr = document.createElement("hr");
+      const thickness = node.attrs["thickness"] as number | null;
+      const color = node.attrs["color"] as string | null;
+      if (thickness !== null || color !== null) hr.style.borderTop = `${thickness ?? 0.75}pt solid ${color ?? "#c4c7c5"}`;
+      return hr;
+    },
   },
   // A list's style is its `data-list`, which the editor's styles and the
   // file's show (layout.ts' BULLET_STYLES and NUMBER_STYLES).
@@ -166,9 +176,17 @@ const nodes: Record<string, NodeSpec> = {
     tableNodes({
       tableGroup: "block",
       cellContent: "block+",
-      // A cell's color, as Google Docs' cell background. Pasted tables
-      // keep theirs.
-      cellAttributes: { background: { default: null, getFromDOM: cellColorFromDom } },
+      // A cell's color, as Google Docs' cell background, and its borders
+      // and padding (tables.ts). Pasted tables keep theirs.
+      cellAttributes: {
+        background: { default: null, getFromDOM: cellColorFromDom },
+        border_top: { default: null },
+        border_right: { default: null },
+        border_bottom: { default: null },
+        border_left: { default: null },
+        border_color: { default: null },
+        padding: { default: null },
+      },
     }),
   ),
   text: { group: "inline" },
@@ -294,28 +312,69 @@ const marks: Record<string, MarkSpec> = {
     parseDOM: [{ tag: "sub" }, styled("vertical-align", (value) => /^sub$/i.test(value) && null)],
     toDOM: () => ["sub", 0],
   },
+  // A page number or the number of pages, in a header or footer: a
+  // stand-in character each page shows as its own number (pages.ts), and
+  // the server writes as a field in Word and OpenDocument files. It never
+  // spreads to what's typed next to it.
+  field: {
+    attrs: { kind: { default: "page", validate: "string" } },
+    inclusive: false,
+    parseDOM: [
+      {
+        tag: "span[data-field]",
+        getAttrs: (dom: HTMLElement) => ({ kind: dom.dataset["field"] === "pages" ? "pages" : "page" }),
+      },
+    ],
+    toDOM: (mark) => ["span", { "data-field": mark.attrs["kind"] as string, class: "docs-field" }, 0],
+  },
 };
 
 export const schema = new Schema({ nodes, marks });
 
-/** The table's cells, each drawn with its color as a style property,
- * which the page's security policy allows where a style attribute isn't. */
+/** The table's cells, each drawn with its color, borders, and padding as
+ * style properties, which the page's security policy allows where a style
+ * attribute isn't. Pasted cells take their widths from their table's
+ * columns, as Google Docs copies them. Rows have a least height. */
 function paintedCells(specs: Record<string, NodeSpec>): Record<string, NodeSpec> {
   for (const name of ["table_cell", "table_header"]) {
     const spec = specs[name]!;
     const toDOM = spec.toDOM!;
+    const rule = spec.parseDOM![0] as TagParseRule;
+    const getAttrs = rule.getAttrs!;
     specs[name] = {
       ...spec,
+      parseDOM: [
+        {
+          ...rule,
+          getAttrs: (dom) => {
+            const attrs = getAttrs(dom);
+            if (!attrs) return attrs;
+            return { ...attrs, ...cellBoxFromDom(dom), colwidth: attrs["colwidth"] ?? columnWidthsFromDom(dom) };
+          },
+        },
+      ],
       toDOM(node) {
         const [tag, attrs] = toDOM(node) as [string, Record<string, string | null | undefined>, 0];
         const dom = document.createElement(tag);
         for (const [name, value] of Object.entries(attrs)) if (value != null) dom.setAttribute(name, value);
         const color = node.attrs["background"] as string | null;
         if (color) dom.style.backgroundColor = color;
+        showCellBox(dom, node);
         return { dom, contentDOM: dom };
       },
     };
   }
+  specs["table_row"] = {
+    ...specs["table_row"]!,
+    attrs: { height: { default: null } },
+    parseDOM: [{ tag: "tr", getAttrs: (dom) => ({ height: rowHeightFromDom(dom) }) }],
+    toDOM(node) {
+      const dom = document.createElement("tr");
+      const height = node.attrs["height"] as number | null;
+      if (height) dom.style.height = `${height}pt`;
+      return { dom, contentDOM: dom };
+    },
+  };
   return specs;
 }
 
@@ -348,9 +407,9 @@ function listAttrs(node: Node): Record<string, string> {
 
 /** Pasted HTML with each `style` attribute renamed `data-style`, so the
  * browser doesn't report the styles it won't apply while ProseMirror reads
- * the HTML. The rules below read either. */
+ * the HTML. The rules below read either. Google Docs' lines become lines. */
 export function keepPastedStyles(html: string): string {
-  return html.replace(/<[a-z][^>]*>/gi, (tag) => tag.replace(/(\s)style(\s*=)/gi, "$1data-style$2"));
+  return googleLines(html.replace(/<[a-z][^>]*>/gi, (tag) => tag.replace(/(\s)style(\s*=)/gi, "$1data-style$2")));
 }
 
 /** The value of `name` in an element's `style` attribute, or null. */

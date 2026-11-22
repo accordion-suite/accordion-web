@@ -36,12 +36,12 @@ import {
   listDocuments,
   openDocument,
   pictureAddress,
-  printAddress,
   renameDocument,
 } from "./docs-api.ts";
 import {
   type CellFormat,
   createEditor,
+  insertField,
   FRAGMENT,
   type Formatting,
   formatting,
@@ -65,7 +65,6 @@ import {
   undo,
 } from "./editor.ts";
 import { ColorMenu } from "./color-menu.tsx";
-import { addFonts } from "./font-faces.ts";
 import { fitSize, FONTS, fontStack, SIZES } from "./fonts.ts";
 import {
   AlignIcon,
@@ -138,6 +137,19 @@ import {
   toggleSpace,
 } from "./paragraph.ts";
 import { Outline, readShowOutline, saveShowOutline } from "./outline.tsx";
+import {
+  geometryOf,
+  layOutNow,
+  type PartKind,
+  setPageGeometry,
+  setPageParts,
+  setPartEditing,
+  sheetAt,
+  showPaper,
+} from "./pages.ts";
+import { PartEditor } from "./part-editor.ts";
+import { addPageNumbers, readParts, watchParts } from "./parts.ts";
+import { printDocument } from "./print.ts";
 import { HEADING_LEVELS, linkFromTyped } from "./schema.ts";
 import { clearFormatting, setColor, setFont, setHighlight, setSize, stepFontSize } from "./text-style.ts";
 import {
@@ -513,6 +525,11 @@ function DocumentPage({
   const choosePictures = useRef<HTMLInputElement>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const view = useRef<EditorView | null>(null);
+  // A header or footer someone is editing, which the toolbar and menus
+  // work on in place of the document.
+  const partEditor = useRef<PartEditor | null>(null);
+  const [editingPart, setEditingPart] = useState<PartKind | null>(null);
+  const stopParts = useRef<(() => void) | null>(null);
   const documentElement = useRef<HTMLDivElement>(null);
   const header = useRef<HTMLDivElement>(null);
   const tools = useRef<HTMLDivElement>(null);
@@ -574,6 +591,9 @@ function DocumentPage({
       document.doc.on("update", firstChange);
     }
     return () => {
+      closePart();
+      stopParts.current?.();
+      stopParts.current = null;
       if (firstChange) document.doc.off("update", firstChange);
       pageMap.unobserve(showPage);
       document.awareness.off("change", others);
@@ -593,7 +613,12 @@ function DocumentPage({
       pictureAddress: (hash) => pictureAddress(fileId.current ?? "", hash),
       onPictures: (files) => void addPictures(files),
       onAltText: () => startAltText(),
+      onOpenPart: (kind, sheet) => openPart(kind, sheet),
     });
+    const editor = view.current;
+    stopParts.current = watchParts(document.doc, (parts) => setPageParts(editor, parts));
+    // Going back to the text closes a header or footer.
+    editor.dom.addEventListener("mousedown", () => closePart());
     keepClearOfHeader();
     setFormat(formatting(view.current.state));
     // A new document, or one from before page setup, gets the paper of the
@@ -661,18 +686,25 @@ function DocumentPage({
     return making.current;
   }
 
-  // The page on screen is as wide as the paper, with its margins.
+  function numberPages(kind: PartKind, fromSecond: boolean) {
+    const document = live.current;
+    if (!document) return;
+    closePart();
+    addPageNumbers(document.doc, kind, fromSecond);
+    view.current?.focus();
+  }
+
+  // The page on screen is as wide as the paper, with its margins, and
+  // shows the document on sheets of it, except on phones, where the text
+  // takes the screen's width.
+  const narrow = useNarrow();
   useEffect(() => {
+    if (narrow) closePart();
     const element = mount.current;
     if (!element) return;
-    const properties = ["--page-width", "--page-height", "--margin-top", "--margin-right", "--margin-bottom", "--margin-left"];
-    if (!page) {
-      properties.forEach((property) => element.style.removeProperty(property));
-      return;
-    }
-    const [width, height] = pagePoints(page);
-    [width, height, ...page.margins].forEach((points, index) => element.style.setProperty(properties[index]!, `${points}pt`));
-  }, [page, info]);
+    showPaper(element, page);
+    if (view.current) setPageGeometry(view.current, page && !narrow ? geometryOf(page) : null);
+  }, [page, info, narrow, format !== null]);
 
   // Ctrl+P prints the document, not the editor around it, Ctrl+O opens
   // another document rather than a file from the computer, and Ctrl+F finds
@@ -702,7 +734,17 @@ function DocumentPage({
     setError("");
     setNotice(note);
     try {
-      await printDocument(await makeFile());
+      const id = await makeFile();
+      const current = view.current;
+      if (!current) throw new Error("closed");
+      const name = info?.name.replace(/\.html?$/i, "") ?? "";
+      await printDocument(
+        current.state.doc,
+        readParts(live.current!.doc),
+        page ?? newPageSetup(defaultPageSize()),
+        name,
+        (hash) => pictureAddress(id, hash),
+      );
     } catch {
       setNotice("");
       setError(t("docs.printFailed"));
@@ -741,8 +783,14 @@ function DocumentPage({
     setNotice("");
   }
 
+  /** The editor the toolbar and menus work on: an open header's or
+   * footer's, or the document's. */
+  function target(): EditorView | null {
+    return partEditor.current?.view ?? view.current;
+  }
+
   function run(command: Command) {
-    const editor = view.current;
+    const editor = target();
     if (!editor) return;
     command(editor.state, editor.dispatch, editor);
     editor.focus();
@@ -751,8 +799,52 @@ function DocumentPage({
   /** Runs a command while focus stays where it is, such as in the find
    * panel. */
   function apply(command: Command) {
-    const editor = view.current;
+    const editor = target();
     if (editor) command(editor.state, editor.dispatch, editor);
+  }
+
+  /** Opens the header or footer of sheet `sheet` for editing. */
+  function openPart(kind: PartKind, sheet: number) {
+    const document = live.current;
+    const main = view.current;
+    if (!document || !main || readOnly) return;
+    closePart();
+    const editor = new PartEditor(kind, sheet, document, {
+      // The editor changes while it's being made, before it's open here.
+      onChange: () => partEditor.current && setFormat(formatting(partEditor.current.view.state)),
+      onLink: () => startLink(),
+      onClose: () => {
+        closePart();
+        view.current?.focus();
+      },
+      pictureAddress: (hash) => pictureAddress(fileId.current ?? "", hash),
+    });
+    partEditor.current = editor;
+    setEditingPart(kind);
+    setPartEditing(main, { kind, sheet, element: editor.element });
+    // The margin shows the editor once the pages are laid out, and only
+    // then can it take focus.
+    layOutNow(main);
+    editor.view.focus();
+    setFormat(formatting(editor.view.state));
+  }
+
+  function closePart() {
+    const editor = partEditor.current;
+    if (!editor) return;
+    partEditor.current = null;
+    setEditingPart(null);
+    if (view.current) {
+      setPartEditing(view.current, null);
+      setFormat(formatting(view.current.state));
+    }
+    editor.close();
+  }
+
+  /** Opens the header or footer of the page the caret is on. */
+  function openPartHere(kind: PartKind) {
+    const main = view.current;
+    if (main) openPart(kind, sheetAt(main, main.state.selection.head));
   }
 
   /** Opens the find panel, looking for the selected words if there are
@@ -771,7 +863,7 @@ function DocumentPage({
   }
 
   function startLink() {
-    const editor = view.current;
+    const editor = target();
     if (!editor) return;
     const now = formatting(editor.state);
     const selected = selectedText(editor.state);
@@ -1046,10 +1138,34 @@ function DocumentPage({
             },
             SEPARATOR,
             { label: t("docs.rule"), onSelect: () => run(insertRule) },
+            ...(editingPart
+              ? [
+                  { label: t("docs.pageNumber"), onSelect: () => run(insertField("page")) },
+                  { label: t("docs.pageCount"), onSelect: () => run(insertField("pages")) },
+                ]
+              : [
+                  {
+                    label: t("docs.pageBreak"),
+                    shortcut: t("docs.pageBreakShortcut"),
+                    onSelect: () => run(insertPageBreak),
+                  },
+                ]),
+            SEPARATOR,
+            // Headers and footers show on pages, which phones don't.
+            ...(narrow
+              ? []
+              : [
+                  { label: t("docs.header"), onSelect: () => openPartHere("header") },
+                  { label: t("docs.footer"), onSelect: () => openPartHere("footer") },
+                ]),
             {
-              label: t("docs.pageBreak"),
-              shortcut: t("docs.pageBreakShortcut"),
-              onSelect: () => run(insertPageBreak),
+              label: t("docs.pageNumbers"),
+              submenu: [
+                { label: t("docs.numbersTop"), onSelect: () => numberPages("header", false) },
+                { label: t("docs.numbersTopFromSecond"), onSelect: () => numberPages("header", true) },
+                { label: t("docs.numbersBottom"), onSelect: () => numberPages("footer", false) },
+                { label: t("docs.numbersBottomFromSecond"), onSelect: () => numberPages("footer", true) },
+              ],
             },
           ],
         },
@@ -1515,9 +1631,6 @@ function DocumentPage({
   );
 }
 
-/** Prints the document from its print page, in a frame the reader doesn't
- * see, so it comes out as anyone opening the file would see it, on its own
- * paper. Browsers offer Save as PDF in the same window. */
 /** A new document, before it has a file. */
 function draftInfo(): DocumentInfo {
   return {
@@ -1541,42 +1654,20 @@ function checkAddress(id: string): string {
   return `/api/docs/documents/${id}`;
 }
 
-function printDocument(id: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const frame = document.createElement("iframe");
-    frame.className = "docs-print-frame";
-    frame.setAttribute("aria-hidden", "true");
-    frame.tabIndex = -1;
-    const done = () => setTimeout(() => frame.remove(), 1000);
-    frame.addEventListener("load", () => {
-      const page = frame.contentWindow;
-      // An error page has no <main>: the document is gone or the
-      // connection failed.
-      if (!page || !frame.contentDocument?.querySelector("main")) {
-        frame.remove();
-        reject(new Error("no print page"));
-        return;
-      }
-      page.addEventListener("afterprint", done);
-      // The print page has the document's fonts too, and prints once the
-      // ones it shows have loaded.
-      const printed = frame.contentDocument;
-      addFonts(printed);
-      void printed.body.offsetHeight;
-      void printed.fonts.ready.then(() => {
-        page.focus();
-        page.print();
-        resolve();
-      });
-    });
-    frame.addEventListener("error", () => {
-      frame.remove();
-      reject(new Error("no print page"));
-    });
-    frame.src = printAddress(id);
-    document.body.append(frame);
-  });
+/** Whether the window is as narrow as a phone's, where the page takes the
+ * screen's width. It matches the style sheet's. */
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => matchMedia(NARROW).matches);
+  useEffect(() => {
+    const query = matchMedia(NARROW);
+    const change = () => setNarrow(query.matches);
+    query.addEventListener("change", change);
+    return () => query.removeEventListener("change", change);
+  }, []);
+  return narrow;
 }
+
+const NARROW = "(max-width: 860px)";
 
 const SIZE_NAMES: Record<PageSize, MessageKey> = {
   letter: "docs.sizeLetter",
@@ -2022,6 +2113,8 @@ function tableEntries(run: Run, cell: CellFormat | null, onCellColor: () => void
       onSelect: () => run(tableCommands.headerRow),
     },
     { label: t("docs.cellColor"), onSelect: onCellColor },
+    ...(cell?.lines ? [{ label: t("docs.hideBorders"), onSelect: () => run(tableCommands.hideBorders) }] : []),
+    ...(cell?.lineless ? [{ label: t("docs.showBorders"), onSelect: () => run(tableCommands.showBorders) }] : []),
     SEPARATOR,
     {
       label: t("docs.deleteRow"),
