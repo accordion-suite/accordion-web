@@ -65,7 +65,7 @@ import {
   undo,
 } from "./editor.ts";
 import { ColorMenu } from "./color-menu.tsx";
-import { fitSize, FONTS, fontStack, SIZES } from "./fonts.ts";
+import { fitSize, FONTS, fontStack, onFontsReplaced, type Replaced, SIZES } from "./fonts.ts";
 import {
   AlignIcon,
   BoldIcon,
@@ -1026,6 +1026,20 @@ function DocumentPage({
   }
   useEffect(() => () => clearTimeout(noticeTimer.current), []);
 
+  // Says which font Docs uses for each one it doesn't have, such as in a
+  // paste, once for each font while the page is open.
+  const toldFonts = useRef(new Set<string>());
+  useEffect(
+    () =>
+      onFontsReplaced((replaced) => {
+        const fresh = replaced.filter((each) => !toldFonts.current.has(each.from.toLowerCase()));
+        if (!fresh.length) return;
+        for (const each of fresh) toldFonts.current.add(each.from.toLowerCase());
+        tell(fresh.map((each) => t(FONT_NOTICES[each.kind], { from: each.from, to: each.to })).join(" "));
+      }),
+    [],
+  );
+
   /** Cut or copy from the menu, which browsers allow right after a click. */
   function clipboard(action: "cut" | "copy") {
     const editor = view.current;
@@ -1764,6 +1778,13 @@ function useNarrow(): boolean {
 
 const NARROW = "(max-width: 860px)";
 
+/** What the editor says when it uses another font in place of one. */
+const FONT_NOTICES: Record<Replaced["kind"], MessageKey> = {
+  same: "docs.fontSame",
+  like: "docs.fontLike",
+  other: "docs.fontOther",
+};
+
 const SIZE_NAMES: Record<PageSize, MessageKey> = {
   letter: "docs.sizeLetter",
   a4: "docs.sizeA4",
@@ -2296,7 +2317,7 @@ function Toolbar({
         <option value="code">{t("docs.styleCode")}</option>
       </select>
       <span class="docs-toolbar-gap" />
-      <FontPicker font={format.text.font} run={run} />
+      <FontPicker font={format.text.font} weight={format.text.weight} run={run} />
       <span class="docs-toolbar-gap" />
       <SizeBox size={format.text.size} run={run} />
       <span class="docs-toolbar-gap" />
@@ -2412,9 +2433,11 @@ function Toolbar({
   );
 }
 
-/** The font menu, each font's name shown in that font. With more than one
- * font selected, the button shows none. */
-function FontPicker({ font, run }: { font: string | null; run: Run }) {
+/** The font menu, each font's name shown in that font, as in Google Docs.
+ * Choosing a font sets it in its regular weight, and a font with more than
+ * one weight has them in a submenu. With more than one font selected, the
+ * button shows none. */
+function FontPicker({ font, weight, run }: { font: string | null; weight: number | null; run: Run }) {
   const [menu, setMenu] = useState<{
     place: MenuPlace;
     byKeyboard: boolean;
@@ -2447,6 +2470,16 @@ function FontPicker({ font, run }: { font: string | null; run: Run }) {
             font: fontStack(choice.name),
             checked: choice.name === font,
             onSelect: () => run(setFont(choice.name)),
+            submenu:
+              choice.weights.length > 1
+                ? choice.weights.map((each) => ({
+                    label: t(`docs.weight${each}` as MessageKey),
+                    font: fontStack(choice.name),
+                    weight: each,
+                    checked: choice.name === font && each === weight,
+                    onSelect: () => run(setFont(choice.name, each)),
+                  }))
+                : undefined,
           }))}
           place={menu.place}
           byKeyboard={menu.byKeyboard}

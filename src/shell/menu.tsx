@@ -3,14 +3,17 @@
 // Enter or Space picks one, and Escape or Tab closes it and returns focus to
 // where it was. Only the focused item is highlighted, and the pointer moves
 // focus, so there's never more than one. An item can open a submenu beside
-// it, by the pointer resting on it, the Right arrow, or Enter.
+// it, by the pointer resting on it, the Right arrow, or Enter. An item with
+// a submenu and an action of its own, such as a font with its weights,
+// does its action on Enter or a click, and opens its submenu otherwise.
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 
 export interface MenuAction {
   label: string;
-  /** What choosing the item does. An item with a submenu needs none. */
+  /** What choosing the item does. An item with a submenu needs none, and
+   * one with both does this when chosen. */
   onSelect?: () => void;
   /** The actions the item opens beside it, such as a menu bar's
    * **Download** with each format. */
@@ -25,6 +28,8 @@ export interface MenuAction {
   icon?: ComponentChildren;
   /** The CSS font the label shows in, such as a font menu's own fonts. */
   font?: string;
+  /** The weight the label shows in, such as a font's weights. */
+  weight?: number;
 }
 
 /** A line between groups of actions. */
@@ -276,7 +281,7 @@ export function Menu({
             }}
             onPointerLeave={() => menu.current?.focus()}
             onClick={(event) => {
-              if (entry.submenu) {
+              if (entry.submenu && !entry.onSelect) {
                 clearTimeout(resting.current);
                 setOpen({ index, byKeyboard: event.detail === 0 });
                 return;
@@ -290,7 +295,10 @@ export function Menu({
                 {entry.icon}
               </span>
             )}
-            <span class="menu-label" style={entry.font ? { fontFamily: entry.font } : undefined}>
+            <span
+              class="menu-label"
+              style={entry.font || entry.weight ? { fontFamily: entry.font, fontWeight: entry.weight } : undefined}
+            >
               {entry.label}
             </span>
             {entry.shortcut && <kbd aria-hidden="true">{entry.shortcut}</kbd>}

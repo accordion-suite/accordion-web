@@ -13,10 +13,10 @@ export function addFonts(page: Document = document): void {
   const window = page.defaultView;
   if (added.has(page) || !window) return;
   added.add(page);
-  for (const [family, weight, italic, range, url] of FACES) {
+  for (const [family, weights, italic, range, url] of FACES) {
     // The page's own FontFace, since a font set takes only its own.
     const face = new window.FontFace(family, `url(${url})`, {
-      weight: String(weight),
+      weight: weights,
       style: italic ? "italic" : "normal",
       unicodeRange: range,
       display: "swap",

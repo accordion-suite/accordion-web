@@ -5899,7 +5899,7 @@ button.checklist-add {
   position: absolute;
   padding-top: 10px;
   color: #1f1f1f;
-  font: 10pt/1.15 "Arial", sans-serif;
+  font: 10pt/1.15 "Arimo", sans-serif;
   white-space: pre-wrap;
   word-wrap: break-word;
   pointer-events: auto;
@@ -5951,15 +5951,14 @@ button.checklist-add {
   overflow: hidden;
 }
 
-/* Arial at 11 points, as in Google Docs and the Word download. Docs adds
-   its own Arial, made to match it (fonts.ts), so text breaks into lines the
-   same way everywhere. Lines are 1.15 apart, and single spacing is Arial's
-   own line height, 1.15 (layout.ts' SINGLE), as the file and the downloads
-   space them. */
+/* Arimo at 11 points, as Google Docs uses Arial, whose letter widths Arimo
+   has (fonts.ts), so text breaks into lines the same way everywhere. Lines
+   are 1.15 apart, and single spacing is Arimo's own line height, 1.15
+   (layout.ts' SINGLE), as the file and the downloads space them. */
 .docs-text {
   min-height: 600px;
   outline: none;
-  font: 11pt/1.3225 "Arial", sans-serif;
+  font: 11pt/1.3225 "Arimo", sans-serif;
   white-space: pre-wrap;
   word-wrap: break-word;
   /* Pages break where the editor breaks them (pages.ts), so printing
@@ -6077,8 +6076,42 @@ button.checklist-add {
   white-space: pre-wrap;
 }
 
+/* Weights other than regular and bold (schema.ts' font_weight). Bold
+   around one makes it bolder, as Google Docs does (fonts.ts' shownWeight):
+   lighter than regular becomes regular, lighter than bold becomes bold. */
+[data-weight="100"] {
+  font-weight: 100;
+}
+[data-weight="200"] {
+  font-weight: 200;
+}
+[data-weight="300"] {
+  font-weight: 300;
+}
+[data-weight="500"] {
+  font-weight: 500;
+}
+[data-weight="600"] {
+  font-weight: 600;
+}
+[data-weight="800"] {
+  font-weight: 800;
+}
+[data-weight="900"] {
+  font-weight: 900;
+}
+strong [data-weight="100"],
+strong [data-weight="200"],
+strong [data-weight="300"] {
+  font-weight: 400;
+}
+strong [data-weight="500"],
+strong [data-weight="600"] {
+  font-weight: 700;
+}
+
 .docs-text code {
-  font-family: "Courier New", monospace;
+  font-family: "Cousine", monospace;
 }
 
 .docs-text pre code {

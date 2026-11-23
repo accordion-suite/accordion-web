@@ -7,7 +7,7 @@
 import { type Attrs, type DOMOutputSpec, type MarkSpec, type Node, type NodeSpec, Schema, type TagParseRule } from "prosemirror-model";
 import { tableNodes } from "prosemirror-tables";
 
-import { DEFAULT_FONT, fitSize, safeFontName } from "./fonts.ts";
+import { DEFAULT_FONT, fitSize, reportReplaced, resolveFont } from "./fonts.ts";
 import { breaksPage, LAYOUT_ATTRS, layoutFromDom, listStyleFromDom, showLayout } from "./layout.ts";
 import { cellBoxFromDom, columnWidthsFromDom, googleLines, rowHeightFromDom, ruleFromDom, showCellBox } from "./tables.ts";
 
@@ -235,7 +235,7 @@ const nodes: Record<string, NodeSpec> = {
     group: "inline",
     atom: true,
     content: "(text | hard_break)*",
-    marks: "link bold italic underline strike code superscript subscript text_color highlight font_size font_family",
+    marks: "link bold italic underline strike code superscript subscript text_color highlight font_size font_family font_weight",
     // Ahead of the superscript mark's rule for <sup>.
     parseDOM: [{ tag: "sup[data-footnote]", priority: 60 }],
     toDOM: () => ["sup", { "data-footnote": "" }, 0],
@@ -271,8 +271,8 @@ const marks: Record<string, MarkSpec> = {
   font_family: {
     attrs: { family: { validate: "string" } },
     parseDOM: [
-      styled("font-family", (value) => fontAttrs(fontFromCss(value))),
-      { tag: "font[face]", consuming: false, getAttrs: (dom) => fontAttrs(fontFromCss(dom.getAttribute("face") ?? "")) },
+      styled("font-family", (value) => fontAttrs(value)),
+      { tag: "font[face]", consuming: false, getAttrs: (dom) => fontAttrs(dom.getAttribute("face") ?? "") },
     ],
     toDOM: (mark) => ["span", { style: `font-family:'${mark.attrs["family"] as string}'` }, 0],
   },
@@ -319,7 +319,8 @@ const marks: Record<string, MarkSpec> = {
       // Google Docs wraps whole pastes in <b style="font-weight:normal">.
       { tag: "b", getAttrs: (dom) => !/^(normal|[1-5]00)$/i.test(declared(dom, "font-weight") ?? "") && null },
       { style: "font-weight=400", clearMark: (mark) => mark.type.name === "bold" },
-      styled("font-weight", (value) => /^(bold(er)?|[6-9]\d{2,})$/i.test(value) && null),
+      // Other weights are the font_weight mark's, not bold.
+      styled("font-weight", (value) => /^(bold(er)?|700)$/i.test(value) && null),
     ],
     toDOM: () => ["strong", 0],
   },
@@ -354,6 +355,24 @@ const marks: Record<string, MarkSpec> = {
     excludes: "superscript subscript",
     parseDOM: [{ tag: "sub" }, styled("vertical-align", (value) => /^sub$/i.test(value) && null)],
     toDOM: () => ["sub", 0],
+  },
+  // A weight other than regular and bold, such as Light or Black, which
+  // the font menu offers for each font that has it (fonts.ts). It goes
+  // inside bold's <strong>, so bold makes it bolder, as Google Docs does
+  // (app.css, fonts.ts' `shownWeight`). Copied text says its weight in
+  // `data-weight`, since the style a copy shows is for other programs.
+  font_weight: {
+    attrs: { weight: { validate: "number" } },
+    parseDOM: [
+      { tag: "[data-weight]", consuming: false, getAttrs: (dom: HTMLElement) => weightAttrs(Number(dom.dataset["weight"])) },
+      styled("font-weight", (value, dom) => !dom.hasAttribute("data-weight") && weightAttrs(weightFromCss(value))),
+      // A font named with its weight, such as "Raleway Light".
+      styled("font-family", (value, dom) => declared(dom, "font-weight") === null && weightAttrs(resolveFont(value).weight)),
+    ],
+    toDOM: (mark) => {
+      const weight = String(mark.attrs["weight"] as number);
+      return ["span", { "data-weight": weight, style: `font-weight:${weight}` }, 0];
+    },
   },
   // A page number or the number of pages, in a header or footer: a
   // stand-in character each page shows as its own number (pages.ts), and
@@ -497,10 +516,32 @@ function colorAttrs(value: string): Attrs | false {
   return color && color !== "#000000" ? { color } : false;
 }
 
-/** A font, unless it's the font text has anyway, which Google Docs names on
- * everything it copies. */
-function fontAttrs(family: string | null): Attrs | false {
-  return family && family !== DEFAULT_FONT ? { family } : false;
+/** The font Docs uses for a CSS `font-family` (fonts.ts), unless it's the
+ * font text has anyway, as Google Docs' Arial becomes. A font Docs doesn't
+ * have is reported, so the editor can say what it uses instead. */
+function fontAttrs(family: string): Attrs | false {
+  const font = resolveFont(family);
+  if (font.replaced) reportReplaced(font.replaced);
+  return font.name !== DEFAULT_FONT ? { family: font.name } : false;
+}
+
+/** A weight the font_weight mark keeps: 100 to 900 in hundreds, but not
+ * regular or bold, which are no mark and the bold mark. */
+export function weightAttrs(weight: number | null): Attrs | false {
+  return weight !== null && weight % 100 === 0 && weight >= 100 && weight <= 900 && weight !== 400 && weight !== 700
+    ? { weight }
+    : false;
+}
+
+/** A CSS `font-weight` as a number, to the nearest hundred. `bolder` and
+ * `lighter` depend on the text around them, so they're none. */
+export function weightFromCss(text: string): number | null {
+  const value = text.trim().toLowerCase();
+  if (value === "normal") return 400;
+  if (value === "bold") return 700;
+  const number = Number(value);
+  if (!value || !Number.isFinite(number)) return null;
+  return Math.min(900, Math.max(100, Math.round(number / 100) * 100));
 }
 
 /** A CSS color as the document keeps it, `#rrggbb`, or null for one that
@@ -579,14 +620,6 @@ export function sizeFromCss(text: string): number | null {
     ];
   if (!(points >= 1 && points <= 400)) return null;
   return fitSize(points);
-}
-
-/** The first font a CSS `font-family` names that isn't a generic family,
- * if its name is one the document can keep. */
-export function fontFromCss(text: string): string | null {
-  const first = (text.split(",")[0] ?? "").trim().replace(/^["']|["']$/g, "").trim();
-  if (/^(serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-[a-z]+|math|emoji|fangsong|inherit|initial|unset|-webkit-standard)$/i.test(first)) return null;
-  return safeFontName(first);
 }
 
 /** Whether `text` is a picture's hash: SHA-256 in lowercase hex. */

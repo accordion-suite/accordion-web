@@ -15,7 +15,8 @@
 // request. PNGs and fonts are compressed already, so they don't.
 //
 // Docs' fonts are files in dist/app/ too, one for each style and language
-// of each font in src/docs/fonts.ts. The editor imports the list of them
+// of each font in src/docs/fonts.ts, and for each weight of a font that
+// isn't variable. The editor imports the list of them
 // from "docs-fonts", which this script makes as it builds.
 //
 // dist/files.json lists every file with its SHA-256 hash. The server checks
@@ -42,12 +43,12 @@ const DARK = "#111418";
 // the first load stays fast on a Raspberry Pi over 4G (decision 13).
 const BUDGET = 150 * 1024;
 
-/** The weights documents use: regular and bold. */
-const FONT_WEIGHTS = [400, 700];
-
-/** Makes the "docs-fonts" module: every font file, with the family, weight,
+/** Makes the "docs-fonts" module: every font file, with the family, weights,
  * style, and characters each one is for, as FontFace takes them. Importing
- * each file through esbuild names it by its hash and copies it to dist/app/. */
+ * each file through esbuild names it by its hash and copies it to dist/app/.
+ * A variable font has one file for each style and language with all its
+ * weights. Others have one for each weight too. The build fails if a font's
+ * weights in src/docs/fonts.ts aren't the ones its package has. */
 const docsFonts: Plugin = {
   name: "docs-fonts",
   setup(builder) {
@@ -57,31 +58,44 @@ const docsFonts: Plugin = {
       const ranges: string[] = [];
       const faces: string[] = [];
       for (const font of FONTS) {
-        const folder = resolve("node_modules", "@fontsource", font.package);
+        const folder = resolve("node_modules", font.package);
         const metadata = JSON.parse(await readFile(join(folder, "metadata.json"), "utf8")) as {
           id: string;
+          family: string;
           subsets: string[];
           weights: number[];
           styles: string[];
+          variable?: { wght?: { min: string; max: string } };
         };
+        if (metadata.family !== font.name) throw new Error(`${font.package} is ${metadata.family}, not ${font.name}.`);
+        if (metadata.weights.join() !== font.weights.join()) {
+          throw new Error(`${font.package} has weights ${metadata.weights.join(", ")}, not ${font.weights.join(", ")}.`);
+        }
+        const axis = metadata.variable?.wght;
+        const variable = font.package.startsWith("@fontsource-variable/");
+        if (variable && !axis) throw new Error(`${font.package} has no weight axis.`);
+        // A variable file's weights, as FontFace's "100 900", or each weight.
+        const files: [string, string][] = variable
+          ? [["wght", `${axis!.min} ${axis!.max}`]]
+          : font.weights.map((weight) => [String(weight), String(weight)]);
         const unicode = JSON.parse(await readFile(join(folder, "unicode.json"), "utf8")) as Record<string, string>;
         let found = 0;
         for (const subset of metadata.subsets) {
           const range = unicode[subset];
           if (!range) continue;
-          for (const weight of FONT_WEIGHTS.filter((weight) => metadata.weights.includes(weight))) {
+          for (const [part, weights] of files) {
             for (const style of metadata.styles) {
-              const file = join(folder, "files", `${metadata.id}-${subset}-${weight}-${style}.woff2`);
+              const file = join(folder, "files", `${metadata.id}-${subset}-${part}-${style}.woff2`);
               if (!(await access(file).then(() => true, () => false))) continue;
               let at = ranges.indexOf(range);
               if (at < 0) at = ranges.push(range) - 1;
               imports.push(`import f${imports.length} from ${JSON.stringify(file)};`);
-              faces.push(`[${JSON.stringify(font.name)},${weight},${style === "italic"},R[${at}],f${imports.length - 1}]`);
+              faces.push(`[${JSON.stringify(font.name)},${JSON.stringify(weights)},${style === "italic"},R[${at}],f${imports.length - 1}]`);
               found++;
             }
           }
         }
-        if (found === 0) throw new Error(`@fontsource/${font.package} has no regular or bold files.`);
+        if (found === 0) throw new Error(`${font.package} has no font files.`);
       }
       const contents = `${imports.join("\n")}
 const R = ${JSON.stringify(ranges)};

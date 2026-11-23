@@ -65,7 +65,7 @@ import { findPlugin } from "./find.ts";
 import { pagesPlugin, type PartKind } from "./pages.ts";
 import { keepPastedStyles, schema } from "./schema.ts";
 import { BORDER_ATTRS, fitTables } from "./tables.ts";
-import { clearFormatting, stepFontSize, styleMarkViews, type TextStyle, textStyle } from "./text-style.ts";
+import { clearFormatting, fontCheck, stepFontSize, styleMarkViews, type TextStyle, textStyle } from "./text-style.ts";
 
 const nodes = schema.nodes as Record<string, NodeType>;
 const marks = schema.marks as Record<string, MarkType>;
@@ -128,6 +128,7 @@ export function createEditor(
       columnResizing(),
       tableEditing(),
       contentsPlugin(),
+      fontCheck(() => !readOnly),
       pagesPlugin(mount, onOpenPart, onOpenNote),
     ],
   });
@@ -204,6 +205,7 @@ export function createPartEditor(
       gapCursor(),
       columnResizing(),
       tableEditing(),
+      fontCheck(() => true),
     ],
   });
   return new EditorView(mount, {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { colorFromCss, fontFromCss, keepPastedStyles, sizeFromCss } from "./schema.ts";
+import { colorFromCss, keepPastedStyles, sizeFromCss, weightAttrs, weightFromCss } from "./schema.ts";
 
 test("reads colors as CSS writes them", () => {
   assert.equal(colorFromCss("#1A5FB4"), "#1a5fb4");
@@ -24,10 +24,18 @@ test("reads sizes in points", () => {
   assert.equal(sizeFromCss("calc(1px)"), null);
 });
 
-test("reads the first font that isn't generic", () => {
-  assert.equal(fontFromCss('"Times New Roman", serif'), "Times New Roman");
-  assert.equal(fontFromCss("sans-serif"), null);
-  assert.equal(fontFromCss("url(x)"), null);
+test("reads weights, keeping only those that aren't regular or bold", () => {
+  assert.equal(weightFromCss("300"), 300);
+  assert.equal(weightFromCss("normal"), 400);
+  assert.equal(weightFromCss("bold"), 700);
+  assert.equal(weightFromCss("540"), 500);
+  assert.equal(weightFromCss("1000"), 900);
+  assert.equal(weightFromCss("bolder"), null);
+  assert.deepEqual(weightAttrs(300), { weight: 300 });
+  assert.equal(weightAttrs(400), false);
+  assert.equal(weightAttrs(700), false);
+  assert.equal(weightAttrs(350), false);
+  assert.equal(weightAttrs(null), false);
 });
 
 test("pasted styles are renamed only inside tags", () => {

@@ -3,17 +3,27 @@
 // selection, or kept for the next thing typed when nothing's selected.
 
 import type { Mark, MarkType, Node, NodeType } from "prosemirror-model";
-import type { Command, EditorState } from "prosemirror-state";
-import type { MarkViewConstructor } from "prosemirror-view";
+import { type Command, type EditorState, Plugin } from "prosemirror-state";
+import type { EditorView, MarkViewConstructor } from "prosemirror-view";
 
-import { DEFAULT_FONT, DEFAULT_SIZE, fitSize, fontStack, stepSize } from "./fonts.ts";
+import {
+  DEFAULT_FONT,
+  DEFAULT_SIZE,
+  fitSize,
+  fontNamed,
+  fontStack,
+  nearestWeight,
+  reportReplaced,
+  resolveFont,
+  stepSize,
+} from "./fonts.ts";
 import { schema } from "./schema.ts";
 
 const marks = schema.marks as Record<string, MarkType>;
 const nodes = schema.nodes as Record<string, NodeType>;
 
 /** The style marks, which a span shows. */
-type StyleMark = "font_family" | "font_size" | "text_color" | "highlight";
+type StyleMark = "font_family" | "font_size" | "text_color" | "highlight" | "font_weight";
 
 /** How the editor shows each style: a span whose style is set from code,
  * since the page's security policy doesn't allow style attributes. */
@@ -22,6 +32,8 @@ export const styleMarkViews: Record<StyleMark, MarkViewConstructor> = {
   font_size: (mark) => span((dom) => (dom.style.fontSize = `${mark.attrs["size"] as number}pt`)),
   text_color: (mark) => span((dom) => (dom.style.color = mark.attrs["color"] as string)),
   highlight: (mark) => span((dom) => (dom.style.backgroundColor = mark.attrs["color"] as string)),
+  // The weight shown depends on bold around it, so app.css sets it.
+  font_weight: (mark) => span((dom) => (dom.dataset["weight"] = String(mark.attrs["weight"] as number))),
 };
 
 function span(style: (dom: HTMLElement) => void) {
@@ -53,6 +65,9 @@ export const SUBTITLE_SIZE = 15;
  * has more than one. A color is null for none, as is a highlight. */
 export interface TextStyle {
   font: string | null;
+  /** The weight the font menu shows as chosen: 400 for none, 700 for bold
+   * alone, or the font_weight mark's. */
+  weight: number | null;
   size: number | null;
   color: string | null;
   highlight: string | null;
@@ -64,6 +79,7 @@ export interface TextStyle {
 export function textStyle(state: EditorState): TextStyle {
   const { empty, $from } = state.selection;
   const fonts = new Set<string>();
+  const weights = new Set<number>();
   const sizes = new Set<number>();
   const colors = new Set<string | null>();
   const highlights = new Set<string | null>();
@@ -72,6 +88,7 @@ export function textStyle(state: EditorState): TextStyle {
   const add = (set: readonly Mark[], block: Node) => {
     const attr = (name: string, key: string) => set.find((mark) => mark.type === marks[name])?.attrs[key] as unknown;
     fonts.add((attr("font_family", "family") as string | undefined) ?? DEFAULT_FONT);
+    weights.add((attr("font_weight", "weight") as number | undefined) ?? (marks["bold"]!.isInSet(set) ? 700 : 400));
     sizes.add((attr("font_size", "size") as number | undefined) ?? blockSize(block));
     colors.add((attr("text_color", "color") as string | undefined) ?? null);
     highlights.add((attr("highlight", "color") as string | undefined) ?? null);
@@ -94,6 +111,7 @@ export function textStyle(state: EditorState): TextStyle {
   const one = <T>(set: Set<T>): T | null => (set.size === 1 ? [...set][0]! : null);
   return {
     font: one(fonts),
+    weight: one(weights),
     size: one(sizes),
     color: one(colors),
     highlight: one(highlights),
@@ -125,10 +143,45 @@ function setStyleMark(type: MarkType, attrs: Record<string, unknown> | null): Co
   };
 }
 
-/** The selection's font. The default font is no font of its own, so a
- * document's text follows the default. */
-export function setFont(name: string): Command {
-  return setStyleMark(marks["font_family"]!, name === DEFAULT_FONT ? null : { family: name });
+/** The selection's font, in its regular weight unless `weight` is given,
+ * as the font menu and its weights set them. The default font is no font
+ * of its own, so a document's text follows the default. Regular is no
+ * weight, and bold is the bold mark, which stays when no weight is given. */
+export function setFont(name: string, weight?: number): Command {
+  return (state, dispatch) => {
+    const { empty, $cursor } = state.selection as { empty: boolean; $cursor?: unknown };
+    if (empty && !$cursor) return false;
+    if (dispatch) {
+      const family = marks["font_family"]!;
+      const weightType = marks["font_weight"]!;
+      const bold = marks["bold"]!;
+      const set = (add: (mark: Mark) => void, remove: (type: MarkType) => void) => {
+        remove(family);
+        if (name !== DEFAULT_FONT) add(family.create({ family: name }));
+        remove(weightType);
+        if (weight === undefined) return;
+        remove(bold);
+        if (weight === 700) add(bold.create());
+        else if (weight !== 400) add(weightType.create({ weight }));
+      };
+      const tr = state.tr;
+      if (empty) {
+        set(
+          (mark) => tr.addStoredMark(mark),
+          (type) => tr.removeStoredMark(type),
+        );
+      } else {
+        for (const { $from, $to } of state.selection.ranges) {
+          set(
+            (mark) => tr.addMark($from.pos, $to.pos, mark),
+            (type) => tr.removeMark($from.pos, $to.pos, type),
+          );
+        }
+      }
+      dispatch(tr.scrollIntoView());
+    }
+    return true;
+  };
 }
 
 export function setSize(points: number): Command {
@@ -187,3 +240,53 @@ export const PALETTE: readonly (readonly string[])[] = [
   ["#85200c", "#990000", "#b45f06", "#bf9000", "#38761d", "#134f5c", "#1155cc", "#0b5394", "#351c75", "#741b47"],
   ["#5b0f00", "#660000", "#783f04", "#7f6000", "#274e13", "#0c343d", "#1c4587", "#073763", "#20124d", "#4c1130"],
 ];
+
+/** Keeps a document to the fonts Docs has, in an editor that can change
+ * it. Text that names another font, such as from a document made before
+ * Docs named its fonts by their own names, or a paste the schema's rules
+ * didn't read, gets the font Docs uses in its place, and the page is told
+ * (fonts.ts' `reportReplaced`). A weight the font doesn't have becomes the
+ * nearest it has, so the font menu shows the weight the text has. */
+export function fontCheck(editable: () => boolean): Plugin {
+  let view: EditorView | null = null;
+  return new Plugin({
+    view(editorView) {
+      view = editorView;
+      return { destroy: () => (view = null) };
+    },
+    appendTransaction(transactions, before, after) {
+      if (!transactions.some((tr) => tr.docChanged) || (view && !editable())) return null;
+      const start = before.doc.content.findDiffStart(after.doc.content);
+      if (start === null) return null;
+      const end = before.doc.content.findDiffEnd(after.doc.content)?.b ?? after.doc.content.size;
+      const family = marks["font_family"]!;
+      const weightType = marks["font_weight"]!;
+      const tr = after.tr;
+      after.doc.nodesBetween(start, Math.max(start, end), (node, pos) => {
+        if (!node.isText) return true;
+        const from = pos;
+        const to = pos + node.nodeSize;
+        const named = family.isInSet(node.marks)?.attrs["family"] as string | undefined;
+        let name = named ?? DEFAULT_FONT;
+        if (named !== undefined && !fontNamed(named)) {
+          const resolved = resolveFont(named);
+          if (resolved.replaced) reportReplaced(resolved.replaced);
+          name = resolved.name;
+          tr.removeMark(from, to, family);
+          if (name !== DEFAULT_FONT) tr.addMark(from, to, family.create({ family: name }));
+        }
+        const weight = weightType.isInSet(node.marks)?.attrs["weight"] as number | undefined;
+        if (weight !== undefined) {
+          const nearest = nearestWeight(fontNamed(name)!, weight);
+          if (nearest !== weight) {
+            tr.removeMark(from, to, weightType);
+            if (nearest === 700) tr.addMark(from, to, marks["bold"]!.create());
+            else if (nearest !== null && nearest !== 400) tr.addMark(from, to, weightType.create({ weight: nearest }));
+          }
+        }
+        return false;
+      });
+      return tr.docChanged ? tr : null;
+    },
+  });
+}

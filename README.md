@@ -24,7 +24,7 @@ npm test
 npm run build
 ```
 
-The build writes the app to `dist/`, with compressed copies of each file, and fails if Drive's first load is over its 150 KB budget. Docs, Notes, and Settings load only when they first open, so they stay out of that budget. Docs' 33 fonts come with the app, from Fontsource's copies of open fonts, so showing one never tells another site who's reading. The build copies each font's files into `dist/app/` from `src/docs/fonts.ts`, and the browser downloads only the ones a page uses. It also writes `dist/files.json`, each file's SHA-256 hash, which the server checks as it starts. With the same Node.js build, the same source always builds the same files, so release builds can be compared (decision 9). The suite's release build downloads a pinned Node.js for this.
+The build writes the app to `dist/`, with compressed copies of each file, and fails if Drive's first load is over its 150 KB budget. Docs, Notes, and Settings load only when they first open, so they stay out of that budget. Docs' 40 fonts come with the app in every weight they have, from Fontsource's copies of open fonts, so showing one never tells another site who's reading. The build copies each font's files into `dist/app/` from `src/docs/fonts.ts`, one file per style and language for a variable font, and the browser downloads only the ones a page uses. It also writes `dist/files.json`, each file's SHA-256 hash, which the server checks as it starts. With the same Node.js build, the same source always builds the same files, so release builds can be compared (decision 9). The suite's release build downloads a pinned Node.js for this.
 
 To try the app, point a development server at the build with the `ACCORDION_WEB_DIR` setting, and rebuild after each change.
 
