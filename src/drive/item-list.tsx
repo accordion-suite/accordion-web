@@ -195,6 +195,7 @@ export function ItemList({
   const [, setDetailsOpen] = useDetailsOpen();
   const actions = useItemActions({
     notify: drive.notify,
+    docs: drive.modules.includes("docs"),
     details: (item) => {
       setSelected(new Set([item.id]));
       setDetailsOpen(true);

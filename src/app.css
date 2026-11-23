@@ -2371,6 +2371,16 @@ dialog label {
   margin-top: 8px;
 }
 
+/* What won't come across when a file opens with Docs. */
+.open-with-lost {
+  margin: 8px 0 12px;
+  padding-left: 20px;
+}
+
+.open-with-lost li + li {
+  margin-top: 4px;
+}
+
 .dialog-buttons {
   display: flex;
   flex-wrap: wrap;

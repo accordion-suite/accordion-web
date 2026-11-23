@@ -23,6 +23,7 @@ import { consentFor, movedNotice, moveWithConsent } from "./move-check.tsx";
 import { naming } from "./move.ts";
 import { placePath } from "./places.ts";
 import { freeName } from "./names.ts";
+import { opensWithDocs, useOpenWithDocs } from "./open-with-docs.tsx";
 import { announceChange } from "./store.ts";
 
 /** A folder's page. My Drive and each app's place have their own
@@ -94,14 +95,18 @@ export function useItemActions({
   notify,
   details,
   trashed,
+  docs = false,
 }: {
-  notify: (notice: Notice) => void;
+  notify: (notice: Notice | null) => void;
+  /** Whether Docs is on, to offer Open with Docs. */
+  docs?: boolean;
   /** Shows the item in the details panel. */
   details: (item: Item) => void;
   /** Called after items go to the trash. */
   trashed?: (items: Item[]) => void;
 }): ItemActions {
   const [open, setOpen] = useState<Open | null>(null);
+  const openWith = useOpenWithDocs(notify);
 
   /** Says what changed, with how to undo it and do it again. */
   function done(message: string, change?: Pick<Notice, "undo" | "redo" | "undone">) {
@@ -233,10 +238,11 @@ export function useItemActions({
         { label: t("viewer.download"), onSelect: () => download(chosen) },
       );
     } else {
-      entries.push(
-        { label: t("drive.open"), onSelect: () => navigate(filePath(item), { state: OPENED_HERE }) },
-        { label: t("viewer.download"), onSelect: () => download(chosen) },
-      );
+      entries.push({ label: t("drive.open"), onSelect: () => navigate(filePath(item), { state: OPENED_HERE }) });
+      if (docs && opensWithDocs(item)) {
+        entries.push({ label: t("openWith.action"), onSelect: () => void openWith.open(item) });
+      }
+      entries.push({ label: t("viewer.download"), onSelect: () => download(chosen) });
       // Viewers see only the current version, as in Google Drive.
       if (editable) {
         entries.push({ label: t("drive.manageVersions"), onSelect: () => setOpen({ kind: "versions", item }) });
@@ -369,7 +375,7 @@ export function useItemActions({
     rename: (item) => setOpen({ kind: "rename", item }),
     move: (items) => setOpen({ kind: "move", items }),
     share: (item) => setOpen({ kind: "share", item }),
-    busy: open !== null,
-    dialog,
+    busy: open !== null || openWith.dialog !== null,
+    dialog: dialog ?? openWith.dialog,
   };
 }

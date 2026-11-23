@@ -19,6 +19,8 @@ import { useTabTitle } from "../shell/page.tsx";
 import { followLink } from "../shell/router.ts";
 import { ConfirmDialog, Dialog } from "../shell/dialog.tsx";
 import { ItemIcon } from "./icons.tsx";
+import { useDrive } from "./layout.tsx";
+import { opensWithDocs, useOpenWithDocs } from "./open-with-docs.tsx";
 import { type Item, thumbnailAddress } from "./item.ts";
 import { TextFile, canEditText, isText } from "./text-file.tsx";
 
@@ -95,6 +97,11 @@ export function Viewer({
   const [editAsked, setEditing] = useState(() => (history.state as { edit?: boolean } | null)?.edit === true);
   const editing = editAsked && canEditText(file);
   const opensIn = useOpensIn(file);
+  const drive = useDrive();
+  const openWith = useOpenWithDocs(drive.notify);
+  // A document opens in Docs as it is; other files Docs reads become one.
+  const convertible =
+    drive.modules.includes("docs") && opensWithDocs(file) && !file.trashed_at && opensIn?.label !== "viewer.openInDocs";
   const dirty = useRef(false);
   /** What to do once the reader agrees to lose their changes. */
   const [discarding, setDiscarding] = useState<(() => void) | null>(null);
@@ -149,6 +156,11 @@ export function Viewer({
             {t(opensIn.label)}
           </a>
         )}
+        {!editing && convertible && (
+          <button type="button" class="secondary" onClick={() => void openWith.open(file)}>
+            {t("openWith.action")}
+          </button>
+        )}
         {!editing && canEditText(file) && (
           <button type="button" class="secondary" onClick={() => setEditing(true)}>
             {t("viewer.edit")}
@@ -182,6 +194,7 @@ export function Viewer({
           onClose={() => setDiscarding(null)}
         />
       )}
+      {openWith.dialog}
     </Dialog>
   );
 }

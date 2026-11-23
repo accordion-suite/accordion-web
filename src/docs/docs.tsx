@@ -65,7 +65,8 @@ import {
   undo,
 } from "./editor.ts";
 import { ColorMenu } from "./color-menu.tsx";
-import { fitSize, FONTS, fontStack, onFontsReplaced, type Replaced, SIZES } from "./fonts.ts";
+import { fitSize, FONTS, fontStack, onFontsReplaced, type Replaced, reportReplaced, SIZES } from "./fonts.ts";
+import { importedFontsKey } from "../drive/open-with-docs.tsx";
 import {
   AlignIcon,
   BoldIcon,
@@ -1039,6 +1040,20 @@ function DocumentPage({
       }),
     [],
   );
+  // A document just made from a file says which fonts Docs used in place
+  // of the ones the file named, once.
+  useEffect(() => {
+    if (!id) return;
+    let fonts: Replaced[] = [];
+    try {
+      const key = importedFontsKey(id);
+      fonts = JSON.parse(sessionStorage.getItem(key) ?? "[]") as Replaced[];
+      sessionStorage.removeItem(key);
+    } catch {
+      return;
+    }
+    for (const each of fonts) reportReplaced(each);
+  }, [id]);
 
   /** Cut or copy from the menu, which browsers allow right after a click. */
   function clipboard(action: "cut" | "copy") {

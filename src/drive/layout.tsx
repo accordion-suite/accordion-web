@@ -113,6 +113,8 @@ interface DriveFrame {
   folderMenu(folder: Item, event: TargetedMouseEvent<HTMLElement>): void;
   /** The folder whose right-click menu is open, for its place to show it. */
   menuOn: string | null;
+  /** The modules that are on, such as "docs". */
+  modules: readonly string[];
 }
 
 const Frame = createContext<DriveFrame | null>(null);
@@ -649,6 +651,7 @@ export function DriveLayout({
     folderMenu: (folder, event) =>
       folder.parent === null ? openNewMenu(folder, event) : openFolderMenu(folder, event),
     menuOn: folderMenu?.folder.id ?? menu?.into?.id ?? null,
+    modules: modulesOn(session),
   };
 
   return (
