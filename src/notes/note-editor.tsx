@@ -471,7 +471,7 @@ function ChecklistEditor({
             type="button"
             class="icon-button checklist-handle"
             data-handle={index}
-            title={t("notes.moveItem", { item: item.text || t("notes.listItem") })}
+            title={t("notes.dragItem")}
             aria-label={t("notes.moveItem", { item: item.text || t("notes.listItem") })}
             onPointerDown={(event) => {
               if (event.button !== 0) return;
