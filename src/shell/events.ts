@@ -136,6 +136,10 @@ export function noteName(name: string): string {
 /** What a notification says, such as "Sam Rivera added 12 items to
  * Holiday". */
 export function notificationText(notification: Notification, me: string): string {
+  if (notification.action === "import_finished") {
+    const state = notification.details?.["state"];
+    return t(state === "canceled" ? "notify.importCanceled" : state === "failed" ? "notify.importFailed" : "notify.importDone");
+  }
   return t(SENTENCES[notification.action] ?? "notify.changed", {
     who: who(notification.actor, me),
     name: !notification.item
@@ -153,6 +157,8 @@ export function notificationText(notification: Notification, me: string): string
 export function notificationLink(notification: Notification): string {
   const { item, folder } = notification;
   if (notification.action === "reminder_due") return item ? `/notes/?note=${item.id}` : "/notes/reminders";
+  // The import page lists it with a link to its report.
+  if (notification.action === "import_finished") return "/settings/import";
   if (notification.action === "shared" || notification.action === "share_changed") {
     if (!item) return "/drive/shared";
     return item.folder ? `/drive/folder/${item.id}` : `/drive/shared?file=${item.id}`;

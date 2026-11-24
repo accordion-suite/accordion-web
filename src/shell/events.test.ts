@@ -76,6 +76,15 @@ test("notifications say what happened and lead to it", () => {
   assert.equal(notificationText(shared, ME), "Sam Rivera shared Holiday with you");
   assert.equal(notificationLink(shared), "/drive/folder/h");
   assert.equal(notificationLink({ ...shared, item: { id: "p", name: "plan.pdf" } }), "/drive/shared?file=p");
+
+  const imported = { ...added, action: "import_finished", actor: null, count: 1, folder: null, details: { state: "done" } };
+  assert.equal(notificationText(imported, ME), "Your import from Google finished");
+  assert.equal(notificationText({ ...imported, details: { state: "canceled" } }, ME), "Your import from Google was canceled");
+  assert.equal(
+    notificationText({ ...imported, details: { state: "failed" } }, ME),
+    "Your import from Google stopped before it finished",
+  );
+  assert.equal(notificationLink(imported), "/settings/import");
 });
 
 test("logs say what happened from the reader's side", () => {

@@ -23,6 +23,14 @@ export const PreviewsIcon = () => (
   </Icon>
 );
 
+/** An arrow into a box, for bringing things in from elsewhere. */
+export const ImportIcon = () => (
+  <Icon>
+    <path d="M12 3.5v11m-4.5-4.5 4.5 4.5 4.5-4.5" {...line} />
+    <path d="M4.5 14.5v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3" {...line} />
+  </Icon>
+);
+
 export const BackIcon = () => (
   <Icon>
     <path d="M19 12H5m6-6-6 6 6 6" {...line} />
