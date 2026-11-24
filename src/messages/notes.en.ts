@@ -37,7 +37,7 @@ export const notesEn = {
   "notes.addItem": "Add item",
   "notes.removeItem": "Remove item",
   "notes.moveItem": "Move {item}",
-  "notes.dragItem": "Drag to move",
+  "notes.dragItem": "Drag up or down to move, or drag right to indent",
   "notes.formatting": "Formatting options",
   "notes.heading1": "Heading 1",
   "notes.heading2": "Heading 2",
