@@ -1,16 +1,21 @@
 // Reads Markdown for the text viewer and the editor's preview. It covers the
 // parts of CommonMark people use most, plus GitHub's tables, task lists, and
 // strikethrough. It builds a tree that the page turns into elements, never
-// HTML, so a file can't run anything: HTML in a file shows as text. Pictures
-// show as links, because loading them would reach other servers.
+// HTML, so a file can't run anything: HTML in a file shows as text, apart
+// from `<u>` for underline. Pictures show as links, because loading them
+// would reach other servers.
 
 export type Inline =
   | { type: "text"; text: string }
-  | { type: "strong" | "em" | "del"; children: Inline[] }
+  /** `u` is underline, written `<u>text</u>`, as Google Keep's notes and
+   * Docs' Markdown downloads carry it. */
+  | { type: "strong" | "em" | "del" | "u"; children: Inline[] }
   | { type: "code"; text: string }
   /** `href` is null for an address that isn't safe to follow, such as a
-   * script, so the link shows as plain text. */
-  | { type: "link"; href: string | null; children: Inline[] }
+   * script, so the link shows as plain text. `target` is the address as
+   * written, and `form` how: `[label](target)`, `<target>`, or a bare
+   * address. */
+  | { type: "link"; href: string | null; target: string; form: "inline" | "auto" | "bare"; children: Inline[] }
   /** `target` is the address as written, such as a file beside a note. */
   | { type: "image"; href: string | null; alt: string; target: string }
   | { type: "break" };
@@ -34,8 +39,10 @@ export type Block =
   | { type: "rule" }
   | { type: "table"; align: Align[]; head: Inline[][]; rows: Inline[][][] };
 
-export function parseMarkdown(source: string): Block[] {
-  return blocks(source.replace(/\r\n?/g, "\n").split("\n").map(expandTabs));
+/** With `breaks`, each line of a paragraph shows on a line of its own, as
+ * Google Keep and Obsidian show notes, rather than joining the next. */
+export function parseMarkdown(source: string, { breaks = false }: { breaks?: boolean } = {}): Block[] {
+  return blocks(source.replace(/\r\n?/g, "\n").split("\n").map(expandTabs), breaks);
 }
 
 /** Tabs in a line's indent count as four spaces, as CommonMark's tab stops
@@ -92,7 +99,7 @@ function interrupts(line: string): boolean {
   return item !== null && item.first.trim() !== "" && (!item.ordered || item.start === 1);
 }
 
-function blocks(lines: string[]): Block[] {
+function blocks(lines: string[], breaks: boolean): Block[] {
   const out: Block[] = [];
   let i = 0;
   while (i < lines.length) {
@@ -154,13 +161,13 @@ function blocks(lines: string[]): Block[] {
         else break;
         i++;
       }
-      out.push({ type: "quote", children: blocks(quoted) });
+      out.push({ type: "quote", children: blocks(quoted, breaks) });
       continue;
     }
 
     const item = marker(line);
     if (item) {
-      i = list(lines, i, item, out);
+      i = list(lines, i, item, out, breaks);
       continue;
     }
 
@@ -194,7 +201,9 @@ function blocks(lines: string[]): Block[] {
       paragraph.push(current.trimStart());
       i++;
     }
-    const children = inlines(paragraph.join("\n"));
+    // Two spaces at a line's end break it, so with `breaks` every line ends
+    // that way.
+    const children = inlines(paragraph.join(breaks ? "  \n" : "\n"));
     out.push(level ? { type: "heading", level, children } : { type: "paragraph", children });
   }
   return out;
@@ -202,7 +211,7 @@ function blocks(lines: string[]): Block[] {
 
 /** Reads the list that starts at line `i`, adds it to `out`, and returns
  * the line after it. */
-function list(lines: string[], i: number, first: Marker, out: Block[]): number {
+function list(lines: string[], i: number, first: Marker, out: Block[], breaks: boolean): number {
   const items: ListItem[] = [];
   let tight = true;
   let item: Marker | null = first;
@@ -230,14 +239,14 @@ function list(lines: string[], i: number, first: Marker, out: Block[]): number {
       content.pop();
       trailing++;
     }
-    const inner = content.slice(0, -1).some(blank) && blocks(content).length > 1;
+    const inner = content.slice(0, -1).some(blank) && blocks(content, breaks).length > 1;
     let checked: boolean | null = null;
     const task = /^\[([ xX])\](?:[ \t]+|$)/.exec(content[0]!);
     if (task) {
       checked = task[1] !== " ";
       content[0] = content[0]!.slice(task[0].length);
     }
-    items.push({ checked, children: blocks(content) });
+    items.push({ checked, children: blocks(content, breaks) });
 
     const next = i < lines.length ? marker(lines[i]!) : null;
     if (next && next.ordered === first.ordered && next.kind === first.kind) {
@@ -344,7 +353,7 @@ export function inlines(source: string): Inline[] {
         out.push(
           picture
             ? { type: "image", href, alt: plain(inlines(link.label)), target: link.href }
-            : { type: "link", href, children: inlines(link.label) },
+            : { type: "link", href, target: link.href, form: "inline", children: inlines(link.label) },
         );
         i = link.end;
         continue;
@@ -352,10 +361,17 @@ export function inlines(source: string): Inline[] {
     }
 
     if (char === "<") {
+      const underline = /^<u>/i.test(source.slice(i, i + 3)) ? underlineEnd(source, i + 3) : -1;
+      if (underline >= 0) {
+        flush();
+        out.push({ type: "u", children: inlines(source.slice(i + 3, underline)) });
+        i = underline + 4;
+        continue;
+      }
       const auto = /^<((?:https?|mailto):[^\s<>]*)>/i.exec(source.slice(i));
       if (auto) {
         flush();
-        out.push({ type: "link", href: auto[1]!, children: [{ type: "text", text: auto[1]! }] });
+        out.push({ type: "link", href: auto[1]!, target: auto[1]!, form: "auto", children: [{ type: "text", text: auto[1]! }] });
         i += auto[0].length;
         continue;
       }
@@ -371,6 +387,8 @@ export function inlines(source: string): Inline[] {
         out.push({
           type: "link",
           href: /^www\./i.test(address) ? `https://${address}` : address,
+          target: address,
+          form: "bare",
           children: [{ type: "text", text: address }],
         });
         i += address.length;
@@ -412,6 +430,23 @@ export function inlines(source: string): Inline[] {
   }
   flush();
   return out;
+}
+
+/** Where the `</u>` that closes a `<u>` is, from `at`, the start of its
+ * text, or -1 when none does. Underlines inside it count. */
+function underlineEnd(source: string, at: number): number {
+  let depth = 0;
+  for (let i = at; i < source.length; i++) {
+    if (source[i] === "\\") {
+      i++;
+    } else if (/^<u>/i.test(source.slice(i, i + 3))) {
+      depth++;
+    } else if (/^<\/u>/i.test(source.slice(i, i + 4))) {
+      if (depth === 0) return i;
+      depth--;
+    }
+  }
+  return -1;
 }
 
 /** The emphasis that the run of `*`, `_`, or `~` at `at` opens, if it

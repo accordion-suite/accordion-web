@@ -5,6 +5,7 @@
 
 import type { TargetedKeyboardEvent } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import type { EditorView } from "prosemirror-view";
 
 import { ApiError } from "../api.ts";
 import { CloseIcon, MoveIcon, PeopleIcon } from "../drive/icons.tsx";
@@ -12,11 +13,24 @@ import { formatMoment, t } from "../i18n.ts";
 import { useLive } from "../shell/live.ts";
 import { Dialog, problemText } from "../shell/dialog.tsx";
 import { Menu, type MenuPlace } from "../shell/menu.tsx";
-import { type ChecklistItem, fromChecklist, isChecklist, readChecklist, taskTexts, toChecklist, writeChecklist } from "./checklist.ts";
+import {
+  blockEnd,
+  type ChecklistItem,
+  fixDepths,
+  fromChecklist,
+  isChecklist,
+  moveItem,
+  readChecklist,
+  taskTexts,
+  toChecklist,
+  toggleItem,
+  writeChecklist,
+} from "./checklist.ts";
+import { FormatBar, RichText } from "./rich-editor.tsx";
 import { type LiveStatus, LiveNote, type Visitor } from "./live.ts";
 import { shiftCaret, withAddedAtEnd } from "./text-change.ts";
 import { useListSettings } from "./preferences.ts";
-import { ArchiveIcon, ChecklistIcon, ImageIcon, LabelIcon, MicIcon, NoColorIcon, PaletteIcon, PinIcon, ReminderIcon, TranscribeIcon } from "./icons.tsx";
+import { ArchiveIcon, ChecklistIcon, DragIcon, FormatIcon, ImageIcon, LabelIcon, MicIcon, NoColorIcon, PaletteIcon, PinIcon, ReminderIcon, TranscribeIcon } from "./icons.tsx";
 import { MAX_MEMO_MS, Recording, RecordingError } from "./memo-recorder.ts";
 import { TrashIcon } from "../drive/icons.tsx";
 import { addImage, addMemo, changeNote, createNote, NOTE_COLORS, type Note, type NoteChange, type NoteColor, openNote, removeImage, transcriptsOn } from "./notes-api.ts";
@@ -187,7 +201,8 @@ function Carets({
   );
 }
 
-/** The fields for writing a note, shared by the box and the dialog. */
+/** The fields for writing a note, shared by the box and the dialog. With
+ * `formatting`, the formatting bar shows under the text. */
 function NoteFields({
   draft,
   onDraft,
@@ -195,6 +210,7 @@ function NoteFields({
   readOnly = false,
   carets = [],
   onCaret,
+  formatting = false,
 }: {
   draft: Draft;
   onDraft: (draft: Draft) => void;
@@ -205,40 +221,13 @@ function NoteFields({
   carets?: readonly FieldCaret[];
   /** Where the reader's caret is, as it moves, in a shared note. */
   onCaret?: (caret: OwnCaret | null) => void;
+  formatting?: boolean;
 }) {
-  const body = useRef<HTMLTextAreaElement>(null);
-  /** What the text was, and where the caret, as the reader last left it,
-   * so a change from someone else keeps the caret with its words. */
-  const shown = useRef({ text: draft.text, start: 0, end: 0 });
-  const remember = () => {
-    const area = body.current;
-    if (!area) return;
-    shown.current = { text: area.value, start: area.selectionStart, end: area.selectionEnd };
-    if (document.activeElement === area) onCaret?.({ start: area.selectionStart, end: area.selectionEnd });
-  };
-  useLayoutEffect(() => {
-    const area = body.current;
-    const before = shown.current;
-    if (area && document.activeElement === area && before.text !== draft.text) {
-      area.setSelectionRange(
-        shiftCaret(before.text, draft.text, before.start),
-        shiftCaret(before.text, draft.text, before.end),
-      );
-    }
-    remember();
-  }, [draft.text]);
-  // Browsers honor the autofocus attribute only once a page, so the box
-  // takes focus itself each time it opens, as a list's first item does.
-  useEffect(() => {
-    if (autofocusBody) body.current?.focus();
-  }, []);
-  // Grows with the text, so the note reads as one piece.
-  useEffect(() => {
-    const area = body.current;
-    if (!area) return;
-    area.style.height = "auto";
-    area.style.height = `${area.scrollHeight}px`;
-  }, [draft.text]);
+  const [view, setView] = useState<EditorView | null>(null);
+  // The bar follows the selection, so it draws again after each change.
+  const [, setChanges] = useState(0);
+  const latest = useRef(draft);
+  latest.current = draft;
   return (
     <>
       <input
@@ -260,26 +249,23 @@ function NoteFields({
           onCaret={onCaret}
         />
       ) : (
-        <div class="caret-host">
-        <textarea
-          ref={body}
-          class="note-body-field"
-          aria-label={t("notes.bodyPlaceholder")}
-          placeholder={readOnly ? "" : t("notes.bodyPlaceholder")}
-          rows={3}
-          readOnly={readOnly}
-          value={draft.text}
-          onSelect={remember}
-          onKeyUp={remember}
-          onPointerUp={remember}
-          onFocus={remember}
-          onInput={(event) => {
-            remember();
-            onDraft({ ...draft, text: event.currentTarget.value });
-          }}
-        />
-        <Carets field={body} carets={carets} text={draft.text} />
-        </div>
+        <>
+          <RichText
+            value={draft.text}
+            onChange={(text) => onDraft({ ...latest.current, text })}
+            readOnly={readOnly}
+            placeholder={readOnly ? "" : t("notes.bodyPlaceholder")}
+            label={t("notes.bodyPlaceholder")}
+            autofocus={autofocusBody}
+            carets={carets.filter((caret) => caret.item === undefined)}
+            onCaret={onCaret}
+            onView={(editor) => {
+              setView(editor);
+              setChanges((count) => count + 1);
+            }}
+          />
+          {formatting && !readOnly && view && <FormatBar view={view} />}
+        </>
       )}
     </>
   );
@@ -347,10 +333,25 @@ function ItemText({
   );
 }
 
+/** How far a dragged item goes sideways before it's indented or not. */
+const INDENT_DRAG = 24;
+
+/** Where a dragged item would land: before the item at `before` in the
+ * list (or at its end), at `depth`. `row` is the row the line shows
+ * above, or null for below the last. */
+interface DropPlace {
+  before: number;
+  depth: number;
+  row: number | null;
+}
+
 /** A checklist's items, each with a checkbox. Enter adds an item below,
- * and Backspace in an empty item removes it. The reader's settings say
- * whether the add button puts items at the top or the bottom, and whether
- * checked items go below the others. */
+ * and Backspace in an empty item removes it. Tab, or Ctrl+], indents an
+ * item under the one above it, and Shift+Tab, or Ctrl+[, brings it back,
+ * as in Google Keep. Each item's handle drags it, with its children, to
+ * another place, or sideways to indent it; its arrow keys do the same.
+ * The reader's settings say whether the add button puts items at the top
+ * or the bottom, and whether checked items go below the others. */
 function ChecklistEditor({
   items,
   onItems,
@@ -371,78 +372,221 @@ function ChecklistEditor({
   const settings = useListSettings();
   const atTop = settings.new_items === "top";
   const list = useRef<HTMLDivElement>(null);
-  const [focus, setFocus] = useState<number | null>(autofocus ? (atTop ? 0 : Math.max(0, items.length - 1)) : null);
+  const [focus, setFocus] = useState<{ index: number; on: "text" | "handle" } | null>(
+    autofocus ? { index: atTop ? 0 : Math.max(0, items.length - 1), on: "text" } : null,
+  );
+  const [dragging, setDragging] = useState<{ index: number; x: number; y: number } | null>(null);
+  const [drop, setDrop] = useState<DropPlace | null>(null);
   useEffect(() => {
     if (focus === null) return;
-    list.current?.querySelector<HTMLInputElement>(`input[data-item="${focus}"]`)?.focus();
+    const selector = focus.on === "text" ? `input[data-item="${focus.index}"]` : `button[data-handle="${focus.index}"]`;
+    list.current?.querySelector<HTMLElement>(selector)?.focus();
     setFocus(null);
   }, [focus]);
 
-  const set = (index: number, item: ChecklistItem) => onItems(items.map((each, at) => (at === index ? item : each)));
-  const remove = (index: number) => onItems(items.filter((_, at) => at !== index));
-  const row = (item: ChecklistItem, index: number) => (
-    <div class={item.checked ? "checklist-row checked" : "checklist-row"} key={index}>
-      <input
-        type="checkbox"
-        checked={item.checked}
-        disabled={readOnly}
-        aria-label={item.text || t("notes.listItem")}
-        onChange={() => set(index, { ...item, checked: !item.checked })}
-      />
-      <ItemText
-        index={index}
-        text={item.text}
-        readOnly={readOnly}
-        carets={carets.filter((caret) => caret.item === index)}
-        onCaret={onCaret}
-        onInput={(text) => set(index, { ...item, text })}
-        onKeyDown={(event) => {
-          if (readOnly) return;
-          if (event.key === "Enter") {
-            event.preventDefault();
-            const next = [...items];
-            next.splice(index + 1, 0, { checked: false, text: "" });
-            onItems(next);
-            setFocus(index + 1);
-          } else if (event.key === "Backspace" && item.text === "" && items.length > 1) {
-            event.preventDefault();
-            remove(index);
-            setFocus(Math.max(0, index - 1));
-          }
-        }}
-      />
-      {!readOnly && (
-        <button type="button" class="icon-button" title={t("notes.removeItem")} aria-label={t("notes.removeItem")} onClick={() => remove(index)}>
-          <CloseIcon />
-        </button>
-      )}
-    </div>
-  );
+  const depthOf = (index: number) => items[index]?.depth ?? 0;
+  const remove = (index: number) => onItems(fixDepths(items.filter((_, at) => at !== index)));
   const all = items.map((item, index) => ({ item, index }));
   const open = settings.checked_at_bottom ? all.filter(({ item }) => !item.checked) : all;
   const done = settings.checked_at_bottom ? all.filter(({ item }) => item.checked) : [];
+  /** The rows shown with the `index`th, which it can move among. */
+  const groupOf = (index: number) => (done.some((row) => row.index === index) ? done : open);
+  /** How far in the `index`th item can go: one under the row above it,
+   * and only one step, as in Google Keep, unless it's already further. */
+  const deepest = (index: number, above: number | null) =>
+    above === null ? 0 : Math.max(Math.min(depthOf(above) + 1, 1), Math.min(depthOf(index), depthOf(above) + 1));
+
+  /** Moves the `index`th item, with its children, and keeps it focused. */
+  function move(index: number, before: number, depth: number, on: "text" | "handle") {
+    const length = blockEnd(items, index) - index;
+    if (before === index && depth === depthOf(index)) return;
+    onItems(moveItem(items, index, before, depth));
+    setFocus({ index: before > index ? before - length : before, on });
+  }
+
+  /** Indents (1) or outdents (-1) the `index`th item where it is. */
+  function indent(index: number, step: 1 | -1, on: "text" | "handle"): boolean {
+    const group = groupOf(index);
+    const at = group.findIndex((row) => row.index === index);
+    const above = at > 0 ? group[at - 1]!.index : null;
+    const depth = Math.max(0, Math.min(depthOf(index) + step, deepest(index, above)));
+    if (depth === depthOf(index)) return false;
+    move(index, index, depth, on);
+    return true;
+  }
+
+  /** Moves the `index`th item up (-1) or down (1) past the next row in
+   * its group. */
+  function step(index: number, direction: 1 | -1) {
+    const group = groupOf(index).filter((row) => row.index < index || row.index >= blockEnd(items, index));
+    const after = group.filter((row) => row.index < index).length;
+    if (direction === -1) {
+      // Past the whole item above, not into the middle of its children.
+      let at = after - 1;
+      while (at >= 0 && depthOf(group[at]!.index) > depthOf(index)) at--;
+      const previous = group[at];
+      if (!previous) return;
+      const above = group[at - 1]?.index ?? null;
+      move(index, previous.index, Math.min(depthOf(index), deepest(index, above)), "handle");
+    } else {
+      const next = group[after];
+      if (!next) return;
+      move(index, blockEnd(items, next.index), Math.min(depthOf(index), deepest(index, next.index)), "handle");
+    }
+  }
+
+  /** Where the dragged item would land with the pointer at `y`, `dx` to
+   * the side of where the drag started. */
+  function placeAt(index: number, y: number, dx: number): DropPlace | null {
+    const end = blockEnd(items, index);
+    const group = groupOf(index).filter((row) => row.index < index || row.index >= end);
+    let slot = group.length;
+    for (let at = 0; at < group.length; at++) {
+      const element = list.current?.querySelector(`[data-row="${group[at]!.index}"]`);
+      if (!element) continue;
+      const box = element.getBoundingClientRect();
+      if (y < box.top + box.height / 2) {
+        slot = at;
+        break;
+      }
+    }
+    const above = slot > 0 ? group[slot - 1]!.index : null;
+    const wanted = dx > INDENT_DRAG ? depthOf(index) + 1 : dx < -INDENT_DRAG ? depthOf(index) - 1 : depthOf(index);
+    const depth = Math.max(0, Math.min(wanted, deepest(index, above)));
+    const row = slot < group.length ? group[slot]!.index : null;
+    const before = row ?? (above === null ? index : above + 1);
+    return { before, depth, row };
+  }
+
+  const row = (item: ChecklistItem, index: number) => {
+    const classes = ["checklist-row"];
+    if (item.checked) classes.push("checked");
+    if (dragging && index >= dragging.index && index < blockEnd(items, dragging.index)) classes.push("dragged");
+    if (drop && drop.row === index) classes.push("drop-before");
+    return (
+      <div class={classes.join(" ")} key={index} data-row={index} style={{ "--depth": String(item.depth ?? 0) }}>
+        {drop && drop.row === index && <span class="checklist-drop" style={{ "--drop-depth": String(drop.depth) }} />}
+        {!readOnly && (
+          <button
+            type="button"
+            class="icon-button checklist-handle"
+            data-handle={index}
+            title={t("notes.moveItem", { item: item.text || t("notes.listItem") })}
+            aria-label={t("notes.moveItem", { item: item.text || t("notes.listItem") })}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              setDragging({ index, x: event.clientX, y: event.clientY });
+            }}
+            onPointerMove={(event) => {
+              if (!dragging || dragging.index !== index) return;
+              setDrop(placeAt(index, event.clientY, event.clientX - dragging.x));
+            }}
+            onPointerUp={() => {
+              if (drop) move(index, drop.before, drop.depth, "handle");
+              setDragging(null);
+              setDrop(null);
+            }}
+            onPointerCancel={() => {
+              setDragging(null);
+              setDrop(null);
+            }}
+            onKeyDown={(event) => {
+              const keys: Record<string, () => void> = {
+                ArrowUp: () => step(index, -1),
+                ArrowDown: () => step(index, 1),
+                ArrowRight: () => void indent(index, 1, "handle"),
+                ArrowLeft: () => void indent(index, -1, "handle"),
+              };
+              const action = keys[event.key];
+              if (!action) return;
+              event.preventDefault();
+              action();
+            }}
+          >
+            <DragIcon />
+          </button>
+        )}
+        <input
+          type="checkbox"
+          checked={item.checked}
+          disabled={readOnly}
+          aria-label={item.text || t("notes.listItem")}
+          onChange={() => onItems(toggleItem(items, index))}
+        />
+        <ItemText
+          index={index}
+          text={item.text}
+          readOnly={readOnly}
+          carets={carets.filter((caret) => caret.item === index)}
+          onCaret={onCaret}
+          onInput={(text) => onItems(items.map((each, at) => (at === index ? { ...item, text } : each)))}
+          onKeyDown={(event) => {
+            if (readOnly) return;
+            const atStart = event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0;
+            if (event.key === "Enter") {
+              event.preventDefault();
+              // A new item goes in at the same depth, or under this one
+              // when it has children, so it doesn't take them over.
+              const depth = blockEnd(items, index) > index + 1 ? depthOf(index + 1) : depthOf(index);
+              const next = [...items];
+              next.splice(index + 1, 0, { checked: false, text: "", depth });
+              onItems(next);
+              setFocus({ index: index + 1, on: "text" });
+            } else if (event.key === "Backspace" && item.text === "" && items.length > 1) {
+              event.preventDefault();
+              remove(index);
+              setFocus({ index: Math.max(0, index - 1), on: "text" });
+            } else if (event.key === "Backspace" && atStart && depthOf(index) > 0) {
+              event.preventDefault();
+              indent(index, -1, "text");
+            } else if ((event.key === "Tab" && !event.shiftKey) || ((event.ctrlKey || event.metaKey) && event.key === "]")) {
+              // Tab moves on as usual when the item can't go further in.
+              if (indent(index, 1, "text") || event.key === "]") event.preventDefault();
+            } else if ((event.key === "Tab" && event.shiftKey) || ((event.ctrlKey || event.metaKey) && event.key === "[")) {
+              if (indent(index, -1, "text") || event.key === "[") event.preventDefault();
+            }
+          }}
+        />
+        {!readOnly && (
+          <button type="button" class="icon-button" title={t("notes.removeItem")} aria-label={t("notes.removeItem")} onClick={() => remove(index)}>
+            <CloseIcon />
+          </button>
+        )}
+      </div>
+    );
+  };
   const add = (
     <button
       type="button"
       class="link checklist-add"
       onClick={() => {
-        const blank = { checked: false, text: "" };
+        const blank = { checked: false, text: "", depth: 0 };
         onItems(atTop ? [blank, ...items] : [...items, blank]);
-        setFocus(atTop ? 0 : items.length);
+        setFocus({ index: atTop ? 0 : items.length, on: "text" });
       }}
     >
       + {t("notes.addItem")}
     </button>
   );
+  const dropAtEnd = (group: typeof open) =>
+    drop && drop.row === null && dragging && groupOf(dragging.index) === group ? (
+      <div class="checklist-drop-end">
+        <span class="checklist-drop" style={{ "--drop-depth": String(drop.depth) }} />
+      </div>
+    ) : null;
   return (
-    <div class="checklist-editor" ref={list}>
+    <div class={dragging ? "checklist-editor dragging" : "checklist-editor"} ref={list}>
       {atTop && !readOnly && add}
       {open.map(({ item, index }) => row(item, index))}
+      {dropAtEnd(open)}
       {!atTop && !readOnly && add}
       {done.length > 0 && (
         <>
           <p class="checklist-done">{t("notes.checked", { count: done.length })}</p>
           {done.map(({ item, index }) => row(item, index))}
+          {dropAtEnd(done)}
         </>
       )}
     </div>
@@ -491,6 +635,7 @@ export function Composer({
   }, [start?.at]);
   const [color, setColor] = useState<NoteColor | null>(null);
   const [pinned, setPinned] = useState(false);
+  const [formatting, setFormatting] = useState(false);
   const [colors, setColors] = useState<MenuPlace | null>(null);
   /** The labels chosen, or null for the open label's, if any. */
   const [tags, setTags] = useState<string[] | null>(null);
@@ -656,7 +801,7 @@ export function Composer({
       >
         <PinIcon filled={pinned} />
       </button>
-      <NoteFields draft={draft} onDraft={setDraft} autofocusBody />
+      <NoteFields draft={draft} onDraft={setDraft} autofocusBody formatting={formatting} />
       {held && <ReminderChip reminder={held} onOpen={(button) => setReminding({ under: button })} />}
       {chosenTags.length > 0 && (
         <ul class="note-tags" aria-label={t("notes.labels")}>
@@ -705,6 +850,7 @@ export function Composer({
             <PeopleIcon />
           </button>
         )}
+        {!draft.items && <FormatToggle on={formatting} onToggle={() => setFormatting(!formatting)} />}
         <CheckboxToggle draft={draft} onDraft={setDraft} />
         {onImages && <ImageButton onFiles={(files) => void withImages(files)} />}
         {onRecord && <RecordButton onRecord={(transcribe) => void takeThen((note) => onRecord(note, transcribe))} />}
@@ -754,6 +900,24 @@ export function Composer({
         />
       )}
     </div>
+  );
+}
+
+/** Shows or hides the formatting bar, as Google Keep's button does. */
+function FormatToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      class="icon-button"
+      title={t("notes.formatting")}
+      aria-label={t("notes.formatting")}
+      aria-pressed={on}
+      // Keeps the caret where it is in the text.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onToggle}
+    >
+      <FormatIcon />
+    </button>
   );
 }
 
@@ -1041,6 +1205,7 @@ export function NoteEditor({
   const [note, setNote] = useState<Note | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [status, setStatus] = useState<"" | "saving" | "saved">("");
+  const [formatting, setFormatting] = useState(false);
   const [error, setError] = useState("");
   const [colors, setColors] = useState<MenuPlace | null>(null);
   const [picking, setPicking] = useState(false);
@@ -1543,6 +1708,7 @@ export function NoteEditor({
               readOnly={readOnly || liveStatus === "gone" || liveStatus === "signedOut"}
               carets={carets}
               onCaret={live.current ? sendCaret : undefined}
+              formatting={formatting}
             />
             </>
           )}
@@ -1623,6 +1789,7 @@ export function NoteEditor({
                 <PeopleIcon />
               </button>
             )}
+            {!readOnly && !draft.items && <FormatToggle on={formatting} onToggle={() => setFormatting(!formatting)} />}
             {!readOnly && <CheckboxToggle draft={draft} onDraft={edit} />}
             {mayAdd && <ImageButton onFiles={(files) => void addPictures(files)} />}
             {mayAdd && !recording && <RecordButton onRecord={(transcribe) => void startRecording(transcribe)} />}

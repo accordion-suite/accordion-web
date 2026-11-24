@@ -15,8 +15,9 @@ type Pictures = (target: string) => string | null;
 
 const PicturesContext = createContext<Pictures | null>(null);
 
-export function MarkdownView({ source, pictures }: { source: string; pictures?: Pictures }) {
-  const blocks = useMemo(() => parseMarkdown(source), [source]);
+/** `breaks` shows each line of a paragraph on its own line, as notes do. */
+export function MarkdownView({ source, pictures, breaks = false }: { source: string; pictures?: Pictures; breaks?: boolean }) {
+  const blocks = useMemo(() => parseMarkdown(source, { breaks }), [source, breaks]);
   return (
     <PicturesContext.Provider value={pictures ?? null}>
       <div class="markdown">{blocks.map((block, index) => <BlockView key={index} block={block} />)}</div>
@@ -154,6 +155,12 @@ function InlineView({ node }: { node: Inline }) {
         <del>
           <Inlines nodes={node.children} />
         </del>
+      );
+    case "u":
+      return (
+        <u>
+          <Inlines nodes={node.children} />
+        </u>
       );
     case "code":
       return <code>{node.text}</code>;

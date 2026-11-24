@@ -4365,10 +4365,39 @@ label.choice.folder-choice {
   margin-bottom: 0;
 }
 
-.note-body .markdown :is(h1, h2, h3, h4, h5, h6) {
+/* A note's lines follow each other as in the editor; only a blank line
+   between paragraphs leaves a gap. */
+.note-body .markdown p {
+  margin: 0;
+}
+
+.note-body .markdown p + p {
+  margin-top: 1lh;
+}
+
+/* Headings as Google Keep shows them: larger, not bolder. */
+.note-body .markdown :is(h1, h2, h3, h4, h5, h6),
+.note-rich :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0;
   padding: 0;
   font-size: 1rem;
+  font-weight: 400;
   border: none;
+}
+
+.note-body .markdown h1,
+.note-rich h1 {
+  font-size: 1.375rem;
+}
+
+.note-body .markdown h2,
+.note-rich h2 {
+  font-size: 1.2rem;
+}
+
+.note-body .markdown :is(h3, h4, h5, h6),
+.note-rich :is(h3, h4, h5, h6) {
+  font-weight: 600;
 }
 
 .note-checklist {
@@ -4384,7 +4413,13 @@ label.choice.folder-choice {
   margin: 2px 0;
 }
 
+.note-checklist li {
+  margin-left: calc(var(--depth, 0) * 20px);
+}
+
+/* A long item mustn't squeeze its checkbox. */
 .note-checklist input {
+  flex: none;
   margin-top: 3px;
 }
 
@@ -4618,8 +4653,7 @@ button.note-composer-open {
   border: none;
 }
 
-.note-title-field,
-.note-body-field {
+.note-title-field {
   display: block;
   width: 100%;
   padding: 8px 0;
@@ -4641,9 +4675,87 @@ input.note-title-field {
   border-radius: 0;
 }
 
-.note-body-field {
+/* A note's text, edited as formatted text (rich-editor.tsx). */
+.note-rich {
   min-height: 3lh;
-  overflow: hidden;
+  padding: 8px 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  outline: none;
+}
+
+.note-rich p {
+  margin: 0;
+}
+
+.note-rich .note-placeholder::before {
+  position: absolute;
+  color: var(--muted);
+  pointer-events: none;
+  content: attr(data-placeholder);
+}
+
+.note-rich .note-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.note-rich code {
+  padding: 0.1em 0.35em;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  background: var(--surface);
+  border-radius: 4px;
+}
+
+.note-rich pre.note-code {
+  margin: 0;
+  padding: 0 12px;
+  background: var(--surface);
+}
+
+.note-rich pre.note-code code {
+  padding: 0;
+  background: none;
+}
+
+.note-rich .note-verbatim {
+  color: var(--muted);
+}
+
+.note-format-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 4px;
+  padding: 2px 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.note-format-bar .icon-button[aria-pressed="true"],
+.note-toolbar .icon-button[aria-pressed="true"] {
+  color: var(--on-accent-soft);
+  background: var(--accent-soft);
+}
+
+/* Small enough that the bar fits on one line on a phone. */
+.note-format-bar .icon-button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+}
+
+.note-format-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--border);
 }
 
 .note-toolbar {
@@ -4763,9 +4875,51 @@ dialog.note-editor .note-title-field {
 }
 
 .checklist-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
+  padding-left: calc(var(--depth, 0) * 28px);
+}
+
+/* The handle shows on hover and focus, as in Google Keep. */
+.checklist-row .checklist-handle {
+  margin-right: -6px;
+  cursor: grab;
+  touch-action: none;
+}
+
+/* Touch screens have no hover, so their handles always show. */
+@media (hover: none) {
+  .checklist-row .checklist-handle {
+    opacity: 1;
+  }
+}
+
+.checklist-editor.dragging,
+.checklist-editor.dragging .checklist-handle {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.checklist-row.dragged {
+  opacity: 0.4;
+}
+
+/* Where a dragged item will land, at the depth it will have. */
+.checklist-drop {
+  position: absolute;
+  top: -1px;
+  right: 0;
+  left: calc(var(--drop-depth, 0) * 28px + 34px);
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.checklist-drop-end {
+  position: relative;
+  height: 0;
 }
 
 input.checklist-text {
@@ -4795,7 +4949,7 @@ input.checklist-text {
 }
 
 button.checklist-add {
-  margin: 6px 0 6px 26px;
+  margin: 6px 0 6px 68px;
   font-weight: normal;
   color: var(--muted);
 }

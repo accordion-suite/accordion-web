@@ -105,3 +105,29 @@ export const TranscribeIcon = () => (
     <path d="M3 9.5a4.25 4.25 0 0 0 8.5 0M7.25 13.75v1.75M14 6h6.5M14 10h6.5M14 14h6.5M3.5 19h17" {...line} />
   </Icon>
 );
+
+/** An A over a line: the formatting options, as in Google Keep. */
+export const FormatIcon = () => (
+  <Icon>
+    <path d="M7 16 12 4.5 17 16M8.8 12h6.4M5 20h14" {...line} />
+  </Icon>
+);
+
+export const Heading1Icon = () => (
+  <Icon>
+    <path d="M4 6v12M11 6v12M4 12h7M15.5 9 18 7v11" {...line} />
+  </Icon>
+);
+
+export const Heading2Icon = () => (
+  <Icon>
+    <path d="M4 6v12M11 6v12M4 12h7M15 9.5a2.5 2.5 0 0 1 5 .3c0 2.4-5 4.7-5 8.2h5" {...line} />
+  </Icon>
+);
+
+/** A plain T: normal text. */
+export const NormalTextIcon = () => (
+  <Icon>
+    <path d="M6 6h12M12 6v12" {...line} />
+  </Icon>
+);

@@ -278,7 +278,7 @@ export function NoteBody({ body: whole, note, onToggle }: { body: string; note?:
   if (!isChecklist(body)) {
     return body.trim() ? (
       <div class="note-body">
-        <MarkdownView source={body} pictures={note ? (target) => imageUrl(note, decodeTarget(target), "small") : undefined} />
+        <MarkdownView breaks source={body} pictures={note ? (target) => imageUrl(note, decodeTarget(target), "small") : undefined} />
       </div>
     ) : null;
   }
@@ -291,7 +291,7 @@ export function NoteBody({ body: whole, note, onToggle }: { body: string; note?:
     <div class="note-body">
       <ul class="note-checklist">
         {open.slice(0, CARD_ITEMS).map((item) => (
-          <li key={item.index} class={item.checked ? "checked" : undefined}>
+          <li key={item.index} class={item.checked ? "checked" : undefined} style={{ "--depth": String(item.depth ?? 0) }}>
             <input
               type="checkbox"
               aria-label={item.text}

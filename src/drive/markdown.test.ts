@@ -36,15 +36,15 @@ test("reads emphasis, code, and strikethrough", () => {
 
 test("links only to web pages and email addresses", () => {
   assert.deepEqual(inlines("[Map](https://example.com/a_(b) \"Title\") [bad](javascript:alert(1))"), [
-    { type: "link", href: "https://example.com/a_(b)", children: [text("Map")] },
+    { type: "link", href: "https://example.com/a_(b)", target: "https://example.com/a_(b)", form: "inline", children: [text("Map")] },
     text(" "),
-    { type: "link", href: null, children: [text("bad")] },
+    { type: "link", href: null, target: "javascript:alert(1)", form: "inline", children: [text("bad")] },
   ]);
   assert.deepEqual(inlines("See www.example.com, or <mailto:sam@example.com>."), [
     text("See "),
-    { type: "link", href: "https://www.example.com", children: [text("www.example.com")] },
+    { type: "link", href: "https://www.example.com", target: "www.example.com", form: "bare", children: [text("www.example.com")] },
     text(", or "),
-    { type: "link", href: "mailto:sam@example.com", children: [text("mailto:sam@example.com")] },
+    { type: "link", href: "mailto:sam@example.com", target: "mailto:sam@example.com", form: "auto", children: [text("mailto:sam@example.com")] },
     text("."),
   ]);
   assert.deepEqual(inlines("![A cat](https://example.com/cat.jpg)"), [
@@ -54,6 +54,17 @@ test("links only to web pages and email addresses", () => {
   assert.deepEqual(inlines("![](Garden/a%20b.jpg)"), [{ type: "image", href: null, alt: "", target: "Garden/a%20b.jpg" }]);
   assert.equal(safeHref(" JavaScript:alert(1)"), null);
   assert.equal(safeHref("data:text/html,hi"), null);
+});
+
+test("reads underlines, and with breaks, every line on its own", () => {
+  assert.deepEqual(inlines("<u>Under **bold**</u> and <u>open"), [
+    { type: "u", children: [text("Under "), { type: "strong", children: [text("bold")] }] },
+    text(" and <u>open"),
+  ]);
+  assert.deepEqual(parseMarkdown("One\nTwo", { breaks: true }), [
+    { type: "paragraph", children: [text("One"), { type: "break" }, text("Two")] },
+  ]);
+  assert.deepEqual(parseMarkdown("One\nTwo"), [{ type: "paragraph", children: [text("One\nTwo")] }]);
 });
 
 test("keeps HTML as text", () => {
