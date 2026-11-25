@@ -10,7 +10,8 @@ export interface DocumentInfo {
   name: string;
   folder: string | null;
   modified_at: string;
-  access: "owner" | "editor" | "viewer";
+  /** A commenter views and comments, but can't change the text. */
+  access: "owner" | "editor" | "commenter" | "viewer";
   /** Who owns it, for a document someone shared. */
   owner: string | null;
   /** The contents' SHA-256, which the thumbnail's address carries. */
@@ -44,8 +45,9 @@ function toBase64(bytes: Uint8Array): string {
 /** Copies a document, with everyone's latest edits, beside it if the
  * reader can add to its folder and to their own Docs if not. A name that's
  * taken gets a number. */
-export function copyDocument(id: string, name: string): Promise<DocumentInfo> {
-  return api("POST", `/api/docs/documents/${id}/copy`, { name });
+/** Copies a document, with its comments if `comments`. */
+export function copyDocument(id: string, name: string, comments: boolean): Promise<DocumentInfo> {
+  return api("POST", `/api/docs/documents/${id}/copy`, { name, comments });
 }
 
 export function openDocument(id: string): Promise<DocumentInfo> {

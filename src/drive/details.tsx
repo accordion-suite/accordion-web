@@ -18,7 +18,7 @@ import { ShareDialog } from "./dialogs.tsx";
 import { CloseIcon, InfoIcon, ItemIcon, kindOf } from "./icons.tsx";
 import { folderPath } from "./item-actions.tsx";
 import { CardPreview } from "./item-list.tsx";
-import { type Item, canEdit } from "./item.ts";
+import { type Item, canEdit, levelKey } from "./item.ts";
 import { folderName } from "./places.ts";
 import { type Access, announceChange, pathTo, whoHasAccess } from "./store.ts";
 
@@ -291,7 +291,7 @@ function About({ item }: { item: Item }) {
                     {share.display_name}
                     {from && <span class="details-from hint">{t("details.from", { folder: nameOf(from) })}</span>}
                   </span>
-                  <span class="hint">{t(share.level === "editor" ? "share.editor" : "share.viewer")}</span>
+                  <span class="hint">{t(levelKey(share.level))}</span>
                 </li>
               ))}
             </ul>
@@ -300,7 +300,15 @@ function About({ item }: { item: Item }) {
           <p>
             {t("details.ownedBy", { name: item.owner ?? "" })}
             <br />
-            <span class="hint">{t(item.access === "editor" ? "details.canEdit" : "details.canView")}</span>
+            <span class="hint">
+              {t(
+                item.access === "editor"
+                  ? "details.canEdit"
+                  : item.access === "commenter"
+                    ? "details.canComment"
+                    : "details.canView",
+              )}
+            </span>
           </p>
         )}
         {owner && item.parent !== null && !item.trashed_at && (

@@ -91,9 +91,14 @@ function note(event: LoggedEvent): string {
     }
     case "shared":
     case "share_changed":
-      return t(detail(event, "level") === "editor" ? "events.canEdit" : "events.canView", {
-        name: personName(event.other),
-      });
+      return t(
+        detail(event, "level") === "editor"
+          ? "events.canEdit"
+          : detail(event, "level") === "commenter"
+            ? "events.canComment"
+            : "events.canView",
+        { name: personName(event.other) },
+      );
     case "unshared":
       return t("events.noAccess", { name: personName(event.other) });
     case "link_created": {

@@ -21,7 +21,7 @@ import { ConfirmDialog, Dialog } from "../shell/dialog.tsx";
 import { ItemIcon } from "./icons.tsx";
 import { useDrive } from "./layout.tsx";
 import { opensWithDocs, useOpenWithDocs } from "./open-with-docs.tsx";
-import { type Item, thumbnailAddress } from "./item.ts";
+import { DOC_NAME, type Item, thumbnailAddress } from "./item.ts";
 import { TextFile, canEditText, isText } from "./text-file.tsx";
 
 /** Small screens open PDFs in their own tab, because phones show a PDF in a
@@ -46,7 +46,6 @@ function useMedia(query: string): boolean {
 const NOTE_NAME = /^[^.].*\.(?:md|markdown)$/i;
 
 /** Documents are HTML files that Docs recognizes by how they start. */
-const DOC_NAME = /^[^.].*\.html$/i;
 
 /** The app that opens `file`, if one does: Notes for one of the reader's
  * notes or a note shared with them, Docs for a document. Only the app

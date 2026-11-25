@@ -27,8 +27,9 @@ export interface Item {
   starred: boolean;
   /** What the reader may do with it. An editor can add, rename, move, and
    * delete inside a folder someone shared with them, and a viewer can only
-   * open, download, and copy. */
-  access: "owner" | "editor" | "viewer";
+   * open, download, and copy. A commenter is a viewer who can also comment
+   * where there are comments, such as in Docs. */
+  access: "owner" | "editor" | "commenter" | "viewer";
   /** The owner's name, when it's someone else's. */
   owner: string | null;
   /** For the owner: whether they shared it with anyone. */
@@ -60,7 +61,31 @@ export type FolderColor = (typeof FOLDER_COLORS)[number];
 /** Whether the reader can change an item: rename it, move it, delete it, or
  * add to it. Nothing in the trash can change until it's restored. */
 export function canEdit(item: Pick<Item, "access" | "trashed_at">): boolean {
-  return item.access !== "viewer" && !item.trashed_at;
+  return canChange(item.access) && !item.trashed_at;
+}
+
+/** Whether `access` lets someone change an item. */
+export function canChange(access: Item["access"]): boolean {
+  return access === "owner" || access === "editor";
+}
+
+/** A document Docs may open, by its name. Docs says for sure. */
+export const DOC_NAME = /^[^.].*\.html$/i;
+
+/** The levels the owner can share `item` at, least first. Commenter is
+ * only for documents, the only files with comments, unless someone is a
+ * commenter already. */
+export function shareLevels(item: Pick<Item, "kind" | "name">, current?: ShareEntry["level"]): ShareEntry["level"][] {
+  const comments = (item.kind === "file" && DOC_NAME.test(item.name)) || current === "commenter";
+  return comments ? ["viewer", "commenter", "editor"] : ["viewer", "editor"];
+}
+
+/** How much each level lets someone do, to compare them. */
+export const LEVEL_RANK: Record<ShareEntry["level"], number> = { viewer: 0, commenter: 1, editor: 2 };
+
+/** The name of a level, such as "Viewer". */
+export function levelKey(level: ShareEntry["level"]): "share.viewer" | "share.commenter" | "share.editor" {
+  return level === "editor" ? "share.editor" : level === "commenter" ? "share.commenter" : "share.viewer";
 }
 
 /** An item in a list that reaches across folders, such as search results,
@@ -96,7 +121,7 @@ export interface ShareEntry {
   user: string;
   username: string;
   display_name: string;
-  level: "viewer" | "editor";
+  level: "viewer" | "commenter" | "editor";
 }
 
 /** Something the reader shared, with who has it, for Shared by me. */

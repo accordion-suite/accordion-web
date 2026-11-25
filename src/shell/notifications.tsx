@@ -241,7 +241,8 @@ export function NotificationsButton({ me }: { me: string }) {
                       <span class="notification-text">{notificationText(notification, me)}</span>
                       <span class="hint">
                         <time dateTime={notification.at}>{when(notification.at)}</time>
-                        {level && ` · ${t(level === "editor" ? "notify.youCanEdit" : "notify.youCanView")}`}
+                        {level &&
+                          ` · ${t(level === "editor" ? "notify.youCanEdit" : level === "commenter" ? "notify.youCanComment" : "notify.youCanView")}`}
                       </span>
                     </a>
                     {reminder && (

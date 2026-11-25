@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 
 import { ApiError, api } from "../api.ts";
 import { onLive } from "../shell/live.ts";
-import type { Item, ShareEntry } from "./item.ts";
+import { type Item, LEVEL_RANK, type ShareEntry } from "./item.ts";
 import { readSort, type Sort } from "./sort.ts";
 
 export type ViewMode = "list" | "grid";
@@ -253,7 +253,7 @@ export async function whoHasAccess(path: readonly Item[]): Promise<Access[]> {
     for (const share of shares) {
       const before = people.get(share.user);
       // Closer folders come later, so a tie goes to the closest.
-      if (!before || share.level === "editor" || before.share.level === "viewer") {
+      if (!before || LEVEL_RANK[share.level] >= LEVEL_RANK[before.share.level]) {
         people.set(share.user, { share, from: folder.id === item.id ? null : folder });
       }
     }

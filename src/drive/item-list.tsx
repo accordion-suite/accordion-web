@@ -50,7 +50,7 @@ import {
   StarIcon,
   TrashIcon,
 } from "./icons.tsx";
-import { type Found, type Hit, type Item, type SharedOut, canEdit, thumbnailAddress } from "./item.ts";
+import { type Found, type Hit, type Item, type SharedOut, canChange, canEdit, thumbnailAddress } from "./item.ts";
 import { placeName } from "./places.ts";
 import { typing, useDrive } from "./layout.tsx";
 import { useDriveSettings } from "./preferences.ts";
@@ -429,7 +429,7 @@ export function ItemList({
     } else if (command && event.altKey && !event.shiftKey && letter) {
       if (trash || chosen.length === 0) return;
       if (letter === "p" && only?.kind === "file") openItem(only);
-      else if (letter === "a" && only && only.access !== "viewer") actions.share(only);
+      else if (letter === "a" && only && canChange(only.access)) actions.share(only);
       else if (letter === "m" && chosen.every(canEdit)) actions.move(chosen);
       else if (letter === "s") void actions.star(chosen, chosen.some((item) => !item.starred));
       else return;

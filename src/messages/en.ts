@@ -338,6 +338,7 @@ export const en = {
   "details.ownedBy": "Owned by {name}",
   "details.canEdit": "You can edit",
   "details.canView": "You can view",
+  "details.canComment": "You can comment",
   "details.manageAccess": "Manage access",
   "details.fileDetails": "File details",
   "details.folderDetails": "Folder details",
@@ -397,6 +398,7 @@ export const en = {
   "share.choose": "Choose someone",
   "share.level": "Access",
   "share.viewer": "Viewer",
+  "share.commenter": "Commenter",
   "share.editor": "Editor",
   "share.levelFor": "Access for {name}",
   "share.submit": "Share",
@@ -406,6 +408,8 @@ export const en = {
   "share.noOthers": "There's nobody else on this server to share with yet. People show up here once they've set their password.",
   "share.help":
     "Viewers can open, download, and copy it. Editors can also add, rename, move, and delete what's inside. What they add counts toward your storage.",
+  "share.helpDocument":
+    "Viewers can open, download, and copy it. Commenters can also comment on it. Editors can also save changes to it, rename it, and move it to the trash. Their changes count toward your storage.",
   "share.helpFile":
     "Viewers can open, download, and copy it. Editors can also save changes to it, rename it, and move it to the trash. Their changes count toward your storage.",
   "share.shared": "Shared {item} with {name}.",
@@ -717,6 +721,7 @@ export const en = {
   "events.movedHidden": "Between folders you can't open",
   "events.canEdit": "{name} can edit",
   "events.canView": "{name} can view",
+  "events.canComment": "{name} can comment",
   "events.noAccess": "{name} no longer has access",
   "events.version": "Version {number}",
 
@@ -733,6 +738,7 @@ export const en = {
   "notify.none": "Nothing new. You'll see here when someone shares something with you, or changes what you shared.",
   "notify.youCanEdit": "You can edit",
   "notify.youCanView": "You can view",
+  "notify.youCanComment": "You can comment",
   "notify.shared": "{who} shared {name} with you",
   "notify.shareChanged": "{who} changed your access to {name}",
   "notify.added": { one: "{who} added {name} to {folder}", other: "{who} added {count} items to {folder}" },

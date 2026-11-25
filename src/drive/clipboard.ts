@@ -10,7 +10,7 @@ import { useEffect, useState } from "preact/hooks";
 
 import { api } from "../api.ts";
 import { t } from "../i18n.ts";
-import type { Item } from "./item.ts";
+import { type Item, canChange } from "./item.ts";
 import type { Notice } from "./layout.tsx";
 import { type Person, askToMove, consentFor, everyone, movedNotice, moveWithConsent } from "./move-check.tsx";
 import { naming } from "./move.ts";
@@ -55,7 +55,7 @@ export function hasClipped(): boolean {
  * folders can't be copied. */
 export function clippable(mode: Clipped["mode"], chosen: readonly Item[]): Item[] | string {
   if (mode === "cut") {
-    return chosen.every((item) => item.access !== "viewer" && !item.trashed_at) ? [...chosen] : t("drive.cantCut");
+    return chosen.every((item) => canChange(item.access) && !item.trashed_at) ? [...chosen] : t("drive.cantCut");
   }
   const files = chosen.filter((item) => item.kind === "file");
   return files.length > 0 ? files : t("drive.cantCopyFolders");

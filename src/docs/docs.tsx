@@ -15,7 +15,7 @@ import * as Y from "yjs";
 import { api, type Session } from "../api.ts";
 import { NameDialog, ShareDialog } from "../drive/dialogs.tsx";
 import { ChevronIcon, CloseIcon, MoreIcon } from "../drive/icons.tsx";
-import { type Item, thumbnailAddress } from "../drive/item.ts";
+import { type Item, canChange, thumbnailAddress } from "../drive/item.ts";
 import { formatDate, formatList, type MessageKey, t } from "../i18n.ts";
 import { LiveDocument, type LiveStatus, type Visitor } from "../shell/coedit.ts";
 import { Dialog, problemText } from "../shell/dialog.tsx";
@@ -221,17 +221,46 @@ export function Docs({ session, onSignOut }: { session: Session; onSignOut: () =
 /** Makes a copy and opens it in a new tab, as Google Docs does. The tab
  * opens at once, while the press still lets a page open one, so `id` can
  * still be on its way, such as a draft's file being made. */
-async function copyAndOpen(id: string | Promise<string>, name: string) {
+async function copyAndOpen(id: string | Promise<string>, name: string, comments: boolean) {
   const tab = window.open("", "_blank");
   if (tab) tab.opener = null;
   try {
-    const made = await copyDocument(await id, name);
+    const made = await copyDocument(await id, name, comments);
     if (tab) tab.location.href = documentPath(made.id);
     else navigate(documentPath(made.id));
   } catch (problem) {
     tab?.close();
     throw problem;
   }
+}
+
+/** **Make a copy**: the copy's name, and whether its comments come too.
+ * They're left out unless asked for, as in Google Docs. */
+function CopyDialog({
+  name,
+  onCopy,
+  onClose,
+}: {
+  name: string;
+  onCopy: (name: string, comments: boolean) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [comments, setComments] = useState(false);
+  return (
+    <NameDialog
+      title={t("docs.copyTitle")}
+      submit={t("docs.copySubmit")}
+      initial={t("docs.copyName", { name })}
+      file
+      onSubmit={(copyName) => onCopy(copyName, comments)}
+      onClose={onClose}
+    >
+      <label class="choice">
+        <input type="checkbox" checked={comments} onChange={(event) => setComments(event.currentTarget.checked)} />
+        {t("docs.copyComments")}
+      </label>
+    </NameDialog>
+  );
 }
 
 /** A document just moved to the trash from its own page, which Docs' home
@@ -311,7 +340,7 @@ function DocsHome() {
       // Viewers can copy too: the copy is theirs, in their own Docs.
       { label: t("docs.copyMenu"), onSelect: () => setCopying(document) },
     ];
-    if (document.access !== "viewer") {
+    if (canChange(document.access)) {
       entries.push({ label: t("drive.rename"), onSelect: () => setRenaming(document) }, SEPARATOR, {
         label: t("drive.toTrash"),
         onSelect: () => void trash(document),
@@ -388,13 +417,10 @@ function DocsHome() {
         />
       )}
       {copying && (
-        <NameDialog
-          title={t("docs.copyTitle")}
-          submit={t("docs.copySubmit")}
-          initial={t("docs.copyName", { name: copying.name })}
-          file
-          onSubmit={async (name) => {
-            await copyAndOpen(copying.id, name);
+        <CopyDialog
+          name={copying.name}
+          onCopy={async (name, comments) => {
+            await copyAndOpen(copying.id, name, comments);
             setCopying(null);
             load();
           }}
@@ -586,7 +612,8 @@ function DocumentPage({
     };
   }, [opening]);
 
-  const readOnly = info?.access === "viewer";
+  // Commenters see the document as viewers do, and comment on it.
+  const readOnly = info ? !canChange(info.access) : false;
   const loaded = info !== null;
 
   // The editor appears once the document has arrived from the server, so
@@ -702,7 +729,7 @@ function DocumentPage({
     if (view.current) setActiveThread(view.current, activeThread);
   }, [activeThread, editorReady]);
 
-  const canComment = comments?.can_comment ?? !readOnly;
+  const canComment = comments?.can_comment ?? (!readOnly || info?.access === "commenter");
   /** Shows the results of a change to the comments: the server answers
    * each one with every thread. */
   function changedComments(result: CommentsView) {
@@ -850,9 +877,17 @@ function DocumentPage({
 
   // Ctrl+P prints the document, not the editor around it, Ctrl+O opens
   // another document rather than a file from the computer, and Ctrl+F finds
-  // in the document, as in Google Docs.
+  // in the document, as in Google Docs. Ctrl+Alt+M comments here too, for
+  // commenters, whose text doesn't take keys, and when the text isn't
+  // focused; the editor's own keymap gets it first otherwise.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.altKey && event.code === "KeyM" && !event.defaultPrevented) {
+        if (document.querySelector("dialog[open]")) return;
+        event.preventDefault();
+        latestComments.current.startComment();
+        return;
+      }
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
       const key = event.key.toLowerCase();
       // A dialog that's open keeps its keys, so Ctrl+F doesn't open the
@@ -1114,8 +1149,8 @@ function DocumentPage({
     }
   }
 
-  async function copy(name: string) {
-    await copyAndOpen(makeFile(), name);
+  async function copy(name: string, comments: boolean) {
+    await copyAndOpen(makeFile(), name, comments);
     setCopying(false);
   }
 
@@ -1362,6 +1397,12 @@ function DocumentPage({
         ...(document.fullscreenEnabled ? [{ label: t("docs.fullScreen"), onSelect: fullScreen }] : []),
       ],
     });
+    if (readOnly && canComment) {
+      all.push({
+        label: t("docs.insert"),
+        entries: () => [{ label: t("docs.menuComment"), shortcut: t("docs.commentShortcut"), onSelect: startComment }],
+      });
+    }
     if (editing && format) {
       all.push(
         {
@@ -1679,7 +1720,9 @@ function DocumentPage({
                   onRenamed={(name) => setInfo({ ...info, name })}
                   onError={(problem) => setError(t("docs.renameFailed", { problem }))}
                 />
-                {readOnly && <span class="docs-badge">{t("docs.viewOnly")}</span>}
+                {readOnly && (
+                  <span class="docs-badge">{t(info.access === "commenter" ? "docs.commentOnly" : "docs.viewOnly")}</span>
+                )}
               </div>
               <div class="docs-menus">
                 <MenuBar label={t("docs.menus")} menus={menus()} />
@@ -1885,16 +1928,7 @@ function DocumentPage({
       )}
       {sharing && <ShareDialog item={sharing} onClose={() => setSharing(null)} />}
       {choosing && <OpenDialog current={fileId.current} onClose={() => setChoosing(false)} />}
-      {copying && info && (
-        <NameDialog
-          title={t("docs.copyTitle")}
-          submit={t("docs.copySubmit")}
-          initial={t("docs.copyName", { name: info.name })}
-          file
-          onSubmit={copy}
-          onClose={() => setCopying(false)}
-        />
-      )}
+      {copying && info && <CopyDialog name={info.name} onCopy={copy} onClose={() => setCopying(false)} />}
       {spacing && (
         <SpacingDialog
           layout={spacing}
@@ -2306,7 +2340,7 @@ function DocumentName({
   useEffect(() => {
     if (document.activeElement !== field.current) setValue(info.name);
   }, [info.name]);
-  const readOnly = info.access === "viewer";
+  const readOnly = !canChange(info.access);
 
   async function save() {
     const typed = value.trim();

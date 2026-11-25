@@ -17,7 +17,7 @@ import { navigate } from "../shell/router.ts";
 import { ConfirmDialog } from "../shell/dialog.tsx";
 import { clipFromMenu } from "./clipboard.ts";
 import { ColorDialog, MoveDialog, NameDialog, ShareDialog, VersionsDialog } from "./dialogs.tsx";
-import { type Found, type Item, canEdit } from "./item.ts";
+import { type Found, type Item, canChange, canEdit } from "./item.ts";
 import type { Notice } from "./layout.tsx";
 import { consentFor, movedNotice, moveWithConsent } from "./move-check.tsx";
 import { naming } from "./move.ts";
@@ -251,7 +251,7 @@ export function useItemActions({
     entries.push({ label: t("details.title"), onSelect: () => details(item) });
     entries.push(SEPARATOR);
     // Editors share by link. Only the owner shares with people.
-    if (item.access !== "viewer") entries.push({ label: t("share.open"), onSelect: () => setOpen({ kind: "share", item }) });
+    if (canChange(item.access)) entries.push({ label: t("share.open"), onSelect: () => setOpen({ kind: "share", item }) });
     if (item.access === "owner" && item.shared) {
       entries.push({ label: t("sharedByMe.stop"), onSelect: () => setOpen({ kind: "unshare", item }) });
     }

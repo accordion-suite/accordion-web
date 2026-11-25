@@ -2,14 +2,14 @@
 // to or a folder to search in, choosing what an upload does to items with
 // its names, a file's versions, and sharing.
 
-import type { Ref, TargetedSubmitEvent } from "preact";
+import type { ComponentChildren, Ref, TargetedSubmitEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { ApiError, api } from "../api.ts";
 import { formatDate, formatSize, type MessageKey, t } from "../i18n.ts";
 import { Dialog, problemText as message } from "../shell/dialog.tsx";
 import type { Child } from "./folder-upload.ts";
-import { FOLDER_COLORS, type FolderColor, type Item, type ShareEntry } from "./item.ts";
+import { FOLDER_COLORS, type FolderColor, type Item, type ShareEntry, levelKey, shareLevels } from "./item.ts";
 import { ItemIcon } from "./icons.tsx";
 import { LinksSection } from "./links.tsx";
 import { type Access, pathTo, whoHasAccess } from "./store.ts";
@@ -26,6 +26,7 @@ export function NameDialog({
   initial = "",
   file = false,
   askExtension = false,
+  children,
   onSubmit,
   onClose,
 }: {
@@ -37,6 +38,8 @@ export function NameDialog({
   /** Asks before removing or changing the extension `initial` has, since
    * the file might then open in a different app. */
   askExtension?: boolean;
+  /** More choices, under the name box. */
+  children?: ComponentChildren;
   onSubmit: (name: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -136,6 +139,7 @@ export function NameDialog({
         <p id="item-name-error" class="error" role="alert">
           {error}
         </p>
+        {children}
         <div class="dialog-buttons">
           <button type="submit" disabled={busy}>
             {submit}
@@ -591,7 +595,8 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
   const you = people?.find((person) => person.you);
   const sharedWith = new Set(shares?.map((share) => share.user));
   const others = people?.filter((person) => !person.you && !sharedWith.has(person.id)) ?? [];
-  const levelName = (value: ShareEntry["level"]) => t(value === "editor" ? "share.editor" : "share.viewer");
+  const levelName = (value: ShareEntry["level"]) => t(levelKey(value));
+  const levels = shareLevels(item);
 
   function linksChanged() {
     changed.current = true;
@@ -638,8 +643,11 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
                   value={level}
                   onChange={(event) => setLevel(event.currentTarget.value as ShareEntry["level"])}
                 >
-                  <option value="viewer">{t("share.viewer")}</option>
-                  <option value="editor">{t("share.editor")}</option>
+                  {levels.map((each) => (
+                    <option key={each} value={each}>
+                      {levelName(each)}
+                    </option>
+                  ))}
                 </select>
               </div>
               <button type="submit" disabled={busy || !adding}>
@@ -647,7 +655,9 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
               </button>
             </form>
           )}
-          <p class="hint">{t(item.kind === "folder" ? "share.help" : "share.helpFile")}</p>
+          <p class="hint">
+            {t(item.kind === "folder" ? "share.help" : levels.includes("commenter") ? "share.helpDocument" : "share.helpFile")}
+          </p>
           <h3 class="share-heading">{t("share.who")}</h3>
           <ul class="share-people">
             {you && (
@@ -678,8 +688,11 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
                     );
                   }}
                 >
-                  <option value="viewer">{t("share.viewer")}</option>
-                  <option value="editor">{t("share.editor")}</option>
+                  {shareLevels(item, entry.level).map((each) => (
+                    <option key={each} value={each}>
+                      {levelName(each)}
+                    </option>
+                  ))}
                 </select>
                 <button
                   type="button"
