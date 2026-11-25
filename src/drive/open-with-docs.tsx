@@ -1,5 +1,7 @@
-// Open with Docs (decision 30): a new document from a Word file, a web
-// page, Markdown, or plain text, as Google Drive's "Open with Google Docs".
+// Open with Docs (decision 30): a new document from a Word or OpenDocument
+// file, Rich Text, a web page, Markdown, or plain text, as Google Drive's
+// "Open with Google Docs". Older Word files and Rich Text need LibreOffice
+// on the server, and the server says so when it isn't installed.
 // The file stays as it is. Docs reads it in the server's sandbox and makes
 // the document beside it, or in the reader's own Docs if they can't add
 // there. When something in the file won't come across, such as text boxes
@@ -19,7 +21,7 @@ import type { Item } from "./item.ts";
 import type { Notice } from "./layout.tsx";
 
 /** The files Docs opens, by their names, as the server's list has them. */
-const OPENS = /^[^.].*\.(docx|docm|dotx|dotm|html?|xhtml|md|markdown|txt)$/i;
+const OPENS = /^[^.].*\.(docx|docm|dotx|dotm|doc|odt|ott|rtf|html?|xhtml|md|markdown|txt)$/i;
 
 export function opensWithDocs(item: Pick<Item, "kind" | "name">): boolean {
   return item.kind === "file" && OPENS.test(item.name);
