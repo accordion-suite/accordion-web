@@ -13,7 +13,7 @@ export const settingsEn = {
   "settings.driveGeneral": "General",
   "settings.driveTitle": "General",
   "settings.notesGroup": "Notes",
-  "settings.notesLists": "Lists",
+  "settings.notesGeneral": "General",
   "settings.notesTranscripts": "Transcripts",
   // The browser tab's title, which shell.tabTitle ends with "- Accordion".
   "settings.tabTitle": "{page} - Settings",
@@ -505,6 +505,12 @@ export const settingsEn = {
   "import.cancel": "Cancel import",
 
   "notesSettings.saved": "Saved.",
+  "notesSettings.startTitle": "New notes",
+  "notesSettings.startIntro": "Where you start typing when you open Take a note.",
+  "notesSettings.text": "In the note",
+  "notesSettings.textHint": "Type the note itself, and add a title later if you like.",
+  "notesSettings.title": "In the title",
+  "notesSettings.titleHint": "Type the title first, then press Enter to go on to the note.",
   "notesSettings.newItemsTitle": "New items",
   "notesSettings.newItemsIntro": "Where Add item puts a new item in a list.",
   "notesSettings.bottom": "At the bottom",

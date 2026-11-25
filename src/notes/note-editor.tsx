@@ -29,7 +29,7 @@ import {
 import { FormatBar, RichText } from "./rich-editor.tsx";
 import { type LiveStatus, LiveNote, type Visitor } from "./live.ts";
 import { shiftCaret, withAddedAtEnd } from "./text-change.ts";
-import { useListSettings } from "./preferences.ts";
+import { useListSettings, useNotesSettings } from "./preferences.ts";
 import { ArchiveIcon, ChecklistIcon, DragIcon, FormatIcon, ImageIcon, LabelIcon, MicIcon, NoColorIcon, PaletteIcon, PinIcon, ReminderIcon, TranscribeIcon } from "./icons.tsx";
 import { MAX_MEMO_MS, Recording, RecordingError } from "./memo-recorder.ts";
 import { TrashIcon } from "../drive/icons.tsx";
@@ -206,7 +206,7 @@ function Carets({
 function NoteFields({
   draft,
   onDraft,
-  autofocusBody,
+  autofocus,
   readOnly = false,
   carets = [],
   onCaret,
@@ -214,7 +214,8 @@ function NoteFields({
 }: {
   draft: Draft;
   onDraft: (draft: Draft) => void;
-  autofocusBody?: boolean;
+  /** Where the caret starts, for a new note. */
+  autofocus?: "title" | "text";
   /** For someone who can see a shared note but not change it. */
   readOnly?: boolean;
   /** Others' carets, in a shared note. */
@@ -228,9 +229,24 @@ function NoteFields({
   const [, setChanges] = useState(0);
   const latest = useRef(draft);
   latest.current = draft;
+  const title = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autofocus === "title") title.current?.focus();
+  }, []);
+
+  /** Enter in the title goes on to the note, as in Keep. */
+  function titleKey(event: KeyboardEvent) {
+    if (event.key !== "Enter" || event.isComposing || readOnly) return;
+    event.preventDefault();
+    const fields = (event.currentTarget as HTMLElement).parentElement;
+    if (view) view.focus();
+    else fields?.querySelector<HTMLElement>('input[data-item="0"]')?.focus();
+  }
+
   return (
     <>
       <input
+        ref={title}
         class="note-title-field"
         aria-label={t("notes.titlePlaceholder")}
         placeholder={t("notes.titlePlaceholder")}
@@ -238,12 +254,13 @@ function NoteFields({
         readOnly={readOnly}
         value={draft.title}
         onInput={(event) => onDraft({ ...draft, title: event.currentTarget.value })}
+        onKeyDown={titleKey}
       />
       {draft.items ? (
         <ChecklistEditor
           items={draft.items}
           onItems={(items) => onDraft({ ...draft, items })}
-          autofocus={autofocusBody}
+          autofocus={autofocus === "text"}
           readOnly={readOnly}
           carets={carets}
           onCaret={onCaret}
@@ -256,7 +273,7 @@ function NoteFields({
             readOnly={readOnly}
             placeholder={readOnly ? "" : t("notes.bodyPlaceholder")}
             label={t("notes.bodyPlaceholder")}
-            autofocus={autofocusBody}
+            autofocus={autofocus === "text"}
             carets={carets.filter((caret) => caret.item === undefined)}
             onCaret={onCaret}
             onView={(editor) => {
@@ -626,6 +643,7 @@ export function Composer({
   onShare?: (note: Note) => void;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
+  const startIn = useNotesSettings()?.start_in ?? "text";
   useEffect(() => {
     if (!start) return;
     onStarted?.();
@@ -801,7 +819,7 @@ export function Composer({
       >
         <PinIcon filled={pinned} />
       </button>
-      <NoteFields draft={draft} onDraft={setDraft} autofocusBody formatting={formatting} />
+      <NoteFields draft={draft} onDraft={setDraft} autofocus={startIn} formatting={formatting} />
       {held && <ReminderChip reminder={held} onOpen={(button) => setReminding({ under: button })} />}
       {chosenTags.length > 0 && (
         <ul class="note-tags" aria-label={t("notes.labels")}>

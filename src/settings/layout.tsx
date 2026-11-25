@@ -76,7 +76,7 @@ export const SECTIONS: readonly Section[] = [
   { id: "activity", label: "settings.activity", icon: ActivityIcon, group: "you" },
   { id: "import", label: "settings.import", icon: ImportIcon, group: "you" },
   { id: "drive", label: "settings.driveGeneral", icon: DriveIcon, group: "drive" },
-  { id: "notes", label: "settings.notesLists", icon: NoteIcon, group: "notes" },
+  { id: "notes", label: "settings.notesGeneral", icon: NoteIcon, group: "notes" },
   { id: "transcripts", label: "settings.notesTranscripts", icon: MicIcon, group: "notes", admin: true },
   { id: "people", label: "settings.people", icon: PeopleIcon, group: "server" },
   { id: "modules", label: "settings.modules", icon: AppsIcon, group: "server" },

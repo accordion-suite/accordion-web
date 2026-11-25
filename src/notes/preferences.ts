@@ -1,5 +1,5 @@
-// The reader's Notes settings: where a list's new items go, and whether
-// checked items move to the bottom. The server keeps them, so they follow
+// The reader's Notes settings: where a new note's caret starts, where a
+// list's new items go, and whether checked items move to the bottom. The server keeps them, so they follow
 // the reader to every device. They load once, and Settings changes them
 // here, so Notes sees a change without loading them again.
 
@@ -8,13 +8,16 @@ import { useEffect, useState } from "preact/hooks";
 import { api } from "../api.ts";
 
 export interface NotesSettings {
+  /** Where the caret starts in a new note: the text, under "Take a
+   * note…", or the title. */
+  start_in: "text" | "title";
   new_items: "bottom" | "top";
   /** Whether checked items show below the others, under "checked items".
    * Otherwise they stay where they are. */
   checked_at_bottom: boolean;
 }
 
-export const DEFAULT_NOTES_SETTINGS: NotesSettings = { new_items: "bottom", checked_at_bottom: true };
+export const DEFAULT_NOTES_SETTINGS: NotesSettings = { start_in: "text", new_items: "bottom", checked_at_bottom: true };
 
 const CHANGED = "accordion:notes-settings";
 

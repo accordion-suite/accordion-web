@@ -1,6 +1,7 @@
-// Notes' settings for lists: where new items go, and whether checked items
-// move to the bottom, as in Google Keep. They save as soon as they change,
-// and follow the reader to every device.
+// Notes' settings: where a new note's caret starts, where a list's new
+// items go, and whether checked items move to the bottom, as in Google
+// Keep. They save as soon as they change, and follow the reader to every
+// device.
 
 import { useState } from "preact/hooks";
 
@@ -26,15 +27,35 @@ export function NotesPage() {
 
   if (!settings) {
     return (
-      <SettingsPage title={t("settings.notesLists")}>
+      <SettingsPage title={t("settings.notesGeneral")}>
         <LoadState error="" />
       </SettingsPage>
     );
   }
 
   return (
-    <SettingsPage title={t("settings.notesLists")}>
+    <SettingsPage title={t("settings.notesGeneral")}>
       <OutcomeLine outcome={outcome} />
+      <section class="settings-card">
+        <h2 id="start-title">{t("notesSettings.startTitle")}</h2>
+        <p class="hint">{t("notesSettings.startIntro")}</p>
+        <fieldset class="choices" aria-labelledby="start-title">
+          {(["title", "text"] as const).map((place) => (
+            <label class="choice" key={place}>
+              <input
+                type="radio"
+                name="start-in"
+                checked={settings.start_in === place}
+                onChange={() => void save({ start_in: place })}
+              />
+              <span class="choice-text">
+                <strong>{t(`notesSettings.${place}`)}</strong>
+                <span class="hint">{t(`notesSettings.${place}Hint`)}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      </section>
       <section class="settings-card">
         <h2 id="new-items-title">{t("notesSettings.newItemsTitle")}</h2>
         <p class="hint">{t("notesSettings.newItemsIntro")}</p>
