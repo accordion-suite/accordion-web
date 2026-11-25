@@ -207,3 +207,21 @@ export const OutlineIcon = () => (
     <path d="M4.5 6.5h15M8 12h11.5M11.5 17.5h8" {...line} />
   </Icon>
 );
+
+const bubble = "M5 5h14a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 17h-8.5l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 5 5Z";
+
+/** A speech bubble with a plus: add a comment. */
+export const CommentIcon = () => (
+  <Icon>
+    <path d={bubble} {...line} />
+    <path d="M12 8v6M9 11h6" {...line} />
+  </Icon>
+);
+
+/** A speech bubble with lines of text: the document's comments. */
+export const CommentsIcon = () => (
+  <Icon>
+    <path d={bubble} {...line} />
+    <path d="M8 9.5h8M8 12.5h5" {...line} />
+  </Icon>
+);

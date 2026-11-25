@@ -62,6 +62,7 @@ import {
 import { autoLink, autoLinkOnEnter, smartQuotes } from "./autoformat.ts";
 import { ContentsView, contentsPlugin } from "./contents.ts";
 import { findPlugin } from "./find.ts";
+import { commentsPlugin } from "./comments.ts";
 import { pagesPlugin, type PartKind } from "./pages.ts";
 import { keepPastedStyles, schema } from "./schema.ts";
 import { BORDER_ATTRS, fitTables } from "./tables.ts";
@@ -89,6 +90,8 @@ export function createEditor(
     onOpenPart,
     onOpenNote,
     onInsertFootnote,
+    onComment,
+    onCommentClick,
   }: {
     readOnly: boolean;
     onChange: () => void;
@@ -105,6 +108,10 @@ export function createEditor(
     onOpenNote: (pos: number) => void;
     /** Someone asked for a footnote where the caret is. */
     onInsertFootnote: () => void;
+    /** Someone asked to comment on the selected text. */
+    onComment: () => void;
+    /** A click landed in a thread's text, or outside every thread's. */
+    onCommentClick: (thread: string | null) => void;
   },
 ): EditorView {
   addFonts();
@@ -118,11 +125,14 @@ export function createEditor(
       keymap({ Enter: autoLinkOnEnter, "Shift-Enter": autoLinkOnEnter }),
       // Google Docs' shortcut for a footnote.
       keymap({ "Mod-Alt-f": () => (onInsertFootnote(), true) }),
+      // Google Docs' shortcut for a comment, which viewers can't add yet.
+      keymap({ "Mod-Alt-m": () => (onComment(), true) }),
       keymap(keys(onLink, onAltText)),
       keymap(baseKeymap),
       typingShortcuts(),
       listsPlaceText(),
       findPlugin(),
+      commentsPlugin(onCommentClick),
       dropCursor(),
       gapCursor(),
       columnResizing(),

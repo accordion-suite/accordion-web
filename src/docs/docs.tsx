@@ -8,6 +8,8 @@ import { deleteSelection, selectAll } from "prosemirror-commands";
 import { type Command, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useEffect, useRef, useState } from "preact/hooks";
+
+import { useLive } from "../shell/live.ts";
 import * as Y from "yjs";
 
 import { api, type Session } from "../api.ts";
@@ -83,6 +85,8 @@ import {
   LinkIcon,
   MinusIcon,
   NumbersIcon,
+  CommentIcon,
+  CommentsIcon,
   OutlineIcon,
   PageBreakIcon,
   PictureIcon,
@@ -138,6 +142,24 @@ import {
   toggleSpace,
 } from "./paragraph.ts";
 import { Outline, readShowOutline, saveShowOutline } from "./outline.tsx";
+import {
+  clearDraft,
+  COMMENTS_HINT,
+  type CommentsView,
+  commentRanges,
+  deleteComment,
+  deleteThread,
+  draftOf,
+  editComment,
+  listComments,
+  replyTo,
+  resolveThread,
+  setActiveThread,
+  showThreads,
+  startDraft,
+  startThread,
+} from "./comments.ts";
+import { CommentsMargin, CommentsPanel, showThreadText, type ThreadActions } from "./comment-cards.tsx";
 import {
   geometryOf,
   layOutNow,
@@ -522,6 +544,12 @@ function DocumentPage({
   const [choosingPreferences, setChoosingPreferences] = useState(false);
   const [outlined, setOutlined] = useState(readShowOutline);
   const [coloringCell, setColoringCell] = useState(false);
+  // The document's comments, the thread someone's looking at, and whether
+  // the comments panel is open.
+  const [comments, setComments] = useState<CommentsView | null>(null);
+  const [activeThread, setActiveThreadId] = useState<string | null>(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const canvas = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const mount = useRef<HTMLDivElement>(null);
@@ -624,6 +652,10 @@ function DocumentPage({
       onOpenPart: (kind, sheet) => openPart(kind, sheet),
       onOpenNote: (pos) => openNote(pos),
       onInsertFootnote: () => addFootnote(),
+      // The editor keeps these from when it was made, so they reach the
+      // page's latest state through a ref.
+      onComment: () => latestComments.current.startComment(),
+      onCommentClick: (thread) => latestComments.current.lookAtThread(thread, false),
     });
     const editor = view.current;
     stopParts.current = watchParts(document.doc, (parts) => setPageParts(editor, parts));
@@ -641,6 +673,100 @@ function DocumentPage({
     setPage(readPage(pageMap));
     view.current.focus();
   }
+
+  /** Loads the document's comments, once it has a file. */
+  const loadingComments = useRef(0);
+  async function loadComments() {
+    const id = fileId.current;
+    if (!id) return;
+    const request = ++loadingComments.current;
+    try {
+      const loaded = await listComments(id);
+      if (request === loadingComments.current) setComments(loaded);
+    } catch {
+      // The next hint, or reconnecting, tries again.
+    }
+  }
+  useEffect(() => {
+    if (loaded) void loadComments();
+  }, [loaded]);
+  useLive(COMMENTS_HINT, (ids) => {
+    if (fileId.current && (!ids || ids.includes(fileId.current))) void loadComments();
+  });
+  // The editor highlights each thread's text once both have arrived.
+  const editorReady = format !== null;
+  useEffect(() => {
+    if (view.current && comments) showThreads(view.current, comments.threads);
+  }, [comments, editorReady]);
+  useEffect(() => {
+    if (view.current) setActiveThread(view.current, activeThread);
+  }, [activeThread, editorReady]);
+
+  const canComment = comments?.can_comment ?? !readOnly;
+  /** Shows the results of a change to the comments: the server answers
+   * each one with every thread. */
+  function changedComments(result: CommentsView) {
+    // Any answer that comes in from before is out of date.
+    loadingComments.current++;
+    setComments(result);
+  }
+  const threadActions: ThreadActions = {
+    reply: async (thread, text) => changedComments(await replyTo(await makeFile(), thread, text)),
+    resolve: async (thread, resolved) => {
+      changedComments(await resolveThread(await makeFile(), thread, resolved));
+      if (resolved) setActiveThreadId(null);
+    },
+    edit: async (thread, comment, text) => changedComments(await editComment(await makeFile(), thread, comment, text)),
+    remove: async (thread, comment) =>
+      changedComments(
+        comment === null ? await deleteThread(await makeFile(), thread) : await deleteComment(await makeFile(), thread, comment),
+      ),
+  };
+
+  /** Starts a comment on the selected text, as Google Docs' **Add
+   * comment**. */
+  function startComment() {
+    const main = view.current;
+    if (!main || !canComment) return;
+    closePart();
+    closeNote();
+    if (!startDraft(main)) {
+      tell(t("docs.commentSelectFirst"));
+      return;
+    }
+    setActiveThreadId(null);
+    if (!marginFits) setCommentsOpen(true);
+  }
+
+  async function sendDraft(text: string) {
+    const main = view.current;
+    const draft = main && draftOf(main.state);
+    if (!main || !draft) return;
+    const before = new Set(comments?.threads.map((thread) => thread.id));
+    const result = await startThread(await makeFile(), draft, draft.quote, text);
+    clearDraft(main);
+    changedComments(result);
+    setActiveThreadId(result.threads.find((thread) => !before.has(thread.id))?.id ?? null);
+    main.focus();
+  }
+
+  function cancelDraft() {
+    if (view.current) {
+      clearDraft(view.current);
+      view.current.focus();
+    }
+  }
+
+  /** Looks at a thread, or at none: a click in its text, or on its card.
+   * On narrower screens the panel opens to show it. */
+  function lookAtThread(thread: string | null, fromCard: boolean) {
+    setActiveThreadId(thread);
+    if (thread && !marginFits && !fromCard) setCommentsOpen(true);
+    if (thread && fromCard && view.current) showThreadText(view.current, thread);
+  }
+
+  const latestComments = useRef({ startComment, lookAtThread });
+  latestComments.current = { startComment, lookAtThread };
 
   // The header covers the top of the window as the page scrolls. Its
   // height goes to the style sheet, for the outline and for headings the
@@ -711,6 +837,9 @@ function DocumentPage({
   // shows the document on sheets of it, except on phones, where the text
   // takes the screen's width.
   const narrow = useNarrow();
+  // Cards go beside the page where there's room for them as well as the
+  // page and the outline, and in the panel otherwise.
+  const marginFits = useMedia(outlined ? "(min-width: 1432px)" : "(min-width: 1200px)");
   useEffect(() => {
     if (narrow) closePart();
     const element = mount.current;
@@ -1229,6 +1358,7 @@ function DocumentPage({
       label: t("docs.view"),
       entries: () => [
         { label: t("docs.showOutline"), checked: outlined, onSelect: () => showOutline(!outlined) },
+        { label: t("docs.showComments"), checked: commentsOpen, onSelect: () => setCommentsOpen(!commentsOpen) },
         ...(document.fullscreenEnabled ? [{ label: t("docs.fullScreen"), onSelect: fullScreen }] : []),
       ],
     });
@@ -1247,6 +1377,7 @@ function DocumentPage({
               shortcut: t("docs.linkShortcut"),
               onSelect: startLink,
             },
+            ...(editingPart ? [] : [{ label: t("docs.menuComment"), shortcut: t("docs.commentShortcut"), onSelect: startComment }]),
             SEPARATOR,
             { label: t("docs.rule"), onSelect: () => run(insertRule) },
             ...(editingPart
@@ -1509,6 +1640,16 @@ function DocumentPage({
     );
   }
 
+  // The page moves left for the cards beside it while there are threads
+  // to show there, or one being written.
+  const draft = view.current ? draftOf(view.current.state) : null;
+  const showMargin =
+    marginFits &&
+    !narrow &&
+    !commentsOpen &&
+    view.current !== null &&
+    (draft !== null || (comments !== null && commentRanges(view.current.state).length > 0));
+
   const statusText =
     status === "connecting"
       ? t("docs.connecting")
@@ -1557,6 +1698,16 @@ function DocumentPage({
                 ))}
               </span>
             )}
+            <button
+              type="button"
+              class="icon-button docs-comments-button"
+              title={t("docs.comments")}
+              aria-label={t("docs.comments")}
+              aria-expanded={commentsOpen}
+              onClick={() => setCommentsOpen(!commentsOpen)}
+            >
+              <CommentsIcon />
+            </button>
             <button type="button" class="docs-share" onClick={() => void share()}>
               {t("docs.share")}
             </button>
@@ -1574,6 +1725,7 @@ function DocumentPage({
               onSpacing={startSpacing}
               onRestart={startRestart}
               onCellColor={() => setColoringCell(true)}
+              onComment={startComment}
             />
           )}
           {finding && view.current && (
@@ -1605,7 +1757,7 @@ function DocumentPage({
           {error || statusText || notice}
         </p>
       )}
-      <div class={outlined ? "docs-canvas outlined" : "docs-canvas"}>
+      <div class={["docs-canvas", outlined && "outlined", showMargin && "commented"].filter(Boolean).join(" ")} ref={canvas}>
         {outlined && view.current && format && <Outline view={view.current} onClose={() => showOutline(false)} />}
         {!outlined && format && (
           <div class="docs-side">
@@ -1621,7 +1773,39 @@ function DocumentPage({
           </div>
         )}
         <div class="docs-page" ref={mount} />
+        {showMargin && view.current && canvas.current && mount.current && (
+          <CommentsMargin
+            view={view.current}
+            canvas={canvas.current}
+            page={mount.current}
+            threads={comments?.threads ?? []}
+            draft={draft}
+            active={activeThread}
+            canComment={canComment}
+            actions={threadActions}
+            onActivate={(thread) => lookAtThread(thread, true)}
+            onDraftSubmit={sendDraft}
+            onDraftCancel={cancelDraft}
+          />
+        )}
       </div>
+      {commentsOpen && view.current && (
+        <CommentsPanel
+          view={view.current}
+          threads={comments?.threads ?? []}
+          draft={draft}
+          active={activeThread}
+          canComment={canComment}
+          actions={threadActions}
+          onActivate={(thread) => lookAtThread(thread, true)}
+          onDraftSubmit={sendDraft}
+          onDraftCancel={cancelDraft}
+          onClose={() => {
+            setCommentsOpen(false);
+            cancelDraft();
+          }}
+        />
+      )}
       {showCount && format && view.current && <WordCountBadge state={view.current.state} onOpen={() => setCounting(true)} />}
       {counting && view.current && (
         <WordCountDialog
@@ -1792,6 +1976,19 @@ function useNarrow(): boolean {
 }
 
 const NARROW = "(max-width: 860px)";
+
+/** Whether the window matches a media query, kept up to date. */
+function useMedia(media: string): boolean {
+  const [matches, setMatches] = useState(() => matchMedia(media).matches);
+  useEffect(() => {
+    const query = matchMedia(media);
+    const change = () => setMatches(query.matches);
+    change();
+    query.addEventListener("change", change);
+    return () => query.removeEventListener("change", change);
+  }, [media]);
+  return matches;
+}
 
 /** What the editor says when it uses another font in place of one. */
 const FONT_NOTICES: Record<Replaced["kind"], MessageKey> = {
@@ -2286,6 +2483,7 @@ function Toolbar({
   onSpacing,
   onRestart,
   onCellColor,
+  onComment,
 }: {
   format: Formatting;
   run: Run;
@@ -2296,6 +2494,7 @@ function Toolbar({
   onSpacing: () => void;
   onRestart: () => void;
   onCellColor: () => void;
+  onComment: () => void;
 }) {
   const [tableMenu, setTableMenu] = useState<{
     place: MenuPlace;
@@ -2345,6 +2544,9 @@ function Toolbar({
       <ColorButton kind="highlight" color={format.text.highlight} run={run} />
       <ToolButton label={t("docs.link")} pressed={format.link !== null} onClick={onLink}>
         <LinkIcon />
+      </ToolButton>
+      <ToolButton label={t("docs.addComment")} onClick={onComment}>
+        <CommentIcon />
       </ToolButton>
       <span class="docs-toolbar-gap" />
       {format.layout && (
