@@ -60,7 +60,7 @@ export function NotesPage() {
         <h2 id="new-items-title">{t("notesSettings.newItemsTitle")}</h2>
         <p class="hint">{t("notesSettings.newItemsIntro")}</p>
         <fieldset class="choices" aria-labelledby="new-items-title">
-          {(["bottom", "top"] as const).map((place) => (
+          {(["top", "bottom"] as const).map((place) => (
             <label class="choice" key={place}>
               <input
                 type="radio"
