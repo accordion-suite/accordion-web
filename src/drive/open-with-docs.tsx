@@ -17,7 +17,7 @@ import { api } from "../api.ts";
 import { t, type MessageKey } from "../i18n.ts";
 import { ConfirmDialog } from "../shell/dialog.tsx";
 import { navigate } from "../shell/router.ts";
-import type { Item } from "./item.ts";
+import { DOC_NAME, type Item } from "./item.ts";
 import type { Notice } from "./layout.tsx";
 
 /** The files Docs opens, by their names, as the server's list has them. */
@@ -25,6 +25,17 @@ const OPENS = /^[^.].*\.(docx|docm|dotx|dotm|doc|odt|ott|rtf|html?|xhtml|md|mark
 
 export function opensWithDocs(item: Pick<Item, "kind" | "name">): boolean {
   return item.kind === "file" && OPENS.test(item.name);
+}
+
+/** Whether `item` is a Docs document, which Docs opens as it is. A file
+ * that's only named `.html`, such as a saved web page, isn't one. Docs
+ * says for sure, and says no when it's turned off. */
+export async function isDocument(item: Pick<Item, "id" | "kind" | "name">): Promise<boolean> {
+  if (item.kind !== "file" || !DOC_NAME.test(item.name)) return false;
+  return api("GET", `/api/docs/documents/${item.id}`).then(
+    () => true,
+    () => false,
+  );
 }
 
 /** What didn't come across, as the server reports it. */
@@ -119,15 +130,9 @@ export function useOpenWithDocs(notify: (notice: Notice | null) => void): {
   async function open(item: Item) {
     try {
       // A document already opens in Docs as it is.
-      if (/\.html$/i.test(item.name)) {
-        const isDocument = await api("GET", `/api/docs/documents/${item.id}`).then(
-          () => true,
-          () => false,
-        );
-        if (isDocument) {
-          navigate(`/docs/d/${item.id}`);
-          return;
-        }
+      if (await isDocument(item)) {
+        navigate(`/docs/d/${item.id}`);
+        return;
       }
       notify({ message: t("openWith.opening", { name: item.name }) });
       const made = await api<Imported>("POST", "/api/docs/imports", { item: item.id });

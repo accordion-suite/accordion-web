@@ -72,12 +72,12 @@ export function canChange(access: Item["access"]): boolean {
 /** A document Docs may open, by its name. Docs says for sure. */
 export const DOC_NAME = /^[^.].*\.html$/i;
 
-/** The levels the owner can share `item` at, least first. Commenter is
- * only for documents, the only files with comments, unless someone is a
- * commenter already. */
-export function shareLevels(item: Pick<Item, "kind" | "name">, current?: ShareEntry["level"]): ShareEntry["level"][] {
-  const comments = (item.kind === "file" && DOC_NAME.test(item.name)) || current === "commenter";
-  return comments ? ["viewer", "commenter", "editor"] : ["viewer", "editor"];
+/** The levels the owner can share an item at, least first. Commenter is
+ * only for a Docs document, the only kind of file with comments, unless
+ * someone is a commenter already. A page that's only named `.html` isn't
+ * one until Docs makes a document from it. */
+export function shareLevels(document: boolean, current?: ShareEntry["level"]): ShareEntry["level"][] {
+  return document || current === "commenter" ? ["viewer", "commenter", "editor"] : ["viewer", "editor"];
 }
 
 /** How much each level lets someone do, to compare them. */

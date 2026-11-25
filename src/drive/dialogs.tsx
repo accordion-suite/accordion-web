@@ -12,6 +12,7 @@ import type { Child } from "./folder-upload.ts";
 import { FOLDER_COLORS, type FolderColor, type Item, type ShareEntry, levelKey, shareLevels } from "./item.ts";
 import { ItemIcon } from "./icons.tsx";
 import { LinksSection } from "./links.tsx";
+import { isDocument } from "./open-with-docs.tsx";
 import { type Access, pathTo, whoHasAccess } from "./store.ts";
 import { keptFor, useRetention } from "./retention.ts";
 import { extensionChange, freeName, stemLength } from "./names.ts";
@@ -558,6 +559,7 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [commentable, setCommentable] = useState(false);
   const changed = useRef(false);
   const owner = item.access === "owner";
 
@@ -573,7 +575,10 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
   }
 
   useEffect(() => {
-    if (owner) load().catch((problem) => setError(message(problem)));
+    if (!owner) return;
+    load().catch((problem) => setError(message(problem)));
+    setCommentable(false);
+    void isDocument(item).then(setCommentable);
   }, [item.id]);
 
   /** Runs a change, then lists who has access again. */
@@ -596,7 +601,7 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
   const sharedWith = new Set(shares?.map((share) => share.user));
   const others = people?.filter((person) => !person.you && !sharedWith.has(person.id)) ?? [];
   const levelName = (value: ShareEntry["level"]) => t(levelKey(value));
-  const levels = shareLevels(item);
+  const levels = shareLevels(commentable);
 
   function linksChanged() {
     changed.current = true;
@@ -688,7 +693,7 @@ export function ShareDialog({ item, onClose }: { item: Item; onClose: (changed: 
                     );
                   }}
                 >
-                  {shareLevels(item, entry.level).map((each) => (
+                  {shareLevels(commentable, entry.level).map((each) => (
                     <option key={each} value={each}>
                       {levelName(each)}
                     </option>
