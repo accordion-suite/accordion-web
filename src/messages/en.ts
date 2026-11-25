@@ -570,6 +570,7 @@ export const en = {
   "color.purple": "Purple",
   "color.pink": "Pink",
   "color.brown": "Brown",
+  "hover.location": "In {place}",
   "hover.ownedByYou": "Owned by you",
   "hover.edited": "Last edited {time}",
   "description.title": "Description",
