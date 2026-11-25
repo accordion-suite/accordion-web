@@ -1605,13 +1605,14 @@ table.items tbody tr.selected {
   z-index: 1;
 }
 
-/* An item's name, star, description, owner, and last edit, while the
-   pointer rests on its icon. */
+/* An item's name, star, description, place, owner, and last edit, while
+   the pointer rests on its icon. The pointer can move onto it to star the
+   item or follow its place. */
 .hover-card {
   position: fixed;
   z-index: 6;
   width: max-content;
-  max-width: min(320px, calc(100vw - 16px));
+  max-width: min(360px, calc(100vw - 16px));
   padding: 12px 16px;
   font-weight: normal;
   text-align: left;
@@ -1620,11 +1621,76 @@ table.items tbody tr.selected {
   background: var(--panel);
   border-radius: 8px;
   box-shadow: var(--shadow);
-  pointer-events: none;
 }
 
 .hover-card p {
   margin: 0;
+}
+
+/* Each fact after the name, with its icon beside it. */
+.hover-card .hover-card-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.hover-card .hover-card-line + .hover-card-line {
+  margin-top: 4px;
+}
+
+/* As tall as a line of its text, so it sits on the first line's middle,
+   and as wide as the item's icon above, so the text lines up with the
+   name. */
+.hover-card-line > .icon {
+  flex: none;
+  width: 24px;
+  height: 1lh;
+  padding: 0 4px;
+  color: var(--muted);
+}
+
+.hover-card-line > span {
+  min-width: 0;
+}
+
+.hover-card-line a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.hover-card-line a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+button.hover-card-star {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: -6px -8px -6px auto;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+}
+
+button.hover-card-star:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+button.hover-card-star.starred {
+  color: var(--star);
+}
+
+button.hover-card-star .icon {
+  width: 20px;
+  height: 20px;
 }
 
 .hover-card .hint {
@@ -1651,8 +1717,11 @@ table.items tbody tr.selected {
 
 /* A long description stops after four lines. */
 .hover-card .hover-card-description {
-  display: -webkit-box;
   margin-bottom: 6px;
+}
+
+.hover-card-description > span {
+  display: -webkit-box;
   overflow: hidden;
   overflow-wrap: anywhere;
   white-space: pre-line;

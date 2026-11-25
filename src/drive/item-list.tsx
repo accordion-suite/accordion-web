@@ -862,7 +862,7 @@ export function ItemList({
               <tr key={item.id} data-id={item.id} class={classes(item)} {...dragging(item)} {...choosing(item)}>
                 <th scope="row">
                   <span class="name-cell">
-                    <HoverCard item={item}>
+                    <HoverCard item={item} onStar={trash ? undefined : (on) => void actions.star([item], on)}>
                       <ItemIcon item={item} />
                     </HoverCard>
                     {nameLink(item, "item-name")}
@@ -897,7 +897,7 @@ export function ItemList({
                     {...dragging(item)}
                     {...choosing(item)}
                   >
-                    <HoverCard item={item}>
+                    <HoverCard item={item} onStar={trash ? undefined : (on) => void actions.star([item], on)}>
                       <ItemIcon item={item} />
                     </HoverCard>
                     {nameLink(item, "tile-name")}
@@ -921,7 +921,7 @@ export function ItemList({
                     {...choosing(item)}
                   >
                     <div class="card-top">
-                      <HoverCard item={item}>
+                      <HoverCard item={item} onStar={trash ? undefined : (on) => void actions.star([item], on)}>
                         <ItemIcon item={item} />
                       </HoverCard>
                       {nameLink(item, "tile-name")}

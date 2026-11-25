@@ -572,7 +572,7 @@ export const en = {
   "color.brown": "Brown",
   "hover.location": "In {place}",
   "hover.ownedByYou": "Owned by you",
-  "hover.edited": "Last edited {time}",
+  "hover.edited": "Edited {time}",
   "description.title": "Description",
   "description.add": "Add a description",
   "description.save": "Save",

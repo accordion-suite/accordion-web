@@ -56,6 +56,33 @@ export const PeopleIcon = () => (
   </Icon>
 );
 
+/** One person, for who owns something. */
+export const PersonIcon = () => (
+  <Icon>
+    <path
+      d="M12 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8m0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4m0 7c3.9 0 7 1.8 7 4.5V20H5v-2.5C5 14.8 8.1 13 12 13m0 2c-2.6 0-4.6 1-4.9 3h9.8c-.3-2-2.3-3-4.9-3"
+      fill="currentColor"
+    />
+  </Icon>
+);
+
+/** A clock, for when something happened. */
+export const ClockIcon = () => (
+  <Icon>
+    <path
+      d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20m0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16m-1 3h2v4.6l3.7 2.2-1 1.7-4.7-2.8z"
+      fill="currentColor"
+    />
+  </Icon>
+);
+
+/** Lines of text, for a description. */
+export const TextLinesIcon = () => (
+  <Icon>
+    <path d="M4 5h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" fill="currentColor" />
+  </Icon>
+);
+
 /** A person with an arrow going out, for what the reader shared. */
 export const SharedOutIcon = () => (
   <Icon>
