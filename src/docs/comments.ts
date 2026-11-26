@@ -28,8 +28,24 @@ export interface DocComment {
   mine: boolean;
   can_delete: boolean;
   text: string;
+  /** The people it mentions, each as `@` and their name in the text. */
+  mentions: Mention[];
   at: string;
   edited: string | null;
+}
+
+/** Someone a comment mentions. */
+export interface Mention {
+  user: string;
+  /** Their name as the comment writes it, after `@`. */
+  name: string;
+}
+
+/** Someone who can open the document, and so can be mentioned. */
+export interface MentionPerson {
+  id: string;
+  name: string;
+  username: string;
 }
 
 export interface CommentThread {
@@ -57,12 +73,18 @@ export function listComments(document: string): Promise<CommentsView> {
   return api("GET", base(document));
 }
 
-export function startThread(document: string, anchors: Anchors, quote: string, text: string): Promise<CommentsView> {
-  return api("POST", base(document), { start: anchors.start, end: anchors.end, quote, text });
+export function startThread(
+  document: string,
+  anchors: Anchors,
+  quote: string,
+  text: string,
+  mentions: string[],
+): Promise<CommentsView> {
+  return api("POST", base(document), { start: anchors.start, end: anchors.end, quote, text, mentions });
 }
 
-export function replyTo(document: string, thread: string, text: string): Promise<CommentsView> {
-  return api("POST", `${base(document)}/${thread}`, { text });
+export function replyTo(document: string, thread: string, text: string, mentions: string[]): Promise<CommentsView> {
+  return api("POST", `${base(document)}/${thread}`, { text, mentions });
 }
 
 export function resolveThread(document: string, thread: string, resolved: boolean): Promise<CommentsView> {
@@ -73,8 +95,20 @@ export function deleteThread(document: string, thread: string): Promise<Comments
   return api("DELETE", `${base(document)}/${thread}`);
 }
 
-export function editComment(document: string, thread: string, comment: string, text: string): Promise<CommentsView> {
-  return api("PATCH", `${base(document)}/${thread}/${comment}`, { text });
+export function editComment(
+  document: string,
+  thread: string,
+  comment: string,
+  text: string,
+  mentions: string[],
+): Promise<CommentsView> {
+  return api("PATCH", `${base(document)}/${thread}/${comment}`, { text, mentions });
+}
+
+/** Everyone else who can open the document, by name, whom a comment can
+ * mention. */
+export function listPeople(document: string): Promise<MentionPerson[]> {
+  return api("GET", `/api/docs/documents/${document}/people`);
 }
 
 export function deleteComment(document: string, thread: string, comment: string): Promise<CommentsView> {

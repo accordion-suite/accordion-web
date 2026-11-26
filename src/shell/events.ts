@@ -126,6 +126,8 @@ const SENTENCES: Record<string, MessageKey> = {
   description_changed: "notify.descriptionChanged",
   link_opened: "notify.linkOpened",
   reminder_due: "notify.reminder",
+  mentioned: "notify.mentioned",
+  replied: "notify.replied",
 };
 
 /** A note's title from its file's name, "Groceries" for "Groceries.md". */
@@ -159,6 +161,12 @@ export function notificationLink(notification: Notification): string {
   if (notification.action === "reminder_due") return item ? `/notes/?note=${item.id}` : "/notes/reminders";
   // The import page lists it with a link to its report.
   if (notification.action === "import_finished") return "/settings/import";
+  // A comment leads to its thread in the document.
+  if (notification.action === "mentioned" || notification.action === "replied") {
+    if (!item) return "/docs/";
+    const thread = notification.details?.["thread"];
+    return `/docs/d/${item.id}${typeof thread === "string" ? `?comment=${encodeURIComponent(thread)}` : ""}`;
+  }
   if (notification.action === "shared" || notification.action === "share_changed") {
     if (!item) return "/drive/shared";
     return item.folder ? `/drive/folder/${item.id}` : `/drive/shared?file=${item.id}`;

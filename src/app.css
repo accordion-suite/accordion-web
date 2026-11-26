@@ -1181,6 +1181,18 @@ dialog.search-options .dialog-close {
   overflow-wrap: anywhere;
 }
 
+/* What a comment someone was told about says, cut to two lines. */
+.notification-quote {
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .notifications-panel .hint {
   font-size: 0.875rem;
 }
@@ -5798,6 +5810,7 @@ button.checklist-add {
 }
 
 .docs-comment-box {
+  position: relative;
   margin-top: 8px;
 }
 
@@ -5830,6 +5843,68 @@ button.checklist-add {
 
 .docs-comment-buttons button {
   padding: 6px 14px;
+  font-size: 0.875rem;
+}
+
+/* A person a comment mentions, as Google Docs shows one. */
+.docs-mention {
+  padding: 0 2px;
+  color: var(--on-accent-soft);
+  font-weight: 600;
+  background: var(--accent-soft);
+  border-radius: 4px;
+}
+
+/* The people to mention, under the comment box as @ is typed. */
+.docs-mention-list {
+  position: absolute;
+  z-index: 7;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 6px 0;
+  max-height: 280px;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--panel);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.docs-mention-list [role="option"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.docs-mention-list [role="option"][aria-selected="true"] {
+  background: var(--surface);
+}
+
+.docs-mention-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+
+.docs-mention-who span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.docs-mention-username {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.docs-mention-none {
+  padding: 6px 12px;
+  color: var(--muted);
   font-size: 0.875rem;
 }
 

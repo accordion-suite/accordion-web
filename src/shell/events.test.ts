@@ -85,6 +85,20 @@ test("notifications say what happened and lead to it", () => {
     "Your import from Google stopped before it finished",
   );
   assert.equal(notificationLink(imported), "/settings/import");
+
+  const mentioned = {
+    ...added,
+    action: "mentioned",
+    count: 1,
+    folder: null,
+    item: { id: "d", name: "Plan.html" },
+    details: { thread: "t1", comment: "c1", text: "@Alex can you look?" },
+  };
+  assert.equal(notificationText(mentioned, ME), "Sam Rivera mentioned you in a comment on Plan.html");
+  assert.equal(notificationLink(mentioned), "/docs/d/d?comment=t1");
+  const replied = { ...mentioned, action: "replied" };
+  assert.equal(notificationText(replied, ME), "Sam Rivera replied to a comment on Plan.html");
+  assert.equal(notificationLink({ ...replied, item: null }), "/docs/");
 });
 
 test("logs say what happened from the reader's side", () => {

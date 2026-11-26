@@ -12,15 +12,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { ApiError, api } from "../api.ts";
 import { CloseIcon, Icon } from "../drive/icons.tsx";
 import { t } from "../i18n.ts";
-import {
-  detail,
-  noteName,
-  type Notification,
-  notificationLink,
-  notificationText,
-  type Notifications,
-  when,
-} from "./events.ts";
+import { detail, noteName, type Notification, notificationLink, notificationText, type Notifications, when } from "./events.ts";
 import { finishReminder, snoozeReminder } from "../notes/notes-api.ts";
 import { useLive } from "./live.ts";
 import { followLink, navigate } from "./router.ts";
@@ -229,6 +221,9 @@ export function NotificationsButton({ me }: { me: string }) {
                 const level = detail(notification, "level");
                 const name = notification.item ? noteName(notification.item.name) : "";
                 const reminder = notification.action === "reminder_due" && notification.item !== null;
+                // What a comment someone was told about says.
+                const quote =
+                  notification.action === "mentioned" || notification.action === "replied" ? detail(notification, "text") : null;
                 return (
                   <li key={notification.id} class={notification.read ? undefined : "unread"}>
                     <a
@@ -239,6 +234,7 @@ export function NotificationsButton({ me }: { me: string }) {
                       }}
                     >
                       <span class="notification-text">{notificationText(notification, me)}</span>
+                      {quote && <span class="notification-quote">{quote}</span>}
                       <span class="hint">
                         <time dateTime={notification.at}>{when(notification.at)}</time>
                         {level &&

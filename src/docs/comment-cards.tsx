@@ -3,7 +3,8 @@
 // enough, and a panel at the side that lists every thread, resolved ones
 // too, and holds the cards on narrower screens.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { createContext } from "preact";
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { EditorView } from "prosemirror-view";
 
 import { CheckIcon, CloseIcon, MoreIcon } from "../drive/icons.tsx";
@@ -11,13 +12,25 @@ import { t } from "../i18n.ts";
 import { ConfirmDialog, problemText } from "../shell/dialog.tsx";
 import { when } from "../shell/events.ts";
 import { Menu, type MenuEntry, type MenuPlace } from "../shell/menu.tsx";
-import { type CommentThread, commentRanges, type DocComment, DRAFT, type Draft, inTextOrder, rangeOf } from "./comments.ts";
+import {
+  type CommentThread,
+  commentRanges,
+  type DocComment,
+  DRAFT,
+  type Draft,
+  inTextOrder,
+  type Mention,
+  type MentionPerson,
+  rangeOf,
+} from "./comments.ts";
+import { insertMention, keptMentions, matchingPeople, mentionParts, mentionQuery } from "./mentions.ts";
 
 /** What can be done to threads. Each answers once the server has it. */
 export interface ThreadActions {
-  reply(thread: string, text: string): Promise<void>;
+  /** `mentions` are the accounts of the people the text mentions. */
+  reply(thread: string, text: string, mentions: string[]): Promise<void>;
   resolve(thread: string, resolved: boolean): Promise<void>;
-  edit(thread: string, comment: string, text: string): Promise<void>;
+  edit(thread: string, comment: string, text: string, mentions: string[]): Promise<void>;
   /** Deletes a comment, or the whole thread for `null`. */
   remove(thread: string, comment: string | null): Promise<void>;
 }
@@ -28,10 +41,16 @@ const MAX_TEXT = 4000;
 /** The space between cards beside the page. */
 const GAP = 8;
 
+/** The people a comment can mention, loaded once when someone first
+ * types @ in one of the document's comment boxes. */
+export const MentionPeople = createContext<(() => Promise<MentionPerson[]>) | null>(null);
+
 /** A box to write a comment in, which grows with what's typed. Ctrl+Enter
- * sends it and Escape gives up, as in Google Docs. */
+ * sends it and Escape gives up, as in Google Docs. Typing @ lists the
+ * people who can open the document, to mention one. */
 function CommentBox({
   initial = "",
+  initialMentions = [],
   placeholder,
   submit,
   autofocus = true,
@@ -39,16 +58,25 @@ function CommentBox({
   onCancel,
 }: {
   initial?: string;
+  initialMentions?: Mention[];
   placeholder: string;
   submit: string;
   autofocus?: boolean;
-  onSubmit: (text: string) => Promise<void>;
+  onSubmit: (text: string, mentions: string[]) => Promise<void>;
   onCancel: () => void;
 }) {
   const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const field = useRef<HTMLTextAreaElement>(null);
+  const loadPeople = useContext(MentionPeople);
+  const [people, setPeople] = useState<MentionPerson[] | null>(null);
+  // The mention being typed, and the person picked in the list for it.
+  const [typing, setTyping] = useState<{ start: number; caret: number; query: string } | null>(null);
+  const [picked, setPicked] = useState(0);
+  // Everyone chosen from the list, by the name the text writes.
+  const chosen = useRef(new Map(initialMentions.map((mention) => [mention.name, mention.user])));
+  const listId = useRef(`mentions-${Math.random().toString(36).slice(2)}`).current;
   useEffect(() => {
     if (autofocus) field.current?.focus({ preventScroll: true });
   }, []);
@@ -59,13 +87,47 @@ function CommentBox({
     element.style.height = `${element.scrollHeight + 2}px`;
   }, [text]);
 
+  const matches = typing && people ? matchingPeople(people, typing.query) : [];
+  // The list stays open while it has people, and says why it's empty when
+  // nobody else can open the document.
+  const listOpen = typing !== null && people !== null && (matches.length > 0 || (people.length === 0 && typing.query === ""));
+
+  /** Follows the caret: opens the list after an @, and closes it once the
+   * caret leaves the mention. */
+  function follow(element: HTMLTextAreaElement) {
+    const caret = element.selectionStart;
+    const found = loadPeople && element.selectionEnd === caret ? mentionQuery(element.value, caret) : null;
+    if (!found) {
+      setTyping(null);
+      return;
+    }
+    if (typing?.query !== found.query) setPicked(0);
+    setTyping({ start: found.start, caret, query: found.query });
+    if (people === null && loadPeople) {
+      loadPeople().then(setPeople, () => setPeople([]));
+    }
+  }
+
+  function choose(person: MentionPerson) {
+    const element = field.current;
+    if (!typing || !element) return;
+    const written = insertMention(text, typing.start, typing.caret, person.name);
+    chosen.current.set(person.name, person.id);
+    setText(written.text);
+    setTyping(null);
+    element.value = written.text;
+    element.focus();
+    element.setSelectionRange(written.caret, written.caret);
+  }
+
   async function send() {
     if (!text.trim() || busy) return;
     setBusy(true);
     setError("");
     try {
-      await onSubmit(text);
+      await onSubmit(text, keptMentions(text, chosen.current));
       setText("");
+      chosen.current.clear();
     } catch (problem) {
       setError(problemText(problem));
     } finally {
@@ -89,8 +151,40 @@ function CommentBox({
         maxLength={MAX_TEXT}
         placeholder={placeholder}
         aria-label={placeholder}
-        onInput={(event) => setText(event.currentTarget.value)}
+        aria-autocomplete="list"
+        aria-controls={listOpen ? listId : undefined}
+        aria-activedescendant={listOpen && matches.length > 0 ? `${listId}-${picked}` : undefined}
+        onInput={(event) => {
+          setText(event.currentTarget.value);
+          follow(event.currentTarget);
+        }}
+        onKeyUp={(event) => {
+          if (event.key.startsWith("Arrow") && !listOpen) follow(event.currentTarget);
+        }}
+        onClick={(event) => follow(event.currentTarget)}
+        onBlur={() => setTyping(null)}
         onKeyDown={(event) => {
+          if (listOpen) {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault();
+              if (matches.length > 0) {
+                const step = event.key === "ArrowDown" ? 1 : -1;
+                setPicked((picked + step + matches.length) % matches.length);
+              }
+              return;
+            }
+            if ((event.key === "Enter" || event.key === "Tab") && !event.ctrlKey && !event.metaKey && matches.length > 0) {
+              event.preventDefault();
+              choose(matches[picked] ?? matches[0]!);
+              return;
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              setTyping(null);
+              return;
+            }
+          }
           if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
             event.preventDefault();
             void send();
@@ -101,6 +195,38 @@ function CommentBox({
           }
         }}
       />
+      {listOpen && (
+        <ul class="docs-mention-list" id={listId} role="listbox" aria-label={t("docs.mentionList")}>
+          {matches.length === 0 ? (
+            <li class="docs-mention-none" role="presentation">
+              {t("docs.mentionNobody")}
+            </li>
+          ) : (
+            matches.map((person, index) => (
+              <li
+                key={person.id}
+                id={`${listId}-${index}`}
+                role="option"
+                aria-selected={index === picked}
+                // Choosing on mouse down keeps the caret in the box.
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  choose(person);
+                }}
+                onMouseEnter={() => setPicked(index)}
+              >
+                <span class="docs-comment-avatar" aria-hidden="true">
+                  {initials(person.name)}
+                </span>
+                <span class="docs-mention-who">
+                  <span>{person.name}</span>
+                  <span class="docs-mention-username">{person.username}</span>
+                </span>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
       {error && (
         <p class="error" role="alert">
           {error}
@@ -115,6 +241,17 @@ function CommentBox({
         </button>
       </div>
     </form>
+  );
+}
+
+/** A comment's text, with the people it mentions shown as names. */
+function CommentText({ comment }: { comment: DocComment }) {
+  return (
+    <p class="docs-comment-text">
+      {mentionParts(comment.text, comment.mentions ?? []).map((part) =>
+        typeof part === "string" ? part : <span class="docs-mention">@{part.name}</span>,
+      )}
+    </p>
   );
 }
 
@@ -211,16 +348,17 @@ function CommentItem({
       {editing ? (
         <CommentBox
           initial={comment.text}
+          initialMentions={comment.mentions ?? []}
           placeholder={t("docs.commentEditLabel")}
           submit={t("docs.commentSave")}
-          onSubmit={async (text) => {
-            await actions.edit(thread.id, comment.id, text);
+          onSubmit={async (text, mentions) => {
+            await actions.edit(thread.id, comment.id, text, mentions);
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <p class="docs-comment-text">{comment.text}</p>
+        <CommentText comment={comment} />
       )}
       {menu && (
         <Menu
@@ -334,7 +472,7 @@ export function ThreadCard({
           <CommentBox
             placeholder={t("docs.commentReply")}
             submit={t("docs.commentReplySubmit")}
-            onSubmit={(text) => actions.reply(thread.id, text)}
+            onSubmit={(text, mentions) => actions.reply(thread.id, text, mentions)}
             onCancel={() => setReplying(false)}
           />
         ) : (
@@ -364,7 +502,7 @@ function DraftCard({
 }: {
   draft: Draft;
   inPanel: boolean;
-  onSubmit: (text: string) => Promise<void>;
+  onSubmit: (text: string, mentions: string[]) => Promise<void>;
   onCancel: () => void;
   cardRef?: (element: HTMLElement | null) => void;
   style?: string;
@@ -406,7 +544,7 @@ export function CommentsMargin({
   canComment: boolean;
   actions: ThreadActions;
   onActivate: (thread: string) => void;
-  onDraftSubmit: (text: string) => Promise<void>;
+  onDraftSubmit: (text: string, mentions: string[]) => Promise<void>;
   onDraftCancel: () => void;
 }) {
   const cards = useRef(new Map<string, HTMLElement>());
@@ -554,7 +692,7 @@ export function CommentsPanel({
   canComment: boolean;
   actions: ThreadActions;
   onActivate: (thread: string) => void;
-  onDraftSubmit: (text: string) => Promise<void>;
+  onDraftSubmit: (text: string, mentions: string[]) => Promise<void>;
   onDraftCancel: () => void;
   onClose: () => void;
 }) {

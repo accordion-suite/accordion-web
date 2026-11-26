@@ -122,6 +122,8 @@ export const docsEn = {
   "docs.commentDeleteBody": "The reply is deleted for everyone who can open the document.",
   "docs.commentDeleteThreadTitle": "Delete this comment?",
   "docs.commentDeleteThreadBody": "The comment and all of its replies are deleted for everyone.",
+  "docs.mentionList": "People to mention",
+  "docs.mentionNobody": "No one else can open this document yet. Share it, then mention people here.",
   "docs.footnote": "Footnote",
   "docs.footnoteShortcut": "Ctrl+Alt+F",
   "docs.contents": "Table of contents",

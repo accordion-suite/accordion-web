@@ -764,6 +764,8 @@ export const en = {
   },
   "notify.linkOpened": "Someone opened your link to {name}",
   "notify.reminder": "Reminder: {name}",
+  "notify.mentioned": "{who} mentioned you in a comment on {name}",
+  "notify.replied": "{who} replied to a comment on {name}",
   "notify.importDone": "Your import from Google finished",
   "notify.importCanceled": "Your import from Google was canceled",
   "notify.importFailed": "Your import from Google stopped before it finished",

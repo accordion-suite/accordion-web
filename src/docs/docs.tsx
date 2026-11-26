@@ -24,7 +24,7 @@ import { Menu, type MenuEntry, type MenuPlace, SEPARATOR } from "../shell/menu.t
 import { MenuBar, type MenuBarMenu } from "../shell/menu-bar.tsx";
 import { PageThumbnail } from "../shell/page-thumbnail.tsx";
 import { PageTitle, useTabTitle } from "../shell/page.tsx";
-import { followLink, navigate, usePath } from "../shell/router.ts";
+import { followLink, navigate, usePath, useQuery } from "../shell/router.ts";
 import { TopBar } from "../shell/top-bar.tsx";
 import {
   addPicture,
@@ -152,6 +152,7 @@ import {
   draftOf,
   editComment,
   listComments,
+  listPeople,
   replyTo,
   resolveThread,
   setActiveThread,
@@ -159,7 +160,7 @@ import {
   startDraft,
   startThread,
 } from "./comments.ts";
-import { CommentsMargin, CommentsPanel, showThreadText, type ThreadActions } from "./comment-cards.tsx";
+import { CommentsMargin, CommentsPanel, MentionPeople, showThreadText, type ThreadActions } from "./comment-cards.tsx";
 import {
   geometryOf,
   layOutNow,
@@ -729,6 +730,24 @@ function DocumentPage({
     if (view.current) setActiveThread(view.current, activeThread);
   }, [activeThread, editorReady]);
 
+  // A link from the bell names the thread to look at, as `?comment=`.
+  const linkedThread = useQuery("comment");
+  useEffect(() => {
+    if (!linkedThread || !comments || !view.current) return;
+    if (comments.threads.some((thread) => thread.id === linkedThread)) {
+      setActiveThreadId(linkedThread);
+      if (!marginFits) setCommentsOpen(true);
+      showThreadText(view.current, linkedThread);
+    }
+    navigate(location.pathname, { replace: true });
+  }, [linkedThread, comments, editorReady]);
+
+  /** Everyone else who can open the document, for mentions. A draft that
+   * has no file yet is the person's own. */
+  function loadPeople() {
+    return fileId.current ? listPeople(fileId.current) : Promise.resolve([]);
+  }
+
   const canComment = comments?.can_comment ?? (!readOnly || info?.access === "commenter");
   /** Shows the results of a change to the comments: the server answers
    * each one with every thread. */
@@ -738,12 +757,13 @@ function DocumentPage({
     setComments(result);
   }
   const threadActions: ThreadActions = {
-    reply: async (thread, text) => changedComments(await replyTo(await makeFile(), thread, text)),
+    reply: async (thread, text, mentions) => changedComments(await replyTo(await makeFile(), thread, text, mentions)),
     resolve: async (thread, resolved) => {
       changedComments(await resolveThread(await makeFile(), thread, resolved));
       if (resolved) setActiveThreadId(null);
     },
-    edit: async (thread, comment, text) => changedComments(await editComment(await makeFile(), thread, comment, text)),
+    edit: async (thread, comment, text, mentions) =>
+      changedComments(await editComment(await makeFile(), thread, comment, text, mentions)),
     remove: async (thread, comment) =>
       changedComments(
         comment === null ? await deleteThread(await makeFile(), thread) : await deleteComment(await makeFile(), thread, comment),
@@ -765,12 +785,12 @@ function DocumentPage({
     if (!marginFits) setCommentsOpen(true);
   }
 
-  async function sendDraft(text: string) {
+  async function sendDraft(text: string, mentions: string[]) {
     const main = view.current;
     const draft = main && draftOf(main.state);
     if (!main || !draft) return;
     const before = new Set(comments?.threads.map((thread) => thread.id));
-    const result = await startThread(await makeFile(), draft, draft.quote, text);
+    const result = await startThread(await makeFile(), draft, draft.quote, text, mentions);
     clearDraft(main);
     changedComments(result);
     setActiveThreadId(result.threads.find((thread) => !before.has(thread.id))?.id ?? null);
@@ -1048,7 +1068,8 @@ function DocumentPage({
         const at = noteAt(main);
         closeNote();
         const node = at === null ? null : main.state.doc.nodeAt(at);
-        if (at !== null && node) main.dispatch(main.state.tr.setSelection(TextSelection.create(main.state.doc, at + node.nodeSize)));
+        if (at !== null && node)
+          main.dispatch(main.state.tr.setSelection(TextSelection.create(main.state.doc, at + node.nodeSize)));
         main.focus();
       },
     });
@@ -1418,7 +1439,9 @@ function DocumentPage({
               shortcut: t("docs.linkShortcut"),
               onSelect: startLink,
             },
-            ...(editingPart ? [] : [{ label: t("docs.menuComment"), shortcut: t("docs.commentShortcut"), onSelect: startComment }]),
+            ...(editingPart
+              ? []
+              : [{ label: t("docs.menuComment"), shortcut: t("docs.commentShortcut"), onSelect: startComment }]),
             SEPARATOR,
             { label: t("docs.rule"), onSelect: () => run(insertRule) },
             ...(editingPart
@@ -1817,10 +1840,27 @@ function DocumentPage({
         )}
         <div class="docs-page" ref={mount} />
         {showMargin && view.current && canvas.current && mount.current && (
-          <CommentsMargin
+          <MentionPeople.Provider value={loadPeople}>
+            <CommentsMargin
+              view={view.current}
+              canvas={canvas.current}
+              page={mount.current}
+              threads={comments?.threads ?? []}
+              draft={draft}
+              active={activeThread}
+              canComment={canComment}
+              actions={threadActions}
+              onActivate={(thread) => lookAtThread(thread, true)}
+              onDraftSubmit={sendDraft}
+              onDraftCancel={cancelDraft}
+            />
+          </MentionPeople.Provider>
+        )}
+      </div>
+      {commentsOpen && view.current && (
+        <MentionPeople.Provider value={loadPeople}>
+          <CommentsPanel
             view={view.current}
-            canvas={canvas.current}
-            page={mount.current}
             threads={comments?.threads ?? []}
             draft={draft}
             active={activeThread}
@@ -1829,25 +1869,12 @@ function DocumentPage({
             onActivate={(thread) => lookAtThread(thread, true)}
             onDraftSubmit={sendDraft}
             onDraftCancel={cancelDraft}
+            onClose={() => {
+              setCommentsOpen(false);
+              cancelDraft();
+            }}
           />
-        )}
-      </div>
-      {commentsOpen && view.current && (
-        <CommentsPanel
-          view={view.current}
-          threads={comments?.threads ?? []}
-          draft={draft}
-          active={activeThread}
-          canComment={canComment}
-          actions={threadActions}
-          onActivate={(thread) => lookAtThread(thread, true)}
-          onDraftSubmit={sendDraft}
-          onDraftCancel={cancelDraft}
-          onClose={() => {
-            setCommentsOpen(false);
-            cancelDraft();
-          }}
-        />
+        </MentionPeople.Provider>
       )}
       {showCount && format && view.current && <WordCountBadge state={view.current.state} onOpen={() => setCounting(true)} />}
       {counting && view.current && (
