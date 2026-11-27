@@ -41,7 +41,6 @@ export async function isDocument(item: Pick<Item, "id" | "kind" | "name">): Prom
 /** What didn't come across, as the server reports it. */
 type Lost =
   | "tracked_changes"
-  | "comments"
   | "text_boxes"
   | "shapes"
   | "equations"
@@ -73,7 +72,6 @@ interface Imported {
 
 const LOST: Record<Lost, MessageKey> = {
   tracked_changes: "openWith.trackedChanges",
-  comments: "openWith.comments",
   text_boxes: "openWith.textBoxes",
   shapes: "openWith.shapes",
   equations: "openWith.equations",

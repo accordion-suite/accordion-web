@@ -269,7 +269,6 @@ export const en = {
   "openWith.title": "Open {name} with Docs?",
   "openWith.intro": "Docs will make a new document from this file. Some things in it won't come across:",
   "openWith.trackedChanges": "Tracked changes. The document has the text as if they were accepted.",
-  "openWith.comments": "Comments.",
   "openWith.textBoxes": "Text boxes. Their text becomes ordinary paragraphs.",
   "openWith.shapes": "Shapes, charts, and other drawings.",
   "openWith.equations": "Equations. They become plain text.",
