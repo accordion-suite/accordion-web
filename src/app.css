@@ -3177,7 +3177,7 @@ pre.text-page {
 
 /* Wide enough for each version's date, size, and buttons on one line. */
 dialog.versions-dialog {
-  width: min(560px, calc(100vw - 32px));
+  width: min(680px, calc(100vw - 32px));
 }
 
 .versions li {
@@ -3189,17 +3189,40 @@ dialog.versions-dialog {
   border-bottom: 1px solid var(--border);
 }
 
+/* The buttons go under the text when there isn't room beside it. */
 .version-about {
   display: flex;
-  flex: 1;
+  flex: 1 1 260px;
   flex-direction: column;
   min-width: 0;
+}
+
+.version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .version-detail {
   font-size: 0.875rem;
   color: var(--muted);
-  white-space: nowrap;
+}
+
+/* A version's name being edited takes the whole row. */
+.version-naming {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.version-naming .hint {
+  margin: 0;
+}
+
+.version-naming-buttons {
+  display: flex;
+  gap: 8px;
 }
 
 /* Wide enough for a name, a username, and Viewer or Editor on one line. */

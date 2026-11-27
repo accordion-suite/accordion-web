@@ -6,7 +6,7 @@ import type { ComponentChildren, Ref, TargetedSubmitEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 
 import { ApiError, api } from "../api.ts";
-import { formatDate, formatSize, type MessageKey, t } from "../i18n.ts";
+import { formatDate, formatList, formatSize, type MessageKey, t } from "../i18n.ts";
 import { Dialog, problemText as message } from "../shell/dialog.tsx";
 import type { Child } from "./folder-upload.ts";
 import { FOLDER_COLORS, type FolderColor, type Item, type ShareEntry, levelKey, shareLevels } from "./item.ts";
@@ -432,13 +432,20 @@ export function ChooseFolderDialog({
 }
 
 /** A saved version of a file, as `/api/drive/items/{id}/versions` lists it. */
-interface Version {
+export interface Version {
   id: string;
   number: number;
   size: number;
   sha256: string;
   created_at: string;
+  /** A named version is kept past the retention period. */
+  name: string | null;
+  /** Whose changes went into it, in the order they first made them. */
+  people: { user: string; display_name: string }[];
 }
+
+/** The longest version name, in characters, as core allows. */
+export const MAX_VERSION_NAME = 100;
 
 /** A file's saved versions, newest first, to download one or make it the
  * current version again. */
@@ -455,12 +462,32 @@ export function VersionsDialog({
   const retention = useRetention();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  /** The version whose name is being edited, and the name so far. */
+  const [naming, setNaming] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     api<Version[]>("GET", `/api/drive/items/${item.id}/versions`).then(setVersions, (problem) =>
       setError(message(problem)),
     );
   }, [item.id]);
+
+  async function saveName(event: TargetedSubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!naming) return;
+    setBusy(true);
+    setError("");
+    const path = `/api/drive/items/${item.id}/versions/${naming.id}/name`;
+    const name = naming.name.trim();
+    try {
+      const named = name ? await api<Version>("PUT", path, { name }) : await api<Version>("DELETE", path);
+      setVersions((list) => list && list.map((version) => (version.id === named.id ? named : version)));
+      setNaming(null);
+    } catch (problem) {
+      setError(message(problem));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function restore(version: Version) {
     setBusy(true);
@@ -476,7 +503,12 @@ export function VersionsDialog({
 
   const current = versions?.[0];
   return (
-    <Dialog title={t("drive.versionsOf", { name: item.name })} class="versions-dialog" onClose={onClose}>
+    <Dialog
+      title={t("drive.versionsOf", { name: item.name })}
+      class="versions-dialog"
+      // Escape while naming leaves the name as it was, and the dialog open.
+      onClose={() => (naming ? setNaming(null) : onClose())}
+    >
       {retention && (
         <p class="hint">
           {retention === "unknown"
@@ -486,40 +518,90 @@ export function VersionsDialog({
       )}
       {versions ? (
         <ul class="versions">
-          {versions.map((version) => (
-            <li key={version.id}>
-              <div class="version-about">
-                <span class="version-name">
-                  {version === current
-                    ? t("drive.versionCurrent", { number: version.number })
-                    : t("drive.version", { number: version.number })}
-                </span>
-                <span class="version-detail">
-                  {t("drive.versionAbout", { date: formatDate(version.created_at), size: formatSize(version.size) })}
-                </span>
-              </div>
-              <a
-                class="button secondary"
-                href={`/api/drive/items/${item.id}/versions/${version.id}/content`}
-                download={item.name}
-                aria-label={t("drive.downloadVersion", { number: version.number })}
-              >
-                {t("viewer.download")}
-              </a>
-              {/* Restoring what's already current would change nothing. */}
-              {version.sha256 !== current?.sha256 && (
-                <button
-                  type="button"
-                  class="secondary"
-                  disabled={busy}
-                  aria-label={t("drive.restoreVersionNamed", { number: version.number })}
-                  onClick={() => restore(version)}
-                >
-                  {t("drive.restoreVersion")}
-                </button>
-              )}
-            </li>
-          ))}
+          {versions.map((version) =>
+            naming?.id === version.id ? (
+              <li key={version.id}>
+                <form class="version-naming" onSubmit={saveName}>
+                  <label for="version-name">{t("drive.versionNameLabel", { number: version.number })}</label>
+                  <input
+                    id="version-name"
+                    type="text"
+                    maxLength={MAX_VERSION_NAME}
+                    value={naming.name}
+                    autoFocus
+                    onInput={(event) => setNaming({ id: version.id, name: event.currentTarget.value })}
+                  />
+                  <p class="hint">{t("drive.versionNameHint")}</p>
+                  <div class="version-naming-buttons">
+                    <button type="submit" disabled={busy}>
+                      {t("drive.versionNameSave")}
+                    </button>
+                    <button type="button" class="secondary" onClick={() => setNaming(null)}>
+                      {t("dialog.cancel")}
+                    </button>
+                  </div>
+                </form>
+              </li>
+            ) : (
+              <li key={version.id}>
+                <div class="version-about">
+                  <span class="version-name">
+                    {version.name ??
+                      (version === current
+                        ? t("drive.versionCurrent", { number: version.number })
+                        : t("drive.version", { number: version.number }))}
+                  </span>
+                  <span class="version-detail">
+                    {version.name
+                      ? t(version === current ? "drive.versionAboutNamedCurrent" : "drive.versionAboutNamed", {
+                          number: version.number,
+                          date: formatDate(version.created_at),
+                          size: formatSize(version.size),
+                        })
+                      : t("drive.versionAbout", { date: formatDate(version.created_at), size: formatSize(version.size) })}
+                  </span>
+                  {version.people.length > 0 && (
+                    <span class="version-detail version-people">
+                      {formatList(version.people.map((person) => person.display_name))}
+                    </span>
+                  )}
+                </div>
+                <div class="version-actions">
+                  <button
+                    type="button"
+                    class="secondary"
+                    disabled={busy}
+                    aria-label={t(version.name ? "drive.renameVersionNamed" : "drive.nameVersionNamed", {
+                      number: version.number,
+                    })}
+                    onClick={() => setNaming({ id: version.id, name: version.name ?? "" })}
+                  >
+                    {t(version.name ? "drive.renameVersion" : "drive.nameVersion")}
+                  </button>
+                  <a
+                    class="button secondary"
+                    href={`/api/drive/items/${item.id}/versions/${version.id}/content`}
+                    download={item.name}
+                    aria-label={t("drive.downloadVersion", { number: version.number })}
+                  >
+                    {t("viewer.download")}
+                  </a>
+                  {/* Restoring what's already current would change nothing. */}
+                  {version.sha256 !== current?.sha256 && (
+                    <button
+                      type="button"
+                      class="secondary"
+                      disabled={busy}
+                      aria-label={t("drive.restoreVersionNamed", { number: version.number })}
+                      onClick={() => restore(version)}
+                    >
+                      {t("drive.restoreVersion")}
+                    </button>
+                  )}
+                </div>
+              </li>
+            ),
+          )}
         </ul>
       ) : (
         !error && <p class="loading">{t("shell.loading")}</p>
