@@ -33,7 +33,10 @@ import {
   type DocumentInfo,
   documentPath,
   downloadAddress,
+  historyPath,
+  nameVersion,
   NEW_DOCUMENT_PATH,
+  restoreVersion,
   type DownloadFormat,
   listDocuments,
   openDocument,
@@ -177,6 +180,8 @@ import { contentsPages, contentsStyles, insertContents } from "./contents.ts";
 import { footnoteBefore, insertFootnote, NoteEditor } from "./footnotes.ts";
 import { addPageNumbers, readParts, watchParts } from "./parts.ts";
 import { printDocument } from "./print.ts";
+import { HistoryPage, takeRestored } from "./history.tsx";
+import { useMedia, useNarrow } from "./media.ts";
 import { type ContentsStyle, HEADING_LEVELS, linkFromTyped } from "./schema.ts";
 import { clearFormatting, setColor, setFont, setHighlight, setSize, stepFontSize } from "./text-style.ts";
 import {
@@ -192,10 +197,12 @@ import {
 export function Docs({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
   const path = usePath();
   const opened = /^\/docs\/d\/([^/]+)\/?$/.exec(path)?.[1] ?? null;
+  const history = /^\/docs\/d\/([^/]+)\/history\/?$/.exec(path)?.[1] ?? null;
   // A new document gets its file, and its address, as someone starts
   // writing, and stays the same page while the address changes.
   const started = useRef<string | null>(null);
   useEffect(() => rememberAppPage("docs", path), [path]);
+  if (history) return <HistoryPage key={history} id={history} session={session} onSignOut={onSignOut} />;
   const editing = path === NEW_DOCUMENT_PATH || opened !== null;
   return (
     <>
@@ -571,6 +578,23 @@ function DocumentPage({
   const [choosingPreferences, setChoosingPreferences] = useState(false);
   const [outlined, setOutlined] = useState(readShowOutline);
   const [coloringCell, setColoringCell] = useState(false);
+  const [namingCurrent, setNamingCurrent] = useState(false);
+  // A version just restored from the history, with Undo.
+  const [restoreNotice, setRestoreNotice] = useState<HomeNotice | null>(() => {
+    const done = opening ? takeRestored(opening) : null;
+    if (!done || !opening) return null;
+    return {
+      text: done.text,
+      async undo() {
+        try {
+          await restoreVersion(opening, done.previous);
+          setRestoreNotice({ text: t("docs.restoreUndone") });
+        } catch (problem) {
+          setRestoreNotice({ text: problemText(problem), problem: true });
+        }
+      },
+    };
+  });
   // The document's comments, the thread someone's looking at, and whether
   // the comments panel is open.
   const [comments, setComments] = useState<CommentsView | null>(null);
@@ -812,8 +836,20 @@ function DocumentPage({
     if (thread && fromCard && view.current) showThreadText(view.current, thread);
   }
 
-  const latestComments = useRef({ startComment, lookAtThread });
-  latestComments.current = { startComment, lookAtThread };
+  /** Opens the version history, for editors, as Google Docs' Ctrl+Alt+Shift+H. */
+  async function seeHistory() {
+    if (readOnly) return;
+    try {
+      navigate(historyPath(await makeFile()));
+    } catch {
+      // makeFile says what went wrong.
+    }
+  }
+
+  // Keys and the editor keep these from when they were set up, so they
+  // reach the page's latest state through a ref.
+  const latestComments = useRef({ startComment, lookAtThread, seeHistory });
+  latestComments.current = { startComment, lookAtThread, seeHistory };
 
   // The header covers the top of the window as the page scrolls. Its
   // height goes to the style sheet, for the outline and for headings the
@@ -906,6 +942,12 @@ function DocumentPage({
         if (document.querySelector("dialog[open]")) return;
         event.preventDefault();
         latestComments.current.startComment();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.altKey && event.shiftKey && event.code === "KeyH") {
+        if (document.querySelector("dialog[open]")) return;
+        event.preventDefault();
+        latestComments.current.seeHistory();
         return;
       }
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
@@ -1327,6 +1369,21 @@ function DocumentPage({
           { label: t("docs.downloadMd"), onSelect: () => void download("md") },
         ],
       },
+      ...(readOnly
+        ? []
+        : [
+            {
+              label: t("docs.versionHistory"),
+              submenu: [
+                { label: t("docs.nameCurrent"), onSelect: () => setNamingCurrent(true) },
+                {
+                  label: t("docs.seeHistory"),
+                  shortcut: t("docs.historyShortcut"),
+                  onSelect: () => void seeHistory(),
+                },
+              ],
+            },
+          ]),
       ...(readOnly
         ? []
         : [
@@ -1905,6 +1962,29 @@ function DocumentPage({
           }}
         />
       )}
+      {namingCurrent && (
+        <NameDialog
+          title={t("docs.nameCurrent")}
+          submit={t("docs.versionNameSave")}
+          onSubmit={async (name) => {
+            await nameVersion(await makeFile(), "current", name);
+            setNamingCurrent(false);
+            tell(t("docs.versionNamed", { name: name.trim() }));
+            view.current?.focus();
+          }}
+          onClose={() => {
+            setNamingCurrent(false);
+            view.current?.focus();
+          }}
+        >
+          <p class="hint">{t("docs.versionNameHint")}</p>
+        </NameDialog>
+      )}
+      {restoreNotice && (
+        <div class="notice-area" role="status">
+          <HomeNoticeView notice={restoreNotice} onClose={() => setRestoreNotice(null)} />
+        </div>
+      )}
       {choosingPreferences && (
         <PreferencesDialog
           onClose={() => {
@@ -2025,32 +2105,6 @@ function checkAddress(id: string): string {
 
 /** Whether the window is as narrow as a phone's, where the page takes the
  * screen's width. It matches the style sheet's. */
-function useNarrow(): boolean {
-  const [narrow, setNarrow] = useState(() => matchMedia(NARROW).matches);
-  useEffect(() => {
-    const query = matchMedia(NARROW);
-    const change = () => setNarrow(query.matches);
-    query.addEventListener("change", change);
-    return () => query.removeEventListener("change", change);
-  }, []);
-  return narrow;
-}
-
-const NARROW = "(max-width: 860px)";
-
-/** Whether the window matches a media query, kept up to date. */
-function useMedia(media: string): boolean {
-  const [matches, setMatches] = useState(() => matchMedia(media).matches);
-  useEffect(() => {
-    const query = matchMedia(media);
-    const change = () => setMatches(query.matches);
-    change();
-    query.addEventListener("change", change);
-    return () => query.removeEventListener("change", change);
-  }, [media]);
-  return matches;
-}
-
 /** What the editor says when it uses another font in place of one. */
 const FONT_NOTICES: Record<Replaced["kind"], MessageKey> = {
   same: "docs.fontSame",

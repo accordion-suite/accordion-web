@@ -225,3 +225,10 @@ export const CommentsIcon = () => (
     <path d="M8 9.5h8M8 12.5h5" {...line} />
   </Icon>
 );
+
+/** An arrow pointing left: back to the document from its history. */
+export const BackIcon = () => (
+  <Icon>
+    <path d="M19 12H5.5M11 6l-6 6 6 6" {...line} />
+  </Icon>
+);

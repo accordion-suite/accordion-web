@@ -1,7 +1,8 @@
 // Docs' API (accordion-docs' `src/api.rs`). Renaming, sharing, and the
 // trash go through Drive's, since a document is a file like any other.
 
-import { api, send } from "../api.ts";
+import { api, ApiError, send } from "../api.ts";
+import { t } from "../i18n.ts";
 import type { PageSize } from "./page-setup.ts";
 
 export interface DocumentInfo {
@@ -97,4 +98,60 @@ export type DownloadFormat = "docx" | "odt" | "html" | "md";
 export function downloadAddress(id: string, format: DownloadFormat, pages: readonly number[] | null = null): string {
   const address = `/api/docs/documents/${id}/download?as=${format}`;
   return pages?.length ? `${address}&pages=${pages.join(".")}` : address;
+}
+
+/** A version of a document, newest first in a list, where the first is
+ * the current one (accordion-docs' `api/versions.rs`). */
+export interface DocVersion {
+  id: string;
+  number: number;
+  size: number;
+  created_at: string;
+  /** The name someone gave it, which keeps it past the retention period. */
+  name: string | null;
+  /** The people whose changes went into it, in the order they first did. */
+  people: { user: string; display_name: string }[];
+}
+
+/** Where a document's version history opens, showing `version` if given. */
+export function historyPath(id: string, version?: string | null): string {
+  return version ? `/docs/d/${id}/history?version=${version}` : `/docs/d/${id}/history`;
+}
+
+/** Every version of a document, newest first. Editors only. */
+export async function listVersions(id: string): Promise<DocVersion[]> {
+  return (await api<{ versions: DocVersion[] }>("GET", `/api/docs/documents/${id}/versions`)).versions;
+}
+
+/** A version to show, as a co-editing state to apply to an empty Y.Doc. */
+export async function versionState(id: string, version: string): Promise<Uint8Array> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/docs/documents/${id}/versions/${version}`);
+  } catch {
+    throw new ApiError(0, t("error.offline"));
+  }
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: unknown };
+    throw new ApiError(response.status, typeof data.error === "string" ? data.error : t("error.problem"));
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+/** Names a version, or the current one, as `"current"`, after saving
+ * everyone's typing. An empty name removes it. */
+export function nameVersion(id: string, version: string, name: string): Promise<DocVersion> {
+  const path = `/api/docs/documents/${id}/versions/${version}/name`;
+  return name.trim() ? api("PUT", path, { name }) : api("DELETE", path);
+}
+
+/** Makes a version current again, as a new version. `previous` is the one
+ * that was current before, which Undo restores. */
+export function restoreVersion(id: string, version: string): Promise<{ version: DocVersion; previous: string }> {
+  return api("POST", `/api/docs/documents/${id}/versions/${version}/restore`);
+}
+
+/** A new document from a version, without comments. */
+export function copyVersion(id: string, version: string, name: string): Promise<DocumentInfo> {
+  return api("POST", `/api/docs/documents/${id}/versions/${version}/copy`, { name });
 }

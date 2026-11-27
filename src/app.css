@@ -7320,6 +7320,206 @@ dialog.docs-open-dialog {
   }
 }
 
+/* A document's version history (docs/history.tsx): the version on its
+   pages at the left, and the list of versions at the right, as in Google
+   Docs. */
+.docs-history {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.docs-history-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--page);
+}
+
+.docs-history-back {
+  color: var(--text);
+}
+
+.docs-history-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.docs-history-head .spacer {
+  flex: 1;
+}
+
+.docs-history-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.docs-history-title h1 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 1.125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.docs-history-title .hint {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.docs-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.docs-history-body {
+  display: flex;
+  flex: 1;
+}
+
+.docs-history-canvas {
+  min-width: 0;
+}
+
+.docs-history-gone {
+  max-width: 560px;
+  margin: 48px auto;
+  text-align: center;
+}
+
+.docs-history-list {
+  position: sticky;
+  top: var(--top-bar-height);
+  align-self: flex-start;
+  box-sizing: border-box;
+  width: 320px;
+  flex: none;
+  height: calc(100dvh - var(--top-bar-height));
+  overflow-y: auto;
+  padding: 16px 0 16px;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.docs-history-list h2 {
+  margin: 0 16px 8px;
+  font-size: 1rem;
+}
+
+.docs-history-days,
+.docs-history-versions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.docs-history-days h3 {
+  margin: 16px 16px 4px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.docs-history-version {
+  display: flex;
+  align-items: flex-start;
+  border-left: 4px solid transparent;
+}
+
+.docs-history-version.shown {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.docs-history-pick {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 4px 8px 12px;
+  border: none;
+  border-radius: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.docs-history-version:not(.shown) .docs-history-pick:hover {
+  background: var(--surface);
+}
+
+.docs-history-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.docs-history-current {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-style: italic;
+}
+
+.docs-history-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 0.8125rem;
+}
+
+.docs-history-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.docs-history-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--caret);
+}
+
+.docs-history-more {
+  margin: 4px 4px 0 0;
+}
+
+.docs-history-empty {
+  margin: 8px 16px;
+}
+
+/* label.choice's margin would put it against the panel's edge. */
+label.choice.docs-history-named {
+  margin: 16px 16px 0;
+}
+
+@media (max-width: 860px) {
+  .docs-history-list {
+    position: static;
+    width: 100%;
+    height: auto;
+    border-left: none;
+  }
+
+  .docs-history-head {
+    flex-wrap: wrap;
+  }
+
+  /* Back is at the left, as on a phone's other pages. */
+  .docs-history-back {
+    margin-right: auto;
+  }
+}
+
 @media print {
   .docs-header,
   .top-bar,

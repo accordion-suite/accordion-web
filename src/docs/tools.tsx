@@ -324,6 +324,7 @@ export function DocsShortcutsDialog({ readOnly, onClose }: { readOnly: boolean; 
       [readOnly ? "Ctrl+F" : { or: ["Ctrl+F", "Ctrl+H"] }, readOnly ? t("docs.find") : t("docs.findReplace")],
       ["Ctrl+Shift+C", t("docs.wordCount")],
       [t("docs.openShortcut"), t("docs.keysOpen")],
+      ...(readOnly ? [] : ([[t("docs.historyShortcut"), t("docs.seeHistory")]] as ShortcutGroup["shortcuts"])),
       [t("docs.printShortcut"), t("docs.keysPrint")],
       [t("docs.copyShortcut"), t("docs.copy")],
       [t("docs.selectAllShortcut"), t("docs.selectAll")],
