@@ -31,6 +31,7 @@ import {
   restoreVersion,
   versionState,
 } from "./docs-api.ts";
+import { changesPlugin, compareDocs } from "./changes.ts";
 import { createPrintView, FRAGMENT } from "./editor.ts";
 import { addFonts } from "./font-faces.ts";
 import { BackIcon } from "./icons.tsx";
@@ -63,6 +64,9 @@ export function HistoryPage({ id, session, onSignOut }: { id: string; session: S
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [onlyNamed, setOnlyNamed] = useState(false);
+  const [showChanges, setShowChanges] = useState(false);
+  // How many changes the shown version made, once compared.
+  const [changeCount, setChangeCount] = useState<number | null>(null);
   const [menu, setMenu] = useState<{ version: DocVersion; place: MenuPlace; byKeyboard: boolean } | null>(null);
   const [naming, setNaming] = useState<DocVersion | null>(null);
   const [copying, setCopying] = useState<DocVersion | null>(null);
@@ -87,6 +91,9 @@ export function HistoryPage({ id, session, onSignOut }: { id: string; session: S
   const shown = versions && (chosen ? (versions.find((version) => version.id === chosen) ?? null) : narrow ? null : current);
   const showList = !narrow || !chosen;
   const showPage = !narrow || chosen !== null;
+  // Show changes compares with the version just before, even one the
+  // list leaves out.
+  const before = shown && versions ? (versions[versions.indexOf(shown) + 1] ?? null) : null;
 
   function choose(version: DocVersion) {
     if (version.id !== chosen) navigate(historyPath(id, version.id));
@@ -187,7 +194,14 @@ export function HistoryPage({ id, session, onSignOut }: { id: string; session: S
             {versions === null ? (
               !error && <p class="loading">{t("shell.loading")}</p>
             ) : shown ? (
-              <VersionPage id={id} version={shown.id} narrow={narrow} onError={(problem) => setError(problem)} />
+              <VersionPage
+                id={id}
+                version={shown}
+                before={showChanges ? before : null}
+                narrow={narrow}
+                onCompared={setChangeCount}
+                onError={(problem) => setError(problem)}
+              />
             ) : (
               chosen && <p class="hint docs-history-gone">{t("docs.versionGone")}</p>
             )}
@@ -217,6 +231,31 @@ export function HistoryPage({ id, session, onSignOut }: { id: string; session: S
               <input type="checkbox" checked={onlyNamed} onChange={(event) => setOnlyNamed(event.currentTarget.checked)} />
               {t("docs.onlyNamed")}
             </label>
+            <div class="switch-row docs-history-changes">
+              <div>
+                <span id="docs-show-changes">{t("docs.showChanges")}</span>
+                {showChanges && shown && (
+                  <p class="hint" id="docs-show-changes-hint">
+                    {!before
+                      ? t("docs.firstVersion")
+                      : changeCount === 0
+                        ? t("docs.noChanges")
+                        : before.name
+                          ? t("docs.comparedWith", { name: before.name })
+                          : t("docs.comparedWithDate", { date: formatDate(before.created_at) })}
+                  </p>
+                )}
+              </div>
+              <input
+                type="checkbox"
+                role="switch"
+                class="switch"
+                aria-labelledby="docs-show-changes"
+                aria-describedby={showChanges && shown ? "docs-show-changes-hint" : undefined}
+                checked={showChanges}
+                onChange={(event) => setShowChanges(event.currentTarget.checked)}
+              />
+            </div>
           </aside>
         )}
       </div>
@@ -364,54 +403,92 @@ function dayName(iso: string): string {
   return formatDay(iso);
 }
 
+/** Versions' co-editing states, which never change, so going back to one
+ * or comparing with it doesn't fetch it again. */
+const states = new Map<string, Promise<Uint8Array>>();
+
+function stateOf(id: string, version: string): Promise<Uint8Array> {
+  const key = `${id}/${version}`;
+  let state = states.get(key);
+  if (!state) {
+    state = versionState(id, version);
+    state.catch(() => states.delete(key));
+    states.set(key, state);
+    // A few dozen are plenty for going back and forth.
+    if (states.size > 32) states.delete(states.keys().next().value!);
+  }
+  return state;
+}
+
+function docOf(state: Uint8Array): Y.Doc {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, state);
+  return doc;
+}
+
+/** The color of a version's changes: its person's, or the app's accent
+ * when several people or no one known made it, since Docs can't yet tell
+ * whose each word is. */
+function changeColor(version: DocVersion): string {
+  return version.people.length === 1 ? caretColor(version.people[0]!.display_name) : "var(--accent)";
+}
+
 /** A version on its pages, as the editor lays them out, but read-only and
- * without comments or carets. */
+ * without comments or carets. With `before`, its changes since that
+ * version are marked. */
 function VersionPage({
   id,
   version,
+  before,
   narrow,
+  onCompared,
   onError,
 }: {
   id: string;
-  version: string;
+  version: DocVersion;
+  before: DocVersion | null;
   narrow: boolean;
+  onCompared: (count: number | null) => void;
   onError: (problem: string) => void;
 }) {
   const mount = useRef<HTMLDivElement>(null);
-  const [doc, setDoc] = useState<Y.Doc | null>(null);
+  const [docs, setDocs] = useState<{ doc: Y.Doc; before: Y.Doc | null } | null>(null);
 
   useEffect(() => {
     let current = true;
-    setDoc(null);
-    versionState(id, version).then(
-      (state) => {
-        if (!current) return;
-        const loaded = new Y.Doc();
-        Y.applyUpdate(loaded, state);
-        setDoc(loaded);
+    setDocs(null);
+    onCompared(null);
+    Promise.all([stateOf(id, version.id), before ? stateOf(id, before.id) : null]).then(
+      ([state, beforeState]) => {
+        if (current) setDocs({ doc: docOf(state), before: beforeState && docOf(beforeState) });
       },
       (problem: unknown) => current && onError(t("docs.versionFailed", { problem: problemText(problem) })),
     );
     return () => {
       current = false;
     };
-  }, [id, version]);
+  }, [id, version.id, before?.id]);
 
   useEffect(() => {
     const element = mount.current;
-    if (!doc || !element) return;
+    if (!docs || !element) return;
     addFonts();
-    const setup = readPage(doc.getMap<unknown>(PAGE));
+    const setup = readPage(docs.doc.getMap<unknown>(PAGE));
     showPaper(element, setup);
-    const view: EditorView = createPrintView(
-      element,
-      yXmlFragmentToProseMirrorRootNode(doc.getXmlFragment(FRAGMENT), schema),
-      (hash) => pictureAddress(id, hash),
-    );
+    let doc = yXmlFragmentToProseMirrorRootNode(docs.doc.getXmlFragment(FRAGMENT), schema);
+    const plugins = [];
+    if (docs.before) {
+      const compared = compareDocs(yXmlFragmentToProseMirrorRootNode(docs.before.getXmlFragment(FRAGMENT), schema), doc);
+      doc = compared.doc;
+      plugins.push(changesPlugin(compared.changes));
+      element.style.setProperty("--change", changeColor(version));
+      onCompared(compared.changes.length);
+    }
+    const view: EditorView = createPrintView(element, doc, (hash) => pictureAddress(id, hash), plugins);
     setPageGeometry(view, narrow ? null : geometryOf(setup ?? newPageSetup(defaultPageSize())));
-    setPageParts(view, readParts(doc));
+    setPageParts(view, readParts(docs.doc));
     return () => view.destroy();
-  }, [doc, narrow]);
+  }, [docs, narrow]);
 
-  return <div class="docs-page" ref={mount} aria-busy={doc === null} />;
+  return <div class="docs-page" ref={mount} aria-busy={docs === null} />;
 }

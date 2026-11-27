@@ -7502,6 +7502,42 @@ label.choice.docs-history-named {
   margin: 16px 16px 0;
 }
 
+.docs-history-changes {
+  margin: 12px 16px 0;
+}
+
+.docs-history-changes .hint {
+  margin-top: 4px;
+}
+
+/* Show changes' marks, in the color of the version's person (changes.ts).
+ * Only the lines take it, so the text stays as readable as the rest. */
+.docs-text ins.docs-change {
+  text-decoration: underline 2px var(--change);
+  text-underline-offset: 3px;
+  /* Unbroken under letters such as p and y, so it shows the change's extent. */
+  text-decoration-skip-ink: none;
+}
+
+.docs-text del.docs-change {
+  text-decoration: line-through 2px var(--change);
+}
+
+/* A little room between what was removed and what took its place. */
+.docs-text del.docs-change:has(+ ins.docs-change) {
+  margin-right: 0.2em;
+}
+
+.docs-text .docs-change-block {
+  outline: 2px solid var(--change);
+  outline-offset: 2px;
+}
+
+.docs-text .docs-change-block.docs-change-removed {
+  outline-style: dashed;
+  opacity: 0.6;
+}
+
 @media (max-width: 860px) {
   .docs-history-list {
     position: static;

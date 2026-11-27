@@ -19,7 +19,15 @@ import { InputRule, inputRules, textblockTypeInputRule, undoInputRule, wrappingI
 import { keymap } from "prosemirror-keymap";
 import type { MarkType, Node, NodeType, ResolvedPos } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from "prosemirror-schema-list";
-import { type Command, EditorState, NodeSelection, Selection, TextSelection, type Transaction } from "prosemirror-state";
+import {
+  type Command,
+  EditorState,
+  NodeSelection,
+  type Plugin,
+  Selection,
+  TextSelection,
+  type Transaction,
+} from "prosemirror-state";
 import {
   addColumnAfter,
   addColumnBefore,
@@ -246,9 +254,15 @@ export function insertField(kind: "page" | "pages"): Command {
 }
 
 /** A copy of `doc` that can't be changed, on pages in `mount`, for
- * printing. */
-export function createPrintView(mount: HTMLElement, doc: Node, pictureAddress: (hash: string) => string): EditorView {
-  const state = EditorState.create({ schema, doc, plugins: [contentsPlugin(), pagesPlugin(mount)] });
+ * printing and the version history, whose **Show changes** adds a plugin
+ * marking them. */
+export function createPrintView(
+  mount: HTMLElement,
+  doc: Node,
+  pictureAddress: (hash: string) => string,
+  plugins: Plugin[] = [],
+): EditorView {
+  const state = EditorState.create({ schema, doc, plugins: [contentsPlugin(), pagesPlugin(mount), ...plugins] });
   return new EditorView(mount, {
     state,
     editable: () => false,
